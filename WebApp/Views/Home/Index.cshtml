@@ -1,8 +1,30 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Home";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<h1 class="base-title">Welcome to Perene BookNotes</h1>
+
+<div class="home-container">
+    <sl-button 
+        hx-get="@Url.Action("Chat", "Chat")"
+        hx-target="#chat-container"
+        hx-swap="innerHTML"
+        variant="primary"
+    >
+        <sl-icon slot="prefix" name="chat-left-text"></sl-icon>
+        Talk with Our AI
+    </sl-button>
+    <sl-button variant="primary"> 
+        <sl-icon slot="prefix" name="journal-arrow-down"></sl-icon>
+        Upload Notes
+    </sl-button>
+    <sl-button variant="primary"> 
+        <sl-icon slot="prefix" name="eye"></sl-icon>
+        See Your Notes
+    </sl-button>
 </div>
+
+<div id="chat-container">
+    <!-- Chat will load here -->
+</div>
+

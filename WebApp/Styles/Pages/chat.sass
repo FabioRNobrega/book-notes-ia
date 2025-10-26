@@ -1,0 +1,27 @@
+@use '../mixins'
+@use '../variables'
+
+.chat
+  gap: 1rem
+  @include mixins.display-col
+
+  &__container
+    min-width: 100%
+    min-height: 50vh
+    background: var(--sl-color-neutral-1000)
+    color: var(--sl-color-neutral-0)
+    border-radius: 10px
+
+    &--message
+      margin: 10px
+      background: var(--sl-color-neutral-0)
+      color: var(--sl-color-neutral-1000)
+      border-radius: 10px
+      min-height: 50px
+      padding: 10px
+    
+    &--input
+      gap: 1rem
+      @include mixins.display-col
+
+    

@@ -1,0 +1,33 @@
+@{
+    ViewData["Title"] = "Local AI Chat";
+}
+
+<div class="chat">
+  <h2 class="base-title">Local AI Chat</h2>
+
+  <div class="chat__container">
+    <div id="messages" class="chat__container--message">
+      <p>👋 Hello! I’m your local AI — powered by Ollama + Semantic Kernel.</p>
+    </div>
+  </div>
+
+  <form
+    class="chat__container--input"
+    hx-post="/chat/send"
+    hx-target="#messages"
+    hx-swap="beforeend"
+    _="on submit put '' into #message"
+  >
+    <sl-input
+      id="message"
+      name="message"
+      placeholder="Type your message..."
+      style="flex-grow: 1;"
+      required
+    ></sl-input>
+    <sl-button type="submit" variant="primary">
+    Send
+    <sl-icon slot="suffix"  name="caret-right-fill"></sl-icon>
+    </sl-button>
+  </form>
+</div>

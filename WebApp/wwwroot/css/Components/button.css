@@ -1,0 +1,1 @@
+:root{--font-family-title: "Zilla Slab", serif;--font-family-base: "Montserrat", "Helvetica", "Arial", sans-serif}sl-button::part(base){font-family:var(--font-family-title);font-size:1.3rem}/*# sourceMappingURL=button.css.map */

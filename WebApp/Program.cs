@@ -1,7 +1,13 @@
+using Microsoft.SemanticKernel;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Add ollama connection
+builder.Services.AddOllamaChatClient(modelId: "gemma3:270m", new Uri("http://ollama:11434"));
+builder.Services.AddTransient(sp => new Kernel(sp));
 
 var app = builder.Build();
 
