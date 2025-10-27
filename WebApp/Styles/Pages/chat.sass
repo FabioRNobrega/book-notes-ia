@@ -14,12 +14,19 @@
 
     &--message
       margin: 10px
-      background: var(--sl-color-neutral-0)
+      background: var(--sl-color-neutral-100)
       color: var(--sl-color-neutral-1000)
       border-radius: 10px
       min-height: 50px
       padding: 10px
-    
+      word-wrap: break-word
+      max-width: 80%
+
+      &-user
+        margin-left: auto
+        background: var(--sl-color-primary-300)
+        color: var(--sl-color-neutral-0)
+        
     &--input
       gap: 1rem
       @include mixins.display-col

@@ -5,9 +5,16 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-// Add ollama connection
-builder.Services.AddOllamaChatClient(modelId: "gemma3:270m", new Uri("http://ollama:11434"));
-builder.Services.AddTransient(sp => new Kernel(sp));
+// Build a Semantic Kernel with Ollama
+builder.Services.AddSingleton<Kernel>(sp =>
+{
+    var kernelBuilder = Kernel.CreateBuilder();
+    kernelBuilder.Services.AddOllamaChatCompletion(
+        modelId: "gemma3:270m",
+        endpoint: new Uri("http://ollama:11434")
+    );
+    return kernelBuilder.Build();
+});
 
 var app = builder.Build();
 

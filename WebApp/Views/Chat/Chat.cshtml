@@ -5,7 +5,7 @@
 <div class="chat">
   <h2 class="base-title">Local AI Chat</h2>
 
-  <div class="chat__container">
+  <div id="chat" class="chat__container">
     <div id="messages" class="chat__container--message">
       <p>👋 Hello! I’m your local AI — powered by Ollama + Semantic Kernel.</p>
     </div>
@@ -14,15 +14,23 @@
   <form
     class="chat__container--input"
     hx-post="/chat/send"
-    hx-target="#messages"
+    hx-target="#chat"
     hx-swap="beforeend"
-    _="on submit put '' into #message"
+    _="
+    on submit
+        set userMsg to #message.value
+        make a <div/> called msg
+        add .chat__container--message to msg
+        add .chat__container--message-user to msg
+        put `<p>${userMsg}</p>` into msg
+        put msg at the end of #chat
+        set #message.value to ''
+    "
   >
     <sl-input
       id="message"
       name="message"
       placeholder="Type your message..."
-      style="flex-grow: 1;"
       required
     ></sl-input>
     <sl-button type="submit" variant="primary">
