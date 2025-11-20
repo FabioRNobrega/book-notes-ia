@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
+@inject UserManager<IdentityUser> UserManager
+
+@{
+    var currentPath = Context.Request.Path;
+}
+
+<header style="border-bottom: 1px solid var(--sl-color-neutral-300);">
+    <div style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 1rem;
+    ">
+        <!-- Left section -->
+        <div style="font-weight: 700; font-size: 1.2rem;">
+            Book Notes IA
+        </div>
+
+        <!-- Right section -->
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+
+            <form asp-area="Identity"
+                  asp-page="/Account/Logout"
+                  asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })"
+                  method="post"
+                  id="logoutForm">
+
+                <sl-tooltip content="Logout">
+                    <sl-button onclick="document.getElementById('logoutForm').submit()">
+                        <sl-icon name="box-arrow-right" slot="prefix"></sl-icon>
+                    </sl-button>
+                </sl-tooltip>
+
+            </form>
+
+        </div>
+    </div>
+</header>
