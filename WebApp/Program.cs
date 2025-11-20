@@ -1,9 +1,18 @@
+
 using Microsoft.SemanticKernel;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// Add Postgres connection
+builder.Services.AddDbContext<AppDbContext>(options => 
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+    )
+);
 
 // Build a Semantic Kernel with Ollama
 builder.Services.AddSingleton<Kernel>(sp =>
