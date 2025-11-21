@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Markdig;
 
 namespace WebApp.Controllers
 {
@@ -31,8 +32,12 @@ namespace WebApp.Controllers
                 // Ask Ollama (Gemma 3)
                 var reply = await chatService.GetChatMessageContentAsync(chatHistory);
 
+
                 // Render result for HTMX partial view
-                return PartialView("_BotMessage", reply.Content);
+                var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+                var html = Markdown.ToHtml(reply.Content ?? string.Empty, pipeline);
+
+                return PartialView("_BotMessage", html);
             }
             catch (Exception ex)
             {

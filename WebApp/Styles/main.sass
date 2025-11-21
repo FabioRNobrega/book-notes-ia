@@ -1,85 +1,18 @@
 @use "./Components/button"
 @use "./Components/input"
 
-@use "./Pages/home"
-@use "./Pages/chat"
 
 @use "./colors"
 @use "./variables"
-@use "./mixins"
 
-*
-  padding: 0
-  margin: 0
-  box-sizing: border-box
 
 body
-  font-size: 16px
   font-family: var(--font-family-base)
-  font-optical-sizing: auto
-  font-style: normal
   background-color: var(--sl-color-neutral-0)
   color: var(--sl-color-neutral-900)
 
-  a
-    text-decoration: none
-
-  ul
-    list-style: none
-
-.base-title
-  font-size: 27px
-  font-weight: 700
-  margin-bottom: 30px
+.font-title
   font-family: var(--font-family-title)
 
-.base-text
+.font-base
   font-family: var(--font-family-base)
-  font-size: 16px
-  font-weight: normal
-  margin: 20px 0px
-  line-height: 1.5em
-  text-indent: 20px
-  text-align: justify
-
-.base-text-light
-  font-family: var(--font-family-base)
-  font-size: 16px
-  font-weight: normal
-
-.title-space
-  margin-bottom: 0px
-  margin-top: 33px
-
-.base-background
-  border-radius: 10px
-  backdrop-filter: blur(15px)
-  margin-bottom: 100px
-  padding: 40px 20px
-
-.base-content
-  & p
-    margin: 2% 0
-
-.base-container
-  @include mixins.container 
-  padding: 100px 15px
-  margin-bottom: 100px
-  @include mixins.tablets-and-down
-    width: 90%
-
-.base-list-display
-  @include mixins.display-col
-
-  @include mixins.tablets-and-up
-    display: grid
-    grid-template-columns: 50% 50%
-    grid-auto-rows: 1fr
-    margin-top: 20px
-
-
-.title
-  font-weight: bold
-  text-align: center
-  font-family: var(--font-family-title)
-  font-size: 35px

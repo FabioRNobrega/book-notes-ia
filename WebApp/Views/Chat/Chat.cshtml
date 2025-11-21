@@ -2,40 +2,68 @@
     ViewData["Title"] = "Local AI Chat";
 }
 
-<div class="chat">
-  <h2 class="base-title">Local AI Chat</h2>
+<div class="flex flex-col gap-4 font-base">
 
-  <div id="chat" class="chat__container">
-    <div id="messages" class="chat__container--message">
-      <p>👋 Hello! I’m your local AI — powered by Ollama + Semantic Kernel.</p>
+    <h2 class="font-title">Local AI Chat</h2>
+
+    <!-- Chat messages container -->
+    <div id="chat"
+         class="w-full min-h-[50vh] bg-[var(--sl-color-neutral-1000)]
+                text-[var(--sl-color-neutral-0)] rounded-[10px] flex flex-col">
+
+        <!-- Initial assistant message -->
+        <div class="
+            m-[10px]
+            bg-[var(--sl-color-neutral-100)]
+            text-[var(--sl-color-neutral-1000)]
+            rounded-[10px]
+            min-h-[50px]
+            p-[10px]
+            max-w-[80%]
+            break-words
+        ">
+            <p>👋 Hello! I’m your local AI — powered by Ollama + Semantic Kernel.</p>
+        </div>
+
     </div>
-  </div>
 
-  <form
-    class="chat__container--input"
-    hx-post="/chat/send"
-    hx-target="#chat"
-    hx-swap="beforeend"
-    _="
-    on submit
-        set userMsg to #message.value
-        make a <div/> called msg
-        add .chat__container--message to msg
-        add .chat__container--message-user to msg
-        put `<p>${userMsg}</p>` into msg
-        put msg at the end of #chat
-        set #message.value to ''
-    "
-  >
-    <sl-input
-      id="message"
-      name="message"
-      placeholder="Type your message..."
-      required
-    ></sl-input>
-    <sl-button type="submit" variant="primary">
-    Send
-    <sl-icon slot="suffix"  name="caret-right-fill"></sl-icon>
-    </sl-button>
-  </form>
+    <!-- Input form -->
+    <form
+        class="flex flex-col gap-4"
+        hx-post="/chat/send"
+        hx-target="#chat"
+        hx-swap="beforeend"
+        _="
+            on submit
+                set userMsg to #message.value
+                make a <div/> called msg
+
+                add .{'m-[10px]'} to msg
+                add .{'bg-[var(--sl-color-primary-300)]'} to msg
+                add .{'text-[var(--sl-color-neutral-0)]'} to msg
+                add .{'rounded-[10px]'} to msg
+                add .{'min-h-[50px]'} to msg
+                add .{'p-[10px]'} to msg
+                add .{'max-w-[80%]'} to msg
+                add .break-words to msg
+                add .ml-auto to msg
+
+                put `<p>${userMsg}</p>` into msg
+                put msg at the end of #chat
+                set #message.value to ''
+        "
+    >
+        <sl-input id="message"
+                  name="message"
+                  placeholder="Type your message..."
+                  required>
+        </sl-input>
+
+        <sl-button type="submit"
+                   variant="primary"
+                   class="text-center w-full">
+            Send
+            <sl-icon slot="suffix" name="caret-right-fill"></sl-icon>
+        </sl-button>
+    </form>
 </div>

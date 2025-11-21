@@ -6,35 +6,34 @@
     var currentPath = Context.Request.Path;
 }
 
-<header style="border-bottom: 1px solid var(--sl-color-neutral-300);">
-    <div style="
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem 1rem;
-    ">
-        <!-- Left section -->
-        <div style="font-weight: 700; font-size: 1.2rem;">
+<header class="border-b border-[var(--sl-color-neutral-300)]">
+    <div class="flex items-center justify-between px-4 py-2">
+
+        <!-- Left section (Brand) -->
+        <div class="font-title font-bold text-xl tracking-tight">
             Book Notes IA
         </div>
 
         <!-- Right section -->
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        @if(SignInManager.IsSignedIn(User)){
+            <div class="flex items-center gap-2">
+                <form asp-area="Identity"
+                    asp-page="/Account/Logout"
+                    asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })"
+                    method="post"
+                    id="logoutForm"
+                    class="m-0">
 
-            <form asp-area="Identity"
-                  asp-page="/Account/Logout"
-                  asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })"
-                  method="post"
-                  id="logoutForm">
+                    <sl-tooltip content="Logout">
+                        <sl-button
+                            size="small"
+                            onclick="document.getElementById('logoutForm').submit()">
+                            <sl-icon name="box-arrow-right" slot="prefix"></sl-icon>
+                        </sl-button>
+                    </sl-tooltip>
 
-                <sl-tooltip content="Logout">
-                    <sl-button onclick="document.getElementById('logoutForm').submit()">
-                        <sl-icon name="box-arrow-right" slot="prefix"></sl-icon>
-                    </sl-button>
-                </sl-tooltip>
-
-            </form>
-
-        </div>
+                </form>
+            </div>
+        }
     </div>
 </header>

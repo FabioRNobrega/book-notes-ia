@@ -1,5 +1,16 @@
 @model string
 
-<div class="chat__container--message">
-  <p>@Model</p>
+<div class="
+    m-[10px]
+    bg-[var(--sl-color-neutral-100)]
+    text-[var(--sl-color-neutral-1000)]
+    rounded-[10px]
+    min-h-[50px]
+    p-[10px]
+    max-w-[80%]
+    break-words
+">
+    <div class="prose prose-invert max-w-none">
+        @Html.Raw(Model)
+    </div>
 </div>

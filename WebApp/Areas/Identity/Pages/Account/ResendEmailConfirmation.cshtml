@@ -1,24 +1,52 @@
 ﻿@page
 @model ResendEmailConfirmationModel
+
 @{
     ViewData["Title"] = "Resend email confirmation";
 }
 
-<h1>@ViewData["Title"]</h1>
-<h2>Enter your email.</h2>
-<hr />
-<div class="row">
-    <div class="col-md-4">
-        <form method="post">
-            <div asp-validation-summary="All" class="text-danger" role="alert"></div>
-            <div class="form-floating mb-3">
-                <input asp-for="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
-                <label asp-for="Input.Email" class="form-label"></label>
-                <span asp-validation-for="Input.Email" class="text-danger"></span>
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Resend</button>
-        </form>
-    </div>
+<div class="w-full mx-auto mt-16 p-6 font-base">
+
+    <h1 class="font-title text-3xl mb-6 text-center">@ViewData["Title"]</h1>
+
+    <form method="post" class="space-y-4">
+
+        <p class="text-center text-sm text-[var(--sl-color-neutral-600)] mb-4">
+            Enter your email to receive a new confirmation link.
+        </p>
+
+        <!-- Validation Summary -->
+        <div asp-validation-summary="All"
+             class="text-red-500 text-sm"
+             role="alert">
+        </div>
+
+        <!-- Email Field -->
+        <div>
+            <label asp-for="Input.Email"
+                   class="block text-sm mb-1 font-medium">
+                Email
+            </label>
+
+            <sl-input
+                asp-for="Input.Email"
+                type="email"
+                required
+                placeholder="name@example.com"
+                class="w-full">
+            </sl-input>
+
+            <span asp-validation-for="Input.Email"
+                  class="text-red-500 text-sm"></span>
+        </div>
+
+        <!-- Submit -->
+        <sl-button type="submit"
+                   variant="primary"
+                   class="w-full">
+            Resend
+        </sl-button>
+    </form>
 </div>
 
 @section Scripts {
