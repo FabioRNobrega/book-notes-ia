@@ -1,41 +1,28 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.Agents.AI;
 using Markdig;
 
 namespace WebApp.Controllers
 {
-    public class ChatController(Kernel kernel) : Controller
+    public class ChatController(AIAgent agent) : Controller
     {
-        private readonly Kernel _kernel = kernel;
+        private readonly AIAgent _agent = agent;
 
-        public IActionResult Chat()
-        {
-            return PartialView("Chat");
-        }
+        public IActionResult Chat() => PartialView("Chat");
 
         [HttpPost("/chat/send")]
-        public async Task<IActionResult> Send([FromForm] string message)
+        public async Task<IActionResult> Send([FromForm] string message, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(message))
                 return Content("");
 
             try
             {
-                // ✅ Get the chat completion service from the new API
-                var chatService = _kernel.GetRequiredService<IChatCompletionService>();
+                var session = await _agent.CreateSessionAsync(ct);
+                var response = await _agent.RunAsync(message, session, cancellationToken: ct);
 
-                // Create (or reuse) a chat history
-                var chatHistory = new ChatHistory();
-                chatHistory.AddUserMessage(message);
-
-                // Ask Ollama (Gemma 3)
-                var reply = await chatService.GetChatMessageContentAsync(chatHistory);
-
-
-                // Render result for HTMX partial view
                 var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
-                var html = Markdown.ToHtml(reply.Content ?? string.Empty, pipeline);
+                var html = Markdown.ToHtml(response.Text ?? string.Empty, pipeline);
 
                 return PartialView("_BotMessage", html);
             }
@@ -45,15 +32,15 @@ namespace WebApp.Controllers
             }
         }
 
-        // Optional: health check endpoint to verify connection
         [HttpGet("/chat/health")]
-        public async Task<IActionResult> Health()
+        public async Task<IActionResult> Health(CancellationToken ct)
         {
             try
             {
-                var chatService = _kernel.GetRequiredService<IChatCompletionService>();
-                var test = await chatService.GetChatMessageContentAsync("Say hello from Ollama");
-                return Ok(new { success = true, message = test.Content });
+                var session = await _agent.CreateSessionAsync(ct);
+                var response = await _agent.RunAsync("Say hello from Ollama", session, cancellationToken: ct);
+
+                return Ok(new { success = true, message = response.Text });
             }
             catch (Exception ex)
             {

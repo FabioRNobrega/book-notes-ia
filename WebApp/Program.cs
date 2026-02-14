@@ -1,7 +1,8 @@
-
-using Microsoft.SemanticKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.AI;
+using Microsoft.Agents.AI;
+using OllamaSharp;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,15 +24,22 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 .AddEntityFrameworkStores<AppDbContext>();
 
 
-// Build a Semantic Kernel with Ollama
-builder.Services.AddSingleton<Kernel>(sp =>
+// Build with Ollama
+builder.Services.AddSingleton<IChatClient>(_ =>
 {
-    var kernelBuilder = Kernel.CreateBuilder();
-    kernelBuilder.Services.AddOllamaChatCompletion(
-        modelId: "gemma3:270m",
-        endpoint: new Uri("http://ollama:11434")
+    var ollamaUrl = builder.Configuration["OLLAMA_URL"] ?? "http://ollama:11434";
+    return new OllamaApiClient(new Uri(ollamaUrl), "gemma3:270m");
+});
+
+builder.Services.AddSingleton<AIAgent>(sp =>
+{
+    var chatClient = sp.GetRequiredService<IChatClient>();
+
+    return new ChatClientAgent(
+        chatClient,
+        name: "LocalOllamaAgent",
+        instructions: "You are a helpful assistant."
     );
-    return kernelBuilder.Build();
 });
 
 var app = builder.Build();

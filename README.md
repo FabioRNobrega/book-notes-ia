@@ -1,48 +1,62 @@
 # Book Notes IA | Fábio R. Nóbrega  
 
-This project is a **local AI web app playground** built with [.NET 9.0 MVC](https://learn.microsoft.com/en-us/aspnet/core/tutorials/first-mvc-app/start-mvc?view=aspnetcore-9.0&tabs=visual-studio) and [Microsoft Semantic Kernel](https://github.com/microsoft/semantic-kernel).  
-It integrates with **Ollama** to run a **local LLM (Gemma 3 270M)** — fully offline, free, and ready for experiments with **htmx**, **hyperscript**, and **Shoelace** UI components.  
+This project is a **local AI web app playground** built with [.NET 9.0 MVC](https://learn.microsoft.com/en-us/aspnet/core/tutorials/first-mvc-app/start-mvc?view=aspnetcore-9.0&tabs=visual-studio) using the new [Microsoft Agent Framework and Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) abstraction layer.
+
+It integrates with **Ollama** to run a **local LLM (Gemma 3 270M)** fully offline, free, and ready for experiments with **HTMX**, **Hyperscript**, and **Shoelace** UI components. The goal is to build a clean, modern, Docker-first AI web architecture without external cloud dependencies.
+
+We use:
+
+-   .NET SDK 9.0\
+-   Microsoft Agent Framework (preview)\
+-   Microsoft.Extensions.AI (provider abstraction)\
+-   OllamaSharp (Ollama .NET bridge)\
+-   Ollama running Gemma 3 (270M parameters)\
+-   PostgreSQL (EF Core 9)\
+-   Docker + Docker Compose\
+-   HTMX + Hyperscript + Shoelace (no heavy JS frontend)
 
 
-We use:  
-- .NET SDK: 9.0.30  
-- Semantic Kernel (AI SDK for .NET)  
-- Ollama with [Gemma 3 (270M parameters)](https://ollama.com/library/gemma3:270m)
-- SQLite (for local persistence)  
-- Docker + Docker Compose  
-- HTMX + Hyperscript + Shoelace (no heavy JS frontend)  
 
----
+## Table of Contents
 
-## Table of contents
+-   [Install](#install)\
+-   [Usage](#usage)\
+-   [Architecture](#architecture)\
+-   [Troubleshooting](#troubleshooting)\
+-   [Git Guideline](#git-guideline)
 
-* [Install](#install)  
-* [Usage](#usage)  
-* [Architecture](#architecture)  
-* [Troubleshooting](#troubleshooting)  
-* [Git Guideline](#git-guideline)  
 
----
 
 ## Install
 
 Clone the repo and enter the project folder:
 
-```bash
+``` bash
+git clone <repo-url>
 cd book-notes-ia
 ```
 
-Make sure **Docker Desktop** is installed and running.  
-Build and run the stack with:
+Make sure **Docker Desktop** (or Docker Engine) is installed and running.
 
-```bash
-make docker-up
+Build and run the full stack:
+
+``` bash
+make docker-build 
 ```
 
-This will start **2 services** with hot reload:
+then
 
-- **webapp** → .NET MVC + Semantic Kernel (port 8080)  
-- **ollama** → local LLM server running Gemma 3 (port 11434)  
+```bash
+make docker-run
+```
+
+This will start **3 services**:
+
+-   **webapp** → .NET MVC + Agent Framework (port 8080)
+-   **ollama** → local LLM server (port 11434)
+-   **postgres** → PostgreSQL database (port 5432)
+
+
 
 ## Usage
 
@@ -54,35 +68,71 @@ http://localhost:8080/
 
 From there you can:
 
-- Interact with a **local AI model** using the MVC web UI.  
-- See **live reload** — changes in `.cs`, `.cshtml`, or `.css` files trigger auto rebuilds via `dotnet watch run`.  
-- The .NET app communicates directly with Ollama at `http://ollama:11434`.
+-   Interact with a fully local AI model (Gemma 3 270M)
+-   Chat using HTMX-driven partial updates
+-   Modify `.cs`, `.cshtml`, `.css` files and rebuild via Docker
+-   Use Identity authentication (ASP.NET Core Identity + PostgreSQL)
 
-You can also test Ollama directly:
+The .NET app communicates with Ollama internally via:
 
-```bash
+http://ollama:11434
+
+To test Ollama directly:
+
+``` bash
 docker exec -it ollama ollama run gemma3:270m
 ```
 
----
 
 ## Architecture
 
 ### Service Overview
 
-```mermaid
+``` mermaid
 flowchart LR
     user([🌐 Browser])
-    web([🧩 WebApp<br/>.NET MVC + Semantic Kernel])
-    ollama([🦙 Ollama Server<br/>Gemma3:270M LLM])
+    web([🧩 WebApp<br/>.NET MVC + Agent Framework])
+    db[(🐘 PostgreSQL)]
+    ollama([🦙 Ollama Server<br/>Gemma3:270M])
 
     user --> web
+    web --> db
     web --> ollama
 ```
 
 ## Troubleshooting
 
-WIP
+### Ollama not responding
+
+Check logs:
+
+``` bash
+docker logs ollama
+```
+
+Ensure model is installed:
+
+``` bash
+docker exec -it ollama ollama list
+```
+
+### Webapp fails to connect to database
+
+Ensure PostgreSQL container is healthy:
+
+``` bash
+docker logs postgres
+```
+
+Check connection string matches docker-compose configuration.
+
+### Rebuild everything clean
+
+``` bash
+docker compose down -v
+docker compose build --no-cache
+docker compose up
+```
 
 ## Git Guideline
 
