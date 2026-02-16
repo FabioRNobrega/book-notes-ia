@@ -22,6 +22,16 @@
         <sl-icon slot="prefix" name="eye"></sl-icon>
         See Your Notes
     </sl-button>
+    <sl-button 
+        hx-get="@Url.Action("MyProfile", "UserProfile")"
+        hx-target="#chat-container"
+        hx-swap="innerHTML"
+        variant="primary"
+    >
+        <sl-icon slot="prefix" name="person-circle"></sl-icon>
+        My Profile
+    </sl-button>
+
 </div>
 
 <div id="chat-container">

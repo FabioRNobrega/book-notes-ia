@@ -1,3 +1,16 @@
 
 sl-input::part(base):focus-within
   box-shadow: 0 0 0 3px var(--sl-color-primary-300)
+
+sl-textarea::part(base):focus-within
+  box-shadow: 0 0 0 3px var(--sl-color-primary-300)
+
+sl-select:focus-within::part(combobox)
+  box-shadow: 0 0 0 3px var(--sl-color-primary-300)
+
+sl-input::part(form-control-label),
+sl-select::part(form-control-label),
+sl-textarea::part(form-control-label),
+sl-radio-group::part(form-control-label)
+  font-family: var(--font-family-title)
+  font-weight: 600

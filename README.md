@@ -83,6 +83,13 @@ To test Ollama directly:
 docker exec -it ollama ollama run gemma3:270m
 ```
 
+You also can access .NET from the docker with:
+
+```bash
+docker compose exec webapp bash
+```
+
+
 
 ## Architecture
 
