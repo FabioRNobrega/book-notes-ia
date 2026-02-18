@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using WebApp.Models;
 
 namespace WebApp.Controllers
@@ -13,16 +15,16 @@ namespace WebApp.Controllers
     public class UserProfileController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<UserProfileController> _logger;
 
-        public UserProfileController(AppDbContext context)
+        public UserProfileController(AppDbContext context, ILogger<UserProfileController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
-        /// <summary>
-        /// Single entry point for the logged-in user profile.
-        /// If the profile exists, go to Edit; otherwise go to Create.
-        /// </summary>
+
+        // GET: UserProfile/MyProfile
         public async Task<IActionResult> MyProfile()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -31,217 +33,102 @@ namespace WebApp.Controllers
 
             var profile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
 
-            if (profile is null)
-                return RedirectToAction(nameof(Create));
-
-            return View("Edit", profile);
-        }
-
-        // GET: UserProfile/Create
-        public async Task<IActionResult> Create()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            // If profile already exists, don't allow creating another one.
-            var exists = await _context.UserProfiles.AnyAsync(p => p.UserId == userId);
-            if (exists)
-                return RedirectToAction(nameof(MyProfile));
-
-            // Pre-fill minimal defaults (adjust as you like)
-            var model = new UserProfile
+            // If missing, show an empty model with defaults
+            profile ??= new UserProfile
             {
                 PreferredLanguage = "en",
                 AgentProfileCompact = "",
                 AgentProfileVersion = 1
             };
 
-            return View(model);
+            return View("Upsert", profile);
         }
 
-        // POST: UserProfile/Create
+        // GET: UserProfile/Upsert  (optional alias, nice for routing)
+        public Task<IActionResult> Upsert() => MyProfile();
+
+        // POST: UserProfile/Upsert
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(
-            [Bind("Nickname,PreferredLanguage,TonePreference,LearningGoals,FavoriteAuthors,AboutMe")] UserProfile userProfile,
-            [FromForm] string[]? readingLanguages,
-            [FromForm] string? learningStyle,
-            [FromForm] string[]? lovedGenres,
-            [FromForm] string[]? dislikedGenres)
+        public async Task<IActionResult> Upsert(
+            [Bind("Nickname,PreferredLanguage,TonePreference,LearningGoals,FavoriteAuthors,AboutMe")] UserProfile input,
+            [FromForm(Name = "LearningStyle")] string? learningStyle,
+            [FromForm(Name = "ReadingLanguages[]")] string[]? readingLanguages,
+            [FromForm(Name = "LovedGenres[]")] string[]? lovedGenres,
+            [FromForm(Name = "DislikedGenres[]")] string[]? dislikedGenres
+        )
         {
+            ModelState.Remove(nameof(UserProfile.UserId));
+            ModelState.Remove(nameof(UserProfile.User));
+
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
+                return PartialView("~/Views/Shared/Components/_Alert.cshtml",
+                    (false, "You are not logged in. Please login again."));
 
-            var exists = await _context.UserProfiles.AnyAsync(p => p.UserId == userId);
-            if (exists)
-                return RedirectToAction(nameof(MyProfile));
 
             if (!ModelState.IsValid)
-                return View(userProfile);
+                return PartialView("~/Views/Shared/Components/_Alert.cshtml",
+                    (false, "Please fix the form errors and try again."));
 
-            userProfile.Id = Guid.NewGuid();
-            userProfile.UserId = userId;
+            var existing = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
 
-            userProfile.ReadingLanguages = ToJson(readingLanguages);
-            userProfile.LearningStyle = ToJson(learningStyle is null ? null : new[] { learningStyle });
-            userProfile.LovedGenres = ToJson(lovedGenres);
-            userProfile.DislikedGenres = ToJson(dislikedGenres);
+            if (existing is null)
+            {
+                var userProfile = new UserProfile
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
 
-            userProfile.AgentProfileCompact = "";
-            userProfile.AgentProfileVersion = 1;
-            userProfile.CreatedAt = DateTime.UtcNow;
-            userProfile.UpdatedAt = DateTime.UtcNow;
+                    Nickname = input.Nickname,
+                    PreferredLanguage = input.PreferredLanguage,
+                    TonePreference = input.TonePreference,
+                    LearningGoals = input.LearningGoals,
+                    FavoriteAuthors = input.FavoriteAuthors,
+                    AboutMe = input.AboutMe,
 
-            _context.Add(userProfile);
-            await _context.SaveChangesAsync();
+                    ReadingLanguages = ToJson(readingLanguages),
+                    LearningStyle = ToJson(learningStyle is null ? null : new[] { learningStyle }),
+                    LovedGenres = ToJson(lovedGenres),
+                    DislikedGenres = ToJson(dislikedGenres),
 
-            return RedirectToAction(nameof(MyProfile));
-        }
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    AgentProfileVersion = 1
+                };
+                userProfile.AgentProfileCompact = BuildAgentProfileCompactJsonString(1, userProfile);
+                _context.Add(userProfile);
+                await _context.SaveChangesAsync();
 
+                return PartialView("~/Views/Shared/Components/_Alert.cshtml",
+                    (true, "Your profile has been created."));
+            }
 
-        // GET: UserProfile/Edit/<id>
-        public async Task<IActionResult> Edit(Guid? id)
-        {
-            if (id is null)
-                return NotFound();
+            // Update path
+            existing.Nickname = input.Nickname;
+            existing.PreferredLanguage = input.PreferredLanguage;
+            existing.TonePreference = input.TonePreference;
+            existing.LearningGoals = input.LearningGoals;
+            existing.FavoriteAuthors = input.FavoriteAuthors;
+            existing.AboutMe = input.AboutMe;
 
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
+            existing.ReadingLanguages = ToJson(readingLanguages);
+            existing.LearningStyle = ToJson(learningStyle is null ? null : new[] { learningStyle });
+            existing.LovedGenres = ToJson(lovedGenres);
+            existing.DislikedGenres = ToJson(dislikedGenres);
 
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.Id == id);
-            if (userProfile is null)
-                return NotFound();
+            existing.AgentProfileVersion = existing.AgentProfileVersion <= 0 ? 1 : existing.AgentProfileVersion + 1;
+            existing.AgentProfileCompact = BuildAgentProfileCompactJsonString(existing.AgentProfileVersion, existing);
 
-            // Prevent editing someone else's profile
-            if (!string.Equals(userProfile.UserId, userId, StringComparison.Ordinal))
-                return Forbid();
-
-            return View(userProfile);
-        }
-
-        // POST: UserProfile/Edit/<id>
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, [Bind(
-            "Id,Nickname,PreferredLanguage,ReadingLanguages,LearningStyle,LovedGenres,DislikedGenres,TonePreference,LearningGoals,FavoriteAuthors,AboutMe"
-        )] UserProfile input)
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            if (id != input.Id)
-                return NotFound();
-
-            // Load the real row from DB so we don't overpost system fields.
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.Id == id);
-            if (userProfile is null)
-                return NotFound();
-
-            if (!string.Equals(userProfile.UserId, userId, StringComparison.Ordinal))
-                return Forbid();
-
-            if (!ModelState.IsValid)
-                return View(input);
-
-            // Copy editable fields
-            userProfile.Nickname = input.Nickname;
-            userProfile.PreferredLanguage = input.PreferredLanguage;
-            userProfile.ReadingLanguages = input.ReadingLanguages;
-            userProfile.LearningStyle = input.LearningStyle;
-            userProfile.LovedGenres = input.LovedGenres;
-            userProfile.DislikedGenres = input.DislikedGenres;
-            userProfile.TonePreference = input.TonePreference;
-            userProfile.LearningGoals = input.LearningGoals;
-            userProfile.FavoriteAuthors = input.FavoriteAuthors;
-            userProfile.AboutMe = input.AboutMe;
-
-            // System-controlled fields
-            userProfile.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(MyProfile));
+
+            return PartialView("~/Views/Shared/Components/_Alert.cshtml",
+                (true, "Your profile has been updated."));
         }
 
-        // Optional: keep Index/Details/Delete out of the UI for now.
-        // If you want, you can remove these actions entirely.
-        // For safety, the ones below only show the current user's profile.
 
-        // GET: UserProfile
-        public async Task<IActionResult> Index()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            var list = await _context.UserProfiles.Where(p => p.UserId == userId).ToListAsync();
-            return View(list);
-        }
-
-        // GET: UserProfile/Details/5
-        public async Task<IActionResult> Details(Guid? id)
-        {
-            if (id is null)
-                return NotFound();
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(m => m.Id == id);
-            if (userProfile is null)
-                return NotFound();
-
-            if (!string.Equals(userProfile.UserId, userId, StringComparison.Ordinal))
-                return Forbid();
-
-            return View(userProfile);
-        }
-
-        // GET: UserProfile/Delete/5
-        public async Task<IActionResult> Delete(Guid? id)
-        {
-            if (id is null)
-                return NotFound();
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(m => m.Id == id);
-            if (userProfile is null)
-                return NotFound();
-
-            if (!string.Equals(userProfile.UserId, userId, StringComparison.Ordinal))
-                return Forbid();
-
-            return View(userProfile);
-        }
-
-        // POST: UserProfile/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(Guid id)
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId))
-                return Challenge();
-
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.Id == id);
-            if (userProfile is null)
-                return RedirectToAction(nameof(MyProfile));
-
-            if (!string.Equals(userProfile.UserId, userId, StringComparison.Ordinal))
-                return Forbid();
-
-            _context.UserProfiles.Remove(userProfile);
-            await _context.SaveChangesAsync();
-
-            return RedirectToAction(nameof(MyProfile));
-        }
 
         private static System.Text.Json.JsonDocument? ToJson(string[]? values)
         {
@@ -251,6 +138,27 @@ namespace WebApp.Controllers
             var json = System.Text.Json.JsonSerializer.Serialize(values);
             return System.Text.Json.JsonDocument.Parse(json);
         }
+
+        private static string BuildAgentProfileCompactJsonString(int profileVersion, UserProfile p)
+        {
+            var payload = new
+            {
+                profile_v = profileVersion,
+                nickname = p.Nickname,
+                preferred_language = p.PreferredLanguage,
+                tone = p.TonePreference,
+                learning_goals = p.LearningGoals,
+                favorite_authors = p.FavoriteAuthors,
+                about_me = p.AboutMe,
+                reading_languages = p.ReadingLanguages,
+                learning_style = p.LearningStyle,
+                loved_genres = p.LovedGenres,
+                disliked_genres = p.DislikedGenres
+            };
+
+            return JsonSerializer.Serialize(payload);
+        }
+
 
     }
 }

@@ -1,0 +1,11 @@
+@model (bool ok, string message)
+
+<sl-alert 
+  variant="@(Model.ok ? "success" : "danger")" 
+  closable
+  _=" on load call me.toast()"
+>
+  <sl-icon slot="icon" name="@(Model.ok ? "check2-circle" : "exclamation-octagon")"></sl-icon>
+  <strong>@(Model.ok ? "Saved" : "Not saved")</strong><br />
+  @Model.message
+</sl-alert>

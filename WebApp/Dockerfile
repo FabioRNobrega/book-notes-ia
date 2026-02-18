@@ -4,7 +4,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY . .
-# Restore dependencies
 RUN dotnet restore
 
 # --------------------------
@@ -12,9 +11,14 @@ RUN dotnet restore
 # --------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0
 WORKDIR /app
-# Copy restored source
 COPY --from=build /src .
-# ASP.NET URLs
+
+# Install EntityFramework tool in the *runtime* image
+RUN dotnet tool install --global dotnet-ef --version 9.*
+# Install Code Generator tool in the *runtime* image
+RUN dotnet tool install --global dotnet-aspnet-codegenerator --version 9.*
+ENV PATH="${PATH}:/root/.dotnet/tools"
+RUN dotnet tool restore
+
 ENV ASPNETCORE_URLS=http://+:8080
-# Enable hot reload and watch
 CMD ["dotnet", "watch", "run", "--urls=http://0.0.0.0:8080"]

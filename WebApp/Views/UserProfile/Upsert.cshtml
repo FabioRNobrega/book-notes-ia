@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Create Profile";
     Layout = null;
+    @using System.Text.Json
 
     var preferredLanguages = new[] {
         ("en", "English"),
@@ -46,19 +47,57 @@
         ("business", "Business"),
         ("classics", "Classics"),
     };
+
+    static HashSet<string> JsonArrayToSet(JsonDocument? doc)
+    {
+        if (doc is null) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (el.ValueKind == JsonValueKind.String)
+                set.Add(el.GetString() ?? "");
+        }
+        return set;
+    }
+
+    static string? JsonFirstString(JsonDocument? doc)
+    {
+        if (doc is null) return null;
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+        var first = doc.RootElement.EnumerateArray().FirstOrDefault();
+        return first.ValueKind == JsonValueKind.String ? first.GetString() : null;
+    }
+
+    var selectedReading = JsonArrayToSet(Model?.ReadingLanguages);
+    var selectedLoved = JsonArrayToSet(Model?.LovedGenres);
+    var selectedDisliked = JsonArrayToSet(Model?.DislikedGenres);
+    var selectedLearningStyle = JsonFirstString(Model?.LearningStyle) ?? "examples";
+
+    var isExisting = Model is not null && Model.Id != Guid.Empty && !string.IsNullOrWhiteSpace(Model.UserId);
 }
 
 <div class="min-h-screen">
     <div class="font-base max-w-[900px] mx-auto px-4 py-6">
 
         <div class="mb-4">
-            <h2 class="font-title text-xl">Create your profile</h2>
+            <h2 class="font-title text-xl">@(isExisting ? "My profile" : "Create your profile")</h2>
             <p class="opacity-80">
-                This helps the assistant personalize answers and recommendations.
+                @(isExisting
+                    ? $"Update your preferences. Last updated: {Model?.UpdatedAt:dd/MM/yyyy}"
+                    : "This helps the assistant personalize answers and recommendations.")
             </p>
         </div>
 
-        <form asp-action="Create" method="post" class="flex flex-col gap-4">
+
+
+        <form asp-action="Create"
+            method="post"
+            hx-post="@Url.Action("Upsert", "UserProfile")"
+            hx-target="#alert"
+            hx-swap="beforeend"
+            class="flex flex-col gap-4">
 
             <div asp-validation-summary="ModelOnly"></div>
 
@@ -101,7 +140,7 @@
 
                         <div>
                             <label class="block mb-2 opacity-90 font-title">Learning style</label>
-                            <sl-radio-group name="LearningStyle" value="examples">
+                            <sl-radio-group name="LearningStyle" value="@selectedLearningStyle">
                                 <div class="flex flex-wrap gap-3">
                                     @foreach (var (val, label) in learningStyles)
                                     {
@@ -133,7 +172,7 @@
                                 <div class="flex flex-wrap gap-3">
                                     @foreach (var (val, label) in readingLanguages)
                                     {
-                                        <sl-checkbox name="ReadingLanguages[]" value="@val">@label</sl-checkbox>
+                                        <sl-checkbox name="ReadingLanguages[]"  value="@val" checked="@(selectedReading.Contains(val))">@label</sl-checkbox>
                                     }
                                 </div>
                                 <div class="text-sm opacity-70 mt-2">
@@ -158,7 +197,7 @@
                                 <div class="flex flex-wrap gap-3">
                                     @foreach (var (val, label) in genres)
                                     {
-                                        <sl-checkbox name="LovedGenres[]" value="@val">@label</sl-checkbox>
+                                        <sl-checkbox name="LovedGenres[]" value="@val" @(selectedLoved.Contains(val) ? "checked" : "")>@label</sl-checkbox>
                                     }
                                 </div>
                             </div>
@@ -168,7 +207,7 @@
                                 <div class="flex flex-wrap gap-3">
                                     @foreach (var (val, label) in genres)
                                     {
-                                        <sl-checkbox name="DislikedGenres[]" value="@val">@label</sl-checkbox>
+                                        <sl-checkbox name="DislikedGenres[]" value="@val" @(selectedDisliked.Contains(val) ? "checked" : "")>@label</sl-checkbox>
                                     }
                                 </div>
                             </div>
@@ -191,14 +230,8 @@
                 </div>
 
                 <div class="flex flex-col md:flex-row gap-3">
-                    <sl-button type="submit" variant="primary" class="w-full">
-                        Create profile
-                        <sl-icon slot="suffix" name="check2"></sl-icon>
-                    </sl-button>
-
-                    <sl-button href="@Url.Action("Index", "Home")" variant="default" class="w-full">
-                        Cancel
-                        <sl-icon slot="suffix" name="x"></sl-icon>
+                    <sl-button type="submit" variant="primary" class="w-full" _="on click go to #header">
+                        Save
                     </sl-button>
                 </div>
         </form>
