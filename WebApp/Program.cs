@@ -3,11 +3,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
 using OllamaSharp;
+using StackExchange.Redis;
+
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-builder.Services.AddControllersWithViews();
 
 // Add Postgres connection
 builder.Services.AddDbContext<AppDbContext>(options => 
@@ -41,6 +40,17 @@ builder.Services.AddSingleton<AIAgent>(sp =>
         instructions: "You are a helpful assistant."
     );
 });
+
+// Build Redis for cache handler
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = builder.Configuration.GetConnectionString("Redis");
+    return ConnectionMultiplexer.Connect(configuration);
+});
+
+// Add services to the container.
+builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<RedisCacheService>();
 
 var app = builder.Build();
 

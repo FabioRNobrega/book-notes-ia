@@ -15,12 +15,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference  Include="Microsoft.Extensions.AI" Version="10.3.0" />
-    <PackageReference  Include="Microsoft.Extensions.AI.Abstractions" Version="10.3.0" />
-    <PackageReference  Include="Microsoft.Agents.AI" Version="1.0.0-preview.260212.1" />
-    <PackageReference  Include="OllamaSharp" Version="5.4.16" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.3.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260212.1" />
+    <PackageReference Include="OllamaSharp" Version="5.4.16" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="9.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="StackExchange.Redis" Version="2.11.0" />
+    <PackageReference Include="ToonSharp" Version="1.0.0" />
   </ItemGroup>
 
 </Project>

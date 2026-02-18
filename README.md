@@ -89,7 +89,11 @@ You also can access .NET from the docker with:
 docker compose exec webapp bash
 ```
 
+And access redis with:
 
+```bash
+docker exec -it redis redis-cli
+```
 
 ## Architecture
 

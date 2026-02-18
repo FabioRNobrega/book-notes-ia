@@ -14,9 +14,21 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - OLLAMA_URL=http://ollama:11434
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=booknotes;Username=postgres;Password=postgres
+      - ConnectionStrings__Redis=redis:6379
     depends_on:
       - ollama
       - postgres
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
 
   postgres:
     image: postgres:16-alpine
@@ -47,3 +59,4 @@ services:
 volumes:
   ollama_models:
   pg_data:
+  redis_data:

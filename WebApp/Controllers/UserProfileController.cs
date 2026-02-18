@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using WebApp.Models;
+using ToonSharp;
+
 
 namespace WebApp.Controllers
 {
@@ -16,11 +18,14 @@ namespace WebApp.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<UserProfileController> _logger;
+         private readonly RedisCacheService _cache;
 
-        public UserProfileController(AppDbContext context, ILogger<UserProfileController> logger)
+
+        public UserProfileController(AppDbContext context, ILogger<UserProfileController> logger, RedisCacheService cache)
         {
             _context = context;
             _logger = logger;
+            _cache = cache;
         }
 
 
@@ -72,6 +77,8 @@ namespace WebApp.Controllers
                     (false, "Please fix the form errors and try again."));
 
             var existing = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+            var cacheKey = $"agentprofile:{userId}";
+            var cacheTTL = TimeSpan.FromDays(365);
 
             if (existing is null)
             {
@@ -96,9 +103,11 @@ namespace WebApp.Controllers
                     UpdatedAt = DateTime.UtcNow,
                     AgentProfileVersion = 1
                 };
-                userProfile.AgentProfileCompact = BuildAgentProfileCompactJsonString(1, userProfile);
+                userProfile.AgentProfileCompact = BuildAgentProfileCompactToon(1, userProfile);
                 _context.Add(userProfile);
+
                 await _context.SaveChangesAsync();
+                await _cache.SetAsync(cacheKey, userProfile.AgentProfileCompact, cacheTTL);
 
                 return PartialView("~/Views/Shared/Components/_Alert.cshtml",
                     (true, "Your profile has been created."));
@@ -118,11 +127,12 @@ namespace WebApp.Controllers
             existing.DislikedGenres = ToJson(dislikedGenres);
 
             existing.AgentProfileVersion = existing.AgentProfileVersion <= 0 ? 1 : existing.AgentProfileVersion + 1;
-            existing.AgentProfileCompact = BuildAgentProfileCompactJsonString(existing.AgentProfileVersion, existing);
+            existing.AgentProfileCompact = BuildAgentProfileCompactToon(existing.AgentProfileVersion, existing);
 
             existing.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await _cache.SetAsync(cacheKey, existing.AgentProfileCompact, cacheTTL);
 
             return PartialView("~/Views/Shared/Components/_Alert.cshtml",
                 (true, "Your profile has been updated."));
@@ -139,7 +149,8 @@ namespace WebApp.Controllers
             return System.Text.Json.JsonDocument.Parse(json);
         }
 
-        private static string BuildAgentProfileCompactJsonString(int profileVersion, UserProfile p)
+        // TOON instead for Token-Oriented Object Notation 
+        private static string BuildAgentProfileCompactToon(int profileVersion, UserProfile p)
         {
             var payload = new
             {
@@ -150,15 +161,24 @@ namespace WebApp.Controllers
                 learning_goals = p.LearningGoals,
                 favorite_authors = p.FavoriteAuthors,
                 about_me = p.AboutMe,
-                reading_languages = p.ReadingLanguages,
-                learning_style = p.LearningStyle,
-                loved_genres = p.LovedGenres,
-                disliked_genres = p.DislikedGenres
+                reading_languages = JsonToArray(p.ReadingLanguages),
+                learning_style = JsonToArray(p.LearningStyle),
+                loved_genres = JsonToArray(p.LovedGenres),
+                disliked_genres = JsonToArray(p.DislikedGenres),
             };
 
-            return JsonSerializer.Serialize(payload);
+            return ToonSerializer.Serialize(payload);;
         }
 
+        private static string[]? JsonToArray(JsonDocument? doc)
+        {
+            if (doc is null) return null;
 
+            return doc.RootElement
+                    .EnumerateArray()
+                    .Select(e => e.GetString()!)
+                    .Where(s => s is not null)
+                    .ToArray();
+        }
     }
 }
