@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using WebApp.Models;
-using ToonSharp;
 
 
 namespace WebApp.Controllers
@@ -42,7 +41,7 @@ namespace WebApp.Controllers
             profile ??= new UserProfile
             {
                 PreferredLanguage = "en",
-                AgentProfileCompact = "",
+                AgentProfileCompact = "{}",
                 AgentProfileVersion = 1
             };
 
@@ -103,7 +102,7 @@ namespace WebApp.Controllers
                     UpdatedAt = DateTime.UtcNow,
                     AgentProfileVersion = 1
                 };
-                userProfile.AgentProfileCompact = BuildAgentProfileCompactToon(1, userProfile);
+                userProfile.AgentProfileCompact = BuildAgentProfileCompactJson(1, userProfile);
                 _context.Add(userProfile);
 
                 await _context.SaveChangesAsync();
@@ -127,7 +126,7 @@ namespace WebApp.Controllers
             existing.DislikedGenres = ToJson(dislikedGenres);
 
             existing.AgentProfileVersion = existing.AgentProfileVersion <= 0 ? 1 : existing.AgentProfileVersion + 1;
-            existing.AgentProfileCompact = BuildAgentProfileCompactToon(existing.AgentProfileVersion, existing);
+            existing.AgentProfileCompact = BuildAgentProfileCompactJson(existing.AgentProfileVersion, existing);
 
             existing.UpdatedAt = DateTime.UtcNow;
 
@@ -149,8 +148,7 @@ namespace WebApp.Controllers
             return System.Text.Json.JsonDocument.Parse(json);
         }
 
-        // TOON instead for Token-Oriented Object Notation 
-        private static string BuildAgentProfileCompactToon(int profileVersion, UserProfile p)
+        private static string BuildAgentProfileCompactJson(int profileVersion, UserProfile p)
         {
             var payload = new
             {
@@ -167,9 +165,15 @@ namespace WebApp.Controllers
                 disliked_genres = JsonToArray(p.DislikedGenres),
             };
 
-            return ToonSerializer.Serialize(payload);;
-        }
+            var options = new JsonSerializerOptions
+            {
+                // keeps it compact; also prevents lots of null fields if you want
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = false
+            };
 
+            return JsonSerializer.Serialize(payload, options);
+        }
         private static string[]? JsonToArray(JsonDocument? doc)
         {
             if (doc is null) return null;
