@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Identity;
 
 namespace WebApp.Models;
@@ -24,7 +25,8 @@ public class UserProfile
     public string? FavoriteAuthors { get; set; }
     public string? AboutMe { get; set; }
 
-    public string AgentProfileCompact { get; set; } = "";
+    [Column(TypeName = "jsonb")]
+    public string? AgentProfileCompact { get; set; }
     public int AgentProfileVersion { get; set; } = 1;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
