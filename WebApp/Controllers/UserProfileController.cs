@@ -1,13 +1,15 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 using WebApp.Models;
+using WebApp.Services;
 
 
 namespace WebApp.Controllers
@@ -17,10 +19,10 @@ namespace WebApp.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<UserProfileController> _logger;
-         private readonly RedisCacheService _cache;
+        private readonly ICacheHandler  _cache;
 
 
-        public UserProfileController(AppDbContext context, ILogger<UserProfileController> logger, RedisCacheService cache)
+        public UserProfileController(AppDbContext context, ILogger<UserProfileController> logger, ICacheHandler cache)
         {
             _context = context;
             _logger = logger;

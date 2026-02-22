@@ -1,9 +1,10 @@
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
 using OllamaSharp;
-using StackExchange.Redis;
+using WebApp.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,15 +43,14 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 });
 
 // Build Redis for cache handler
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
-{
-    var configuration = builder.Configuration.GetConnectionString("Redis");
-    return ConnectionMultiplexer.Connect(configuration);
+builder.Services.AddStackExchangeRedisCache(options =>
+{  
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
 });
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddScoped<RedisCacheService>();
+builder.Services.AddScoped<ICacheHandler, CacheHandler>();
 
 var app = builder.Build();
 

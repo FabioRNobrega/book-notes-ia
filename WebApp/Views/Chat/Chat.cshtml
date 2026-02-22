@@ -6,6 +6,24 @@
 
     <h2 class="font-title">Local AI Chat</h2>
 
+    <!-- Reset chat -->
+    <div class="flex justify-end">
+        <sl-button
+            variant="primary"
+            size="small"
+            outline
+            hx-post="/chat/reset"
+            hx-trigger="click"
+            hx-target="#alert"
+            hx-swap="beforeend"
+            _="on click set #chat.innerHTML to ''"
+        >
+            Delete Session History
+            <sl-icon slot="suffix" name="arrow-counterclockwise"></sl-icon>
+        </sl-button>
+    </div>
+
+
     <!-- Chat messages container -->
     <div id="chat"
          class="w-full min-h-[50vh] bg-[var(--sl-color-neutral-1000)]
@@ -22,7 +40,7 @@
             max-w-[80%]
             break-words
         ">
-            <p>👋 Hello! I’m your local AI — powered by Ollama + Semantic Kernel.</p>
+            <p>👋 Hello! I’m your local AI — powered by Ollama + Microsoft Agent Framework</p>
         </div>
 
     </div>
