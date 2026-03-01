@@ -54,7 +54,7 @@ services:
     environment:
       - OLLAMA_KEEP_ALIVE=60
     entrypoint: /bin/bash
-    command: -c "ollama serve & sleep 8 && ollama pull gemma3:270m && wait"
+    command: -c "ollama serve & sleep 8 && ollama pull qwen2.5:3b && wait"
 
 volumes:
   ollama_models:
