@@ -39,7 +39,12 @@ builder.Services.AddSingleton<AIAgent>(sp =>
     return new ChatClientAgent(
         chatClient,
         name: "LocalOllamaAgent",
-        instructions: "You are a helpful assistant."
+        instructions: 
+            """
+            You are a helpful assistant.
+            Be concise and practical.
+            When giving recommendations, explain briefly why they match the user's preferences.
+            """
     );
 });
 
