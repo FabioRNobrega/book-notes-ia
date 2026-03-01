@@ -27,8 +27,8 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 // Build with Ollama
 builder.Services.AddSingleton<IChatClient>(_ =>
 {
-    var ollamaUrl = builder.Configuration.Ollama("OllamaURL");
-    var ollamaModel = builder.Configuration.Ollama("OllamaModel");
+    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"];
+    var ollamaModel = builder.Configuration["Ollama:OllamaModel"];
     return new OllamaApiClient(new Uri(ollamaUrl), ollamaModel);
 });
 
