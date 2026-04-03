@@ -54,6 +54,18 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = builder.Configuration.GetConnectionString("Redis");
 });
 
+// Register Unsplash HTTP client
+builder.Services.AddHttpClient("Unsplash", client =>
+{
+    client.BaseAddress = new Uri("https://api.unsplash.com/");
+    client.DefaultRequestHeaders.Add(
+        "Authorization",
+        $"Client-ID {builder.Configuration["Unsplash:AccessKey"]}"
+    );
+    client.DefaultRequestHeaders.Add("Accept-Version", "v1");
+});
+builder.Services.AddScoped<IUnsplashService, UnsplashService>();
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<ICacheHandler, CacheHandler>();

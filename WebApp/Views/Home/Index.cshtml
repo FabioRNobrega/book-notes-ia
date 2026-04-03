@@ -1,40 +1,62 @@
-﻿@{
+@using WebApp.Services
+@{
     ViewData["Title"] = "Home";
+    var photo = ViewData["BackgroundPhoto"] as UnsplashPhoto;
 }
 
-<h1 class="font-title mt-6 mb-6 text-xl">Welcome to Perene BookNotes</h1>
-
-<div class="flex flex-row gap-2 m-4">
-    <sl-button 
-        hx-get="@Url.Action("Chat", "Chat")"
-        hx-target="#chat-container"
-        hx-swap="innerHTML"
-        variant="primary"
-    >
-        <sl-icon slot="prefix" name="chat-left-text"></sl-icon>
-        Talk with Our AI
-    </sl-button>
-    <sl-button variant="primary"> 
-        <sl-icon slot="prefix" name="journal-arrow-down"></sl-icon>
-        Upload Notes
-    </sl-button>
-    <sl-button variant="primary"> 
-        <sl-icon slot="prefix" name="eye"></sl-icon>
-        See Your Notes
-    </sl-button>
-    <sl-button 
-        hx-get="@Url.Action("MyProfile", "UserProfile")"
-        hx-target="#chat-container"
-        hx-swap="innerHTML"
-        variant="primary"
-    >
-        <sl-icon slot="prefix" name="person-circle"></sl-icon>
-        My Profile
-    </sl-button>
-
+<!-- Full-viewport background image -->
+<div class="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+     style="@(photo != null ? $"background-image: url('{photo.Url}');" : "background: #0f0f1a;")">
+    <div class="absolute inset-0 bg-black/60"></div>
 </div>
 
-<div id="chat-container">
-    <!-- Chat will load here -->
-</div>
+<!-- Page layout: chat area fills space, nav buttons stick to bottom -->
+<div class="flex flex-col flex-1">
 
+    <!-- Chat / content area -->
+    <div id="chat-container" class="flex-1 overflow-y-auto p-4">
+        <!-- Content loads here via HTMX -->
+    </div>
+
+    <!-- Navigation dock -->
+    <div class="sticky bottom-0 flex flex-row gap-2 px-4 py-4 justify-center flex-wrap
+                bg-black/40 backdrop-blur-sm border-t border-white/10">
+        <sl-button
+            hx-get="@Url.Action("Chat", "Chat")"
+            hx-target="#chat-container"
+            hx-swap="innerHTML"
+            variant="primary"
+        >
+            <sl-icon slot="prefix" name="chat-left-text"></sl-icon>
+            Talk with Our AI
+        </sl-button>
+        <sl-button variant="primary">
+            <sl-icon slot="prefix" name="journal-arrow-down"></sl-icon>
+            Upload Notes
+        </sl-button>
+        <sl-button variant="primary">
+            <sl-icon slot="prefix" name="eye"></sl-icon>
+            See Your Notes
+        </sl-button>
+        <sl-button
+            hx-get="@Url.Action("MyProfile", "UserProfile")"
+            hx-target="#chat-container"
+            hx-swap="innerHTML"
+            variant="primary"
+        >
+            <sl-icon slot="prefix" name="person-circle"></sl-icon>
+            My Profile
+        </sl-button>
+    </div>
+
+    <!-- Unsplash attribution -->
+    @if (photo != null)
+    {
+        <div class="absolute bottom-20 right-3 text-xs text-white/40 hover:text-white/70 transition-colors">
+            Photo by <a href="@photo.PhotographerProfileUrl?utm_source=book_notes_ia&utm_medium=referral"
+                        target="_blank" rel="noopener" class="underline">@photo.PhotographerName</a>
+            on <a href="https://unsplash.com?utm_source=book_notes_ia&utm_medium=referral"
+                  target="_blank" rel="noopener" class="underline">Unsplash</a>
+        </div>
+    }
+</div>

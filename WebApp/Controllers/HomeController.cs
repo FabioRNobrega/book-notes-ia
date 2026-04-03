@@ -2,19 +2,25 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using WebApp.Models;
+using WebApp.Services;
 
 namespace WebApp.Controllers;
 [Authorize]
 public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
+    private readonly IUnsplashService _unsplash;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(ILogger<HomeController> logger, IUnsplashService unsplash)
     {
         _logger = logger;
+        _unsplash = unsplash;
     }
-    public IActionResult Index()
+
+    public async Task<IActionResult> Index()
     {
+        var photo = await _unsplash.GetBookPhotoAsync();
+        ViewData["BackgroundPhoto"] = photo;
         return View();
     }
 
