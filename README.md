@@ -1,66 +1,102 @@
-# Book Notes IA | Fábio R. Nóbrega  
+# Book Notes IA
 
-This project is a **local AI web app playground** built with [.NET 9.0 MVC](https://learn.microsoft.com/en-us/aspnet/core/tutorials/first-mvc-app/start-mvc?view=aspnetcore-9.0&tabs=visual-studio) using the new [Microsoft Agent Framework and Microsoft.Extensions.AI](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) abstraction layer.
+Book Notes IA is a local-first AI reading assistant built with [ASP.NET Core MVC on .NET 9](https://learn.microsoft.com/aspnet/core/mvc/overview?view=aspnetcore-9.0).
+It combines local LLM chat through [Ollama](https://ollama.com/), ASP.NET Core Identity, PostgreSQL, Redis caching, [HTMX](https://htmx.org/)-driven UI updates, and [Shoelace](https://shoelace.style/) components.
 
-It integrates with **Ollama** to run a **local LLM (Gemma 3 270M)** fully offline, free, and ready for experiments with **HTMX**, **Hyperscript**, and **Shoelace** UI components. The goal is to build a clean, modern, Docker-first AI web architecture without external cloud dependencies.
+The project is set up for a Docker-first development flow and is designed to keep the main experience working even when optional integrations, like Unsplash, are not configured.
 
-We use:
+## Stack
 
--   .NET SDK 9.0\
--   Microsoft Agent Framework (preview)\
--   Microsoft.Extensions.AI (provider abstraction)\
--   OllamaSharp (Ollama .NET bridge)\
--   Ollama running Gemma 3 (270M parameters)\
--   PostgreSQL (EF Core 9)\
--   Docker + Docker Compose\
--   HTMX + Hyperscript + Shoelace (no heavy JS frontend)
+- [.NET 9 MVC](https://learn.microsoft.com/aspnet/core/mvc/overview?view=aspnetcore-9.0)
+- [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/overview/) + [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)
+- [Ollama](https://ollama.com/) via [OllamaSharp](https://github.com/awaescher/OllamaSharp)
+- [PostgreSQL](https://www.postgresql.org/) with [EF Core 9](https://learn.microsoft.com/ef/core/)
+- [Redis distributed cache](https://learn.microsoft.com/aspnet/core/performance/caching/distributed?view=aspnetcore-9.0)
+- [ASP.NET Core Identity](https://learn.microsoft.com/aspnet/core/security/authentication/identity?view=aspnetcore-9.0)
+- [HTMX](https://htmx.org/) + [Hyperscript](https://hyperscript.org/) + [Shoelace](https://shoelace.style/)
+- [AspNetCore.SassCompiler](https://github.com/koenvzeijl/AspNetCore.SassCompiler)
+- [Docker Compose](https://docs.docker.com/compose/)
 
+## Current Services
 
+`docker compose` starts these services:
 
-## Table of Contents
+- `webapp` on `http://localhost:8080`
+- `ollama` on `http://localhost:11434`
+- `postgres` on port `5432`
+- `redis` on port `6379`
 
--   [Install](#install)\
--   [Usage](#usage)\
--   [Architecture](#architecture)\
--   [Troubleshooting](#troubleshooting)\
--   [Git Guideline](#git-guideline)
+The Ollama container automatically pulls `qwen2.5:3b`.
 
+## Features
 
+- Local AI chat powered by Ollama
+- User login and registration with ASP.NET Core Identity
+- Profile-driven assistant behavior
+- Redis-backed chat/session caching
+- Optional Unsplash home background image
+- Graceful fallback to a solid background when Unsplash keys are not configured
+- Sass-based styling with generated CSS kept out of git
 
-## Install
+## Project Structure
 
-Clone the repo and enter the project folder:
+```text
+book-notes-ia/
+├── WebApp/
+│   ├── Areas/Identity/       # ASP.NET Core Identity UI
+│   ├── Controllers/          # MVC controllers
+│   ├── Data/                 # EF Core DbContext
+│   ├── Models/               # Domain models
+│   ├── Services/             # AI, cache, Unsplash services
+│   ├── Styles/               # Sass source files
+│   ├── Views/                # MVC views and partials
+│   └── wwwroot/              # Static assets
+├── docker-compose.yml
+├── Makefile
+└── README.md
+```
 
-``` bash
+## Setup
+
+### 1. Clone the repository
+
+```bash
 git clone <repo-url>
 cd book-notes-ia
 ```
 
-Make sure **Docker Desktop** (or Docker Engine) is installed and running.
-
-Build and run the full stack:
-
-``` bash
-make docker-build 
-```
-
-then
+### 2. Create your local env file
 
 ```bash
+cp .env.example .env
+```
+
+If you do not want to use Unsplash right now, you can leave the keys empty. The app will use its built-in solid background fallback.
+
+`.env.example`:
+
+```env
+UNSPLASH_ACCESS_KEY=your_access_key_here
+UNSPLASH_SECRET_KEY=your_secret_key_here
+```
+
+### 3. Build and start the stack
+
+```bash
+make docker-build
 make docker-run
 ```
 
-This will start **3 services**:
+Or directly with Docker Compose:
 
--   **webapp** → .NET MVC + Agent Framework (port 8080)
--   **ollama** → local LLM server (port 11434)
--   **postgres** → PostgreSQL database (port 5432)
-
-
+```bash
+docker compose build --no-cache
+docker compose up
+```
 
 ## Usage
 
-Once running, open your browser at:  
+Open the app at:
 
 ```bash
 http://localhost:8080/
@@ -68,98 +104,118 @@ http://localhost:8080/
 
 From there you can:
 
--   Interact with a fully local AI model (Gemma 3 270M)
--   Chat using HTMX-driven partial updates
--   Modify `.cs`, `.cshtml`, `.css` files and rebuild via Docker
--   Use Identity authentication (ASP.NET Core Identity + PostgreSQL)
+- Sign in or create an account
+- Chat with the local AI assistant
+- Edit your profile to influence assistant responses
+- Switch between chat, notes placeholders, and profile views
 
-The .NET app communicates with Ollama internally via:
+Useful commands:
 
-http://ollama:11434
+Check Ollama models:
 
-To test Ollama directly:
-
-``` bash
-docker exec -it ollama ollama run gemma3:270m
+```bash
+docker exec -it ollama ollama list
 ```
 
-You also can access .NET from the docker with:
+Open a shell in the web container:
 
 ```bash
 docker compose exec webapp bash
 ```
 
-And access redis with:
+Open Redis CLI:
 
 ```bash
 docker exec -it redis redis-cli
 ```
 
-## Architecture
+## Configuration
 
-### Service Overview
+### Ollama
 
-``` mermaid
-flowchart LR
-    user([🌐 Browser])
-    web([🧩 WebApp<br/>.NET MVC + Agent Framework])
-    db[(🐘 PostgreSQL)]
-    ollama([🦙 Ollama Server<br/>Gemma3:270M])
+Configured in `WebApp/appsettings.json` and container env:
 
-    user --> web
-    web --> db
-    web --> ollama
-```
+- `Ollama:OllamaURL`
+- `Ollama:OllamaModel`
+
+The app currently uses `qwen2.5:3b` in Docker.
+
+### Database and Cache
+
+Configured through connection strings:
+
+- `ConnectionStrings:DefaultConnection`
+- `ConnectionStrings:Redis`
+
+At startup the app applies EF Core migrations automatically.
+
+### Unsplash
+
+Unsplash is optional.
+
+When `Unsplash:AccessKey` is configured, the app can fetch and cache a home background image.
+When it is missing, the app does not call Unsplash and falls back to a solid background color.
+
+Relevant env vars:
+
+- `UNSPLASH_ACCESS_KEY`
+- `UNSPLASH_SECRET_KEY`
+
+## Styling Notes
+
+- Sass source files live in `WebApp/Styles/`
+- Generated CSS is output to `WebApp/wwwroot/css/`
+- Generated CSS is ignored by git and should not be committed
 
 ## Troubleshooting
 
-### Ollama not responding
+### Ollama is not responding
 
-Check logs:
-
-``` bash
+```bash
 docker logs ollama
 ```
 
-Ensure model is installed:
+Verify the model exists:
 
-``` bash
+```bash
 docker exec -it ollama ollama list
 ```
 
-### Webapp fails to connect to database
+### Web app cannot connect to PostgreSQL
 
-Ensure PostgreSQL container is healthy:
-
-``` bash
+```bash
 docker logs postgres
 ```
 
-Check connection string matches docker-compose configuration.
+Verify the connection string matches `docker-compose.yml`.
+
+### Redis issues
+
+```bash
+docker logs redis
+```
 
 ### Rebuild everything clean
 
-``` bash
+```bash
 docker compose down -v
 docker compose build --no-cache
 docker compose up
 ```
 
-## Git Guideline
+## Git Guidelines
 
-Follow clear naming and commit conventions.
+### Branch names
 
-### Branches
-
-- Feature:  `feat/branch-name`  
-- Hotfix: `hotfix/branch-name`  
-- POC: `poc/branch-name`  
+- `feat/branch-name`
+- `hotfix/branch-name`
+- `poc/branch-name`
 
 ### Commit prefixes
 
-- Chore: `chore(context): message`  
-- Feat: `feat(context): message`  
-- Fix: `fix(context): message`  
-- Refactor: `refactor(context): message`  
-- Tests: `tests(context): message`  
-- Docs: `docs(context): message`  
+- `chore(scope): message`
+- `feat(scope): message`
+- `fix(scope): message`
+- `refactor(scope): message`
+- `tests(scope): message`
+- `docs(scope): message`
