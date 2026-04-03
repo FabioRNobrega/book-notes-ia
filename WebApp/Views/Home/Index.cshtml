@@ -14,118 +14,150 @@
 <div class="flex flex-col flex-1 min-h-0">
 
     <!-- Scrollable messages area -->
-    <div id="chat-container" class="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-        <!-- Chat.cshtml partial loads here via HTMX -->
+    <div id="chat-container"
+         class="flex-1 min-h-0 overflow-y-auto px-4 py-3 pb-40 md:pb-44"
+         hx-get="@Url.Action("Chat", "Chat")"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <div class="border border-white/10 bg-black/30 p-6 text-lg text-white/70 backdrop-blur-sm" style="border-radius: var(--book-radius);">
+            Loading your assistant...
+        </div>
     </div>
 
-    <!-- Bottom dock: input + nav buttons -->
-    <div class="flex flex-col px-4 pt-2" style="padding-bottom: 10px;">
+    <!-- Bottom dock: AI-only input + mode buttons -->
+    <div class="sticky bottom-0 z-30 px-4 pb-3 pt-3">
+        <div class="border border-white/10 p-3 shadow-2xl backdrop-blur-md"
+             style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+            <div id="chat-composer">
+                <form id="chat-form"
+                      class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
+                      style="background-color: var(--background-transparency-default); border-color: #3d3d3d; border-radius: var(--book-radius);"
+                      hx-post="/chat/send"
+                      hx-target="#chat"
+                      hx-swap="beforeend"
+                      onfocusin="this.style.borderColor='var(--sl-color-primary-300)'"
+                      onfocusout="this.style.borderColor='#3d3d3d'"
+                      _="
+                          on submit
+                              set userMsg to #message.value
+                              if userMsg is ''
+                                  halt the event
+                              end
+                              make a <div/> called wrapper
+                              set wrapper's innerHTML to `<div class='bg-stone-800/90 text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);'><p>${userMsg}</p></div>`
+                              add .flex to wrapper
+                              add .{'flex-col'} to wrapper
+                              add .{'items-end'} to wrapper
+                              add .{'max-w-[75%]'} to wrapper
+                              add .{'ml-auto'} to wrapper
+                              add .{'w-full'} to wrapper
+                              put wrapper at the end of #chat
+                              set #message.value to ''
+                      ">
 
-        <!-- Input form -->
-        <form id="chat-form"
-              class="relative flex items-center gap-3 rounded-2xl border p-3 shadow-xl transition-colors"
-              style="background-color: rgba(45,45,45,0.85); border-color: #3d3d3d;"
-              hx-post="/chat/send"
-              hx-target="#chat"
-              hx-swap="beforeend"
-              onfocusin="this.style.borderColor='var(--sl-color-primary-300)'"
-              onfocusout="this.style.borderColor='#3d3d3d'"
-              _="
-                  on submit
-                      set userMsg to #message.value
-                      if userMsg is ''
-                          halt the event
-                      end
-                      make a <div/> called wrapper
-                      set wrapper's innerHTML to `<div class='bg-stone-800/90 text-white/95 rounded-2xl rounded-tr-sm px-4 py-3 break-words'><p>${userMsg}</p></div>`
-                      add .flex to wrapper
-                      add .{'flex-col'} to wrapper
-                      add .{'items-end'} to wrapper
-                      add .{'max-w-[75%]'} to wrapper
-                      add .{'ml-auto'} to wrapper
-                      add .{'w-full'} to wrapper
-                      put wrapper at the end of #chat
-                      set #message.value to ''
-              ">
+                    <input type="file" id="file-attach" class="hidden"
+                           accept=".pdf,.txt,.epub,.mobi,image/*" />
 
-            <!-- Hidden file input -->
-            <input type="file" id="file-attach" class="hidden"
-                   accept=".pdf,.txt,.epub,.mobi,image/*" />
+                    <button type="button" aria-label="Attach file"
+                            onclick="document.getElementById('file-attach').click()"
+                            class="flex size-10 shrink-0 items-center justify-center
+                                   bg-transparent text-gray-400 transition-all
+                                   hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                        <sl-icon name="paperclip" style="font-size:1.25rem;"></sl-icon>
+                    </button>
 
-            <!-- Attach button -->
-            <button type="button" aria-label="Attach file"
-                    onclick="document.getElementById('file-attach').click()"
-                    class="flex size-10 shrink-0 items-center justify-center rounded-lg
-                           bg-transparent text-gray-400 transition-all
-                           hover:bg-[#3d3d3d] hover:text-white active:scale-95">
-                <sl-icon name="paperclip" style="font-size:1.25rem;"></sl-icon>
-            </button>
+                    <input
+                        id="message"
+                        name="message"
+                        type="text"
+                        placeholder="How can I help you today?"
+                        autocomplete="off"
+                        class="flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
+                        style="font-family:'Crimson Text',Georgia,serif; font-size:16px; color:white;"
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').requestSubmit();}"
+                    />
 
-            <!-- Text input -->
-            <input
-                id="message"
-                name="message"
-                type="text"
-                placeholder="How can I help you today?"
-                autocomplete="off"
-                class="flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
-                style="font-family:'Crimson Text',Georgia,serif; font-size:16px; color:white;"
-                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').requestSubmit();}"
-            />
+                    <sl-tooltip content="Clear chat history" placement="top">
+                        <button type="button" aria-label="Clear history"
+                                hx-post="/chat/reset"
+                                hx-target="#alert"
+                                hx-swap="beforeend"
+                                _="on click set #chat.innerHTML to ''"
+                                class="flex size-10 shrink-0 items-center justify-center
+                                       bg-transparent text-gray-400 transition-all
+                                       hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                            <sl-icon name="arrow-counterclockwise" style="font-size:1.1rem;"></sl-icon>
+                        </button>
+                    </sl-tooltip>
 
-            <!-- Clear history button with tooltip -->
-            <sl-tooltip content="Clear chat history" placement="top">
-                <button type="button" aria-label="Clear history"
-                        hx-post="/chat/reset"
-                        hx-target="#alert"
-                        hx-swap="beforeend"
-                        _="on click set #chat.innerHTML to ''"
-                        class="flex size-10 shrink-0 items-center justify-center rounded-lg
-                               bg-transparent text-gray-400 transition-all
-                               hover:bg-[#3d3d3d] hover:text-white active:scale-95">
-                    <sl-icon name="arrow-counterclockwise" style="font-size:1.1rem;"></sl-icon>
-                </button>
-            </sl-tooltip>
+                    <button type="submit" aria-label="Send message"
+                            class="flex size-10 shrink-0 items-center justify-center
+                                   bg-transparent text-gray-400 transition-all
+                                   hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                        <sl-icon name="send" style="font-size:1.1rem;"></sl-icon>
+                    </button>
+                </form>
+            </div>
 
-            <!-- Send button -->
-            <button type="submit" aria-label="Send message"
-                    class="flex size-10 shrink-0 items-center justify-center rounded-lg
-                           bg-transparent text-gray-400 transition-all
-                           hover:bg-[#3d3d3d] hover:text-white active:scale-95">
-                <sl-icon name="send" style="font-size:1.1rem;"></sl-icon>
-            </button>
-        </form>
-
-        <!-- Nav buttons — immediately below input -->
-        <div class="flex flex-row gap-2 pt-2 justify-center flex-wrap">
-            <sl-button
-                hx-get="@Url.Action("Chat", "Chat")"
-                hx-target="#chat-container"
-                hx-swap="innerHTML"
-                variant="primary"
-            >
-                <sl-icon slot="prefix" name="chat-left-text"></sl-icon>
-                Talk with Our AI
-            </sl-button>
-            <sl-button variant="primary">
-                <sl-icon slot="prefix" name="journal-arrow-down"></sl-icon>
-                Upload Notes
-            </sl-button>
-            <sl-button variant="primary">
-                <sl-icon slot="prefix" name="eye"></sl-icon>
-                See Your Notes
-            </sl-button>
-            <sl-button
-                hx-get="@Url.Action("MyProfile", "UserProfile")"
-                hx-target="#chat-container"
-                hx-swap="innerHTML"
-                variant="primary"
-            >
-                <sl-icon slot="prefix" name="person-circle"></sl-icon>
-                My Profile
-            </sl-button>
+            <div class="mt-3 flex w-full justify-center overflow-x-auto pb-1">
+                <div class="flex flex-nowrap justify-center gap-2">
+                <sl-button
+                    id="mode-ai"
+                    data-chat-mode-button="ai"
+                    hx-get="@Url.Action("Chat", "Chat")"
+                    hx-target="#chat-container"
+                    hx-swap="innerHTML"
+                    onclick="window.BookNotesChat?.setMode('ai')"
+                    variant="primary"
+                    outline
+                    class="shrink-0"
+                >
+                    <sl-icon slot="prefix" name="chat-left-text"></sl-icon>
+                    Talk with Our AI
+                </sl-button>
+                <sl-button
+                    id="mode-upload"
+                    data-chat-mode-button="upload"
+                    hx-get="@Url.Action("UploadNotes", "Home")"
+                    hx-target="#chat-container"
+                    hx-swap="innerHTML"
+                    onclick="window.BookNotesChat?.setMode('upload')"
+                    variant="default"
+                    outline
+                    class="shrink-0">
+                    <sl-icon slot="prefix" name="journal-arrow-down"></sl-icon>
+                    Upload Notes
+                </sl-button>
+                <sl-button
+                    id="mode-notes"
+                    data-chat-mode-button="notes"
+                    hx-get="@Url.Action("SeeYourNotes", "Home")"
+                    hx-target="#chat-container"
+                    hx-swap="innerHTML"
+                    onclick="window.BookNotesChat?.setMode('notes')"
+                    variant="default"
+                    outline
+                    class="shrink-0">
+                    <sl-icon slot="prefix" name="eye"></sl-icon>
+                    See Your Notes
+                </sl-button>
+                <sl-button
+                    id="mode-profile"
+                    data-chat-mode-button="profile"
+                    hx-get="@Url.Action("MyProfile", "UserProfile")"
+                    hx-target="#chat-container"
+                    hx-swap="innerHTML"
+                    onclick="window.BookNotesChat?.setMode('profile')"
+                    variant="default"
+                    outline
+                    class="shrink-0"
+                >
+                    <sl-icon slot="prefix" name="person-circle"></sl-icon>
+                    My Profile
+                </sl-button>
+                </div>
+            </div>
         </div>
-
     </div>
 </div>
 
@@ -140,4 +172,8 @@
         <a href="https://unsplash.com?utm_source=book_notes_ia&utm_medium=referral"
            target="_blank" rel="noopener" class="underline">Unsplash</a>
     </div>
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
 }

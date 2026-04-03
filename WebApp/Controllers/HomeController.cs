@@ -29,6 +29,16 @@ public class HomeController : Controller
         return View();
     }
 
+    public IActionResult UploadNotes()
+    {
+        return PartialView("_UploadNotes");
+    }
+
+    public IActionResult SeeYourNotes()
+    {
+        return PartialView("_SeeYourNotes");
+    }
+
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {

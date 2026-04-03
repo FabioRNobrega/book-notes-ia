@@ -11,20 +11,20 @@
 
     <form method="post" class="space-y-4">
 
-        <p class="text-center text-sm text-[var(--sl-color-neutral-600)] mb-4">
+        <p class="text-center text-lg text-[var(--sl-color-neutral-600)] mb-4">
             Enter your email to receive a new confirmation link.
         </p>
 
         <!-- Validation Summary -->
         <div asp-validation-summary="All"
-             class="text-red-500 text-sm"
+             class="text-red-500 text-lg"
              role="alert">
         </div>
 
         <!-- Email Field -->
         <div>
             <label asp-for="Input.Email"
-                   class="block text-sm mb-1 font-medium">
+                   class="block text-lg mb-1 font-medium">
                 Email
             </label>
 
@@ -37,7 +37,7 @@
             </sl-input>
 
             <span asp-validation-for="Input.Email"
-                  class="text-red-500 text-sm"></span>
+                  class="text-red-500 text-lg"></span>
         </div>
 
         <!-- Submit -->
