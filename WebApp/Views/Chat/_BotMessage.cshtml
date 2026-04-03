@@ -1,16 +1,9 @@
 @model string
 
-<div class="
-    m-[10px]
-    bg-[var(--sl-color-neutral-100)]
-    text-[var(--sl-color-neutral-1000)]
-    rounded-[10px]
-    min-h-[50px]
-    p-[10px]
-    max-w-[80%]
-    break-words
-">
-    <div class="prose prose-invert max-w-none">
-        @Html.Raw(Model)
+<div class="flex flex-col max-w-[75%]">
+    <div class="bg-neutral-900/85 text-white/90 rounded-2xl rounded-tl-sm px-4 py-3 text-sm break-words">
+        <div class="prose prose-invert max-w-none prose-sm">
+            @Html.Raw(Model)
+        </div>
     </div>
 </div>
