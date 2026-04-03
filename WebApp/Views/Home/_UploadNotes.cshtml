@@ -1,57 +1,63 @@
 @model UploadNotesViewModel
 
-<section class="border border-white/10 p-6 text-white/90 shadow-2xl backdrop-blur-md" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
-    <div class="space-y-5">
+<section class="mx-auto flex h-full w-full flex-col overflow-hidden border border-white/10 text-white/90 shadow-2xl backdrop-blur-md"
+         style="max-width: var(--book-panel-width); background-color: var(--sl-color-primary-800); border-radius: var(--book-radius) var(--book-radius) 0 0;">
+    <div class="shrink-0 border-b p-6" style="border-bottom-color: var(--sl-color-primary-950);">
         <div class="space-y-2">
             <p class="font-title text-2xl">Upload Notes</p>
             <p class="max-w-2xl text-lg text-white/70">
                 Import a Kindle <code>My Clippings.txt</code> file. We store only your own books and notes, and we skip bookmark-only entries.
             </p>
         </div>
+    </div>
 
-        @if (!string.IsNullOrWhiteSpace(Model?.StatusMessage))
-        {
-            <div class="border px-4 py-3 text-base @(Model!.IsSuccess ? "border-emerald-300/40 text-emerald-100" : "border-rose-300/40 text-rose-100")"
-                 style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
-                <p>@Model.StatusMessage</p>
-                @if (Model.Summary is not null)
-                {
-                    <p class="mt-2 text-sm text-white/70">
-                        Books touched: @Model.Summary.BooksTouched | New notes: @Model.Summary.NotesImported | Duplicates skipped: @Model.Summary.DuplicatesSkipped | Invalid entries skipped: @Model.Summary.InvalidEntriesSkipped
-                    </p>
-                }
-            </div>
-        }
+    <div class="flex-1 overflow-y-auto p-6"
+         style="background: var(--book-paper-surface); color: var(--book-paper-ink);">
+        <div class="space-y-5">
+            @if (!string.IsNullOrWhiteSpace(Model?.StatusMessage))
+            {
+                <div class="border px-4 py-3 text-base @(Model!.IsSuccess ? "border-emerald-700/30 text-emerald-950" : "border-rose-700/30 text-rose-950")"
+                     style="background-color: rgba(255,255,255,0.25); border-radius: var(--book-radius);">
+                    <p>@Model.StatusMessage</p>
+                    @if (Model.Summary is not null)
+                    {
+                        <p class="mt-2 text-sm" style="color: var(--book-paper-muted);">
+                            Books touched: @Model.Summary.BooksTouched | New notes: @Model.Summary.NotesImported | Duplicates skipped: @Model.Summary.DuplicatesSkipped | Invalid entries skipped: @Model.Summary.InvalidEntriesSkipped
+                        </p>
+                    }
+                </div>
+            }
 
-        <form hx-post="@Url.Action("Import", "Notes")"
-              hx-target="#chat-container"
-              hx-swap="innerHTML"
-              enctype="multipart/form-data"
-              class="space-y-4">
-            <label class="block space-y-2">
-                <span class="font-title text-lg text-white/85">Kindle clippings file</span>
-                <input type="file"
-                       name="file"
-                       accept=".txt"
-                       class="block w-full border border-white/10 bg-transparent px-4 py-3 text-base text-white file:mr-4 file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-white"
-                       style="border-radius: var(--book-radius); background-color: var(--background-transparency-default);" />
-            </label>
+            <form hx-post="@Url.Action("Import", "Notes")"
+                  hx-target="#chat-container"
+                  hx-swap="innerHTML"
+                  enctype="multipart/form-data"
+                  class="space-y-4">
+                <label class="block space-y-2">
+                    <span class="font-title text-lg" style="color: var(--book-paper-ink);">Kindle clippings file</span>
+                    <input type="file"
+                           name="file"
+                           accept=".txt"
+                           class="block w-full border px-4 py-3 text-base file:mr-4 file:border-0 file:bg-[rgba(45,45,45,0.12)] file:px-3 file:py-2"
+                           style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.28); color: var(--book-paper-ink);" />
+                </label>
 
-            <div class="flex flex-wrap gap-3">
-                <sl-button type="submit" variant="primary" outline>
-                    <sl-icon slot="prefix" name="upload"></sl-icon>
-                    Import Kindle Notes
-                </sl-button>
-                <sl-button type="button"
-                           variant="default"
-                           outline
-                           hx-get="@Url.Action("Library", "Notes")"
-                           hx-target="#chat-container"
-                           hx-swap="innerHTML">
-                    <sl-icon slot="prefix" name="journal-bookmark"></sl-icon>
-                    See Your Library
-                </sl-button>
-            </div>
-        </form>
+                <div class="flex flex-wrap gap-3">
+                    <sl-button type="submit" variant="primary">
+                        <sl-icon slot="prefix" name="upload"></sl-icon>
+                        Import Kindle Notes
+                    </sl-button>
+                    <sl-button type="button"
+                               variant="default"
+                               style="border-color: var(--sl-color-primary-950); color: var(--sl-color-primary-50);"
+                               hx-get="@Url.Action("Library", "Notes")"
+                               hx-target="#chat-container"
+                               hx-swap="innerHTML">
+                        <sl-icon slot="prefix" name="journal-bookmark"></sl-icon>
+                        See Your Library
+                    </sl-button>
+                </div>
+            </form>
+        </div>
     </div>
 </section>

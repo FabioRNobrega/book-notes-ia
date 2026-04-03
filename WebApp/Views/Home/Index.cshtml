@@ -4,30 +4,26 @@
     var photo = ViewData["BackgroundPhoto"] as UnsplashPhoto;
 }
 
-<!-- Full-viewport background image -->
 <div class="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
      style="@(photo != null ? $"background-image: url('{photo.Url}');" : "background: #0f0f1a;")">
     <div class="absolute inset-0 bg-black/60"></div>
 </div>
 
-<!-- Page layout fills viewport exactly -->
 <div class="flex flex-col flex-1 min-h-0">
-
-    <!-- Scrollable messages area -->
     <div id="chat-container"
-         class="flex-1 min-h-0 overflow-y-auto px-4 py-3 pb-40 md:pb-44"
+         class="flex-1 min-h-0 overflow-y-auto px-[30px] pt-3 pb-0"
          hx-get="@Url.Action("Chat", "Chat")"
          hx-trigger="load"
          hx-swap="innerHTML">
-        <div class="border border-white/10 bg-black/30 p-6 text-lg text-white/70 backdrop-blur-sm" style="border-radius: var(--book-radius);">
+        <div class="mx-auto border border-white/10 bg-black/30 p-6 text-lg text-white/70 backdrop-blur-sm"
+             style="max-width: var(--book-panel-width); border-radius: var(--book-radius);">
             Loading your assistant...
         </div>
     </div>
 
-    <!-- Bottom dock: AI-only input + mode buttons -->
-    <div class="sticky bottom-0 z-30 px-4 pb-3 pt-3">
-        <div class="border border-white/10 p-3 shadow-2xl backdrop-blur-md"
-             style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+    <div class="sticky bottom-0 z-30 px-4 pb-3 pt-0">
+        <div class="mx-auto border border-white/10 p-3 shadow-2xl backdrop-blur-md"
+             style="max-width: var(--book-dock-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
             <div id="chat-composer">
                 <form id="chat-form"
                       class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
@@ -60,9 +56,8 @@
 
                     <button type="button" aria-label="Attach file"
                             onclick="document.getElementById('file-attach').click()"
-                            class="flex size-10 shrink-0 items-center justify-center
-                                   bg-transparent text-gray-400 transition-all
-                                   hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                            class="flex size-10 shrink-0 items-center justify-center bg-transparent text-gray-400 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"
+                            style="border-radius: var(--book-radius);">
                         <sl-icon name="paperclip" style="font-size:1.25rem;"></sl-icon>
                     </button>
 
@@ -83,17 +78,15 @@
                                 hx-target="#alert"
                                 hx-swap="beforeend"
                                 _="on click set #chat.innerHTML to ''"
-                                class="flex size-10 shrink-0 items-center justify-center
-                                       bg-transparent text-gray-400 transition-all
-                                       hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                                class="flex size-10 shrink-0 items-center justify-center bg-transparent text-gray-400 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"
+                                style="border-radius: var(--book-radius);">
                             <sl-icon name="arrow-counterclockwise" style="font-size:1.1rem;"></sl-icon>
                         </button>
                     </sl-tooltip>
 
                     <button type="submit" aria-label="Send message"
-                            class="flex size-10 shrink-0 items-center justify-center
-                                   bg-transparent text-gray-400 transition-all
-                                   hover:bg-[#3d3d3d] hover:text-white active:scale-95" style="border-radius: var(--book-radius);">
+                            class="flex size-10 shrink-0 items-center justify-center bg-transparent text-gray-400 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"
+                            style="border-radius: var(--book-radius);">
                         <sl-icon name="send" style="font-size:1.1rem;"></sl-icon>
                     </button>
                 </form>
@@ -161,7 +154,6 @@
     </div>
 </div>
 
-<!-- Unsplash attribution — fixed bottom-right, unobtrusive -->
 @if (photo != null)
 {
     <div class="fixed bottom-2 right-3 z-40 text-xs text-white/30 hover:text-white/60 transition-colors">
