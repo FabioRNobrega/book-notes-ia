@@ -1,4 +1,4 @@
-﻿// Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
+// Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
 // for details on configuring this project to bundle and minify static web assets.
 
 (function () {
@@ -36,9 +36,7 @@
         setActiveModeButton(mode);
     }
 
-    function scrollChatToBottom() {
-        const container = document.getElementById("chat-container");
-
+    function scrollContainerToBottom(container) {
         if (!container) {
             return;
         }
@@ -48,8 +46,100 @@
         });
     }
 
+    function scrollContainerToTop(container) {
+        if (!container) {
+            return;
+        }
+
+        window.requestAnimationFrame(() => {
+            container.scrollTop = 0;
+        });
+    }
+
+    function scrollChatToBottom() {
+        scrollContainerToBottom(document.getElementById("chat-container"));
+    }
+
+    function isChatView(container) {
+        return !!container?.querySelector("#chat");
+    }
+
+    function syncContainerScroll(container) {
+        if (!container) {
+            return;
+        }
+
+        if (isChatView(container)) {
+            scrollContainerToBottom(container);
+            return;
+        }
+
+        scrollContainerToTop(container);
+    }
+
+    function appendChatHtml(html) {
+        const chat = document.getElementById("chat");
+
+        if (!chat) {
+            return;
+        }
+
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+
+        while (wrapper.firstElementChild) {
+            const node = wrapper.firstElementChild;
+            wrapper.removeChild(node);
+            chat.appendChild(node);
+
+            if (window.htmx) {
+                window.htmx.process(node);
+            }
+        }
+
+        scrollChatToBottom();
+    }
+
+    async function importChatFile(fileInput) {
+        const file = fileInput.files?.[0];
+
+        if (!file) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+
+        try {
+            const response = await fetch("/notes/import-chat", {
+                method: "POST",
+                body: formData
+            });
+
+            const html = await response.text();
+            appendChatHtml(html);
+        } catch (error) {
+            console.error("Chat file import failed", error);
+            appendChatHtml(`<div class="flex flex-col max-w-[75%]"><div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);"><p>We couldn't import this file right now. Please try again.</p></div></div>`);
+        } finally {
+            fileInput.value = "";
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         setMode("ai");
+    });
+
+    document.addEventListener("change", (event) => {
+        const target = event.target;
+
+        if (!(target instanceof HTMLInputElement)) {
+            return;
+        }
+
+        if (target.matches("[data-chat-file-input]")) {
+            void importChatFile(target);
+        }
     });
 
     document.body.addEventListener("htmx:afterSwap", (event) => {
@@ -59,7 +149,12 @@
             return;
         }
 
-        if (target.id === "chat-container" || target.id === "chat") {
+        if (target.id === "chat-container") {
+            syncContainerScroll(target);
+            return;
+        }
+
+        if (target.id === "chat") {
             scrollChatToBottom();
         }
     });

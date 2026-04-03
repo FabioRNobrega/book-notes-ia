@@ -1,21 +1,21 @@
 # Book Notes IA
 
-Book Notes IA is a local-first AI reading assistant built with [ASP.NET Core MVC on .NET 9](https://learn.microsoft.com/aspnet/core/mvc/overview?view=aspnetcore-9.0).
-It combines local LLM chat through [Ollama](https://ollama.com/), ASP.NET Core Identity, PostgreSQL, Redis caching, [HTMX](https://htmx.org/)-driven UI updates, and [Shoelace](https://shoelace.style/) components.
+Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 9.
+It combines local LLM chat through Ollama, ASP.NET Core Identity, PostgreSQL, Redis caching, HTMX-driven UI updates, and Shoelace components.
 
 The project is set up for a Docker-first development flow and is designed to keep the main experience working even when optional integrations, like Unsplash, are not configured.
 
 ## Stack
 
-- [.NET 9 MVC](https://learn.microsoft.com/aspnet/core/mvc/overview?view=aspnetcore-9.0)
-- [Microsoft Agent Framework](https://learn.microsoft.com/agent-framework/overview/) + [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai)
-- [Ollama](https://ollama.com/) via [OllamaSharp](https://github.com/awaescher/OllamaSharp)
-- [PostgreSQL](https://www.postgresql.org/) with [EF Core 9](https://learn.microsoft.com/ef/core/)
-- [Redis distributed cache](https://learn.microsoft.com/aspnet/core/performance/caching/distributed?view=aspnetcore-9.0)
-- [ASP.NET Core Identity](https://learn.microsoft.com/aspnet/core/security/authentication/identity?view=aspnetcore-9.0)
-- [HTMX](https://htmx.org/) + [Hyperscript](https://hyperscript.org/) + [Shoelace](https://shoelace.style/)
-- [AspNetCore.SassCompiler](https://github.com/koenvzeijl/AspNetCore.SassCompiler)
-- [Docker Compose](https://docs.docker.com/compose/)
+- .NET 9 MVC
+- Microsoft Agent Framework + Microsoft.Extensions.AI
+- Ollama via OllamaSharp
+- PostgreSQL with EF Core 9
+- Redis distributed cache
+- ASP.NET Core Identity
+- HTMX + Hyperscript + Shoelace
+- Sass compilation with `AspNetCore.SassCompiler`
+- Docker Compose
 
 ## Current Services
 

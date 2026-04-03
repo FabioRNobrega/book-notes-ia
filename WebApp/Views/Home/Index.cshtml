@@ -56,7 +56,7 @@
                       ">
 
                     <input type="file" id="file-attach" class="hidden"
-                           accept=".pdf,.txt,.epub,.mobi,image/*" />
+                           accept=".txt" data-chat-file-input="true" />
 
                     <button type="button" aria-label="Attach file"
                             onclick="document.getElementById('file-attach').click()"
@@ -118,7 +118,7 @@
                 <sl-button
                     id="mode-upload"
                     data-chat-mode-button="upload"
-                    hx-get="@Url.Action("UploadNotes", "Home")"
+                    hx-get="@Url.Action("Upload", "Notes")"
                     hx-target="#chat-container"
                     hx-swap="innerHTML"
                     onclick="window.BookNotesChat?.setMode('upload')"
@@ -131,7 +131,7 @@
                 <sl-button
                     id="mode-notes"
                     data-chat-mode-button="notes"
-                    hx-get="@Url.Action("SeeYourNotes", "Home")"
+                    hx-get="@Url.Action("Library", "Notes")"
                     hx-target="#chat-container"
                     hx-swap="innerHTML"
                     onclick="window.BookNotesChat?.setMode('notes')"

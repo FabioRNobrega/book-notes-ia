@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -27,8 +28,8 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 // Build with Ollama
 builder.Services.AddSingleton<IChatClient>(_ =>
 {
-    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"];
-    var ollamaModel = builder.Configuration["Ollama:OllamaModel"];
+    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
+    var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen2.5:3b";
     return new OllamaApiClient(new Uri(ollamaUrl), ollamaModel);
 });
 
@@ -71,6 +72,13 @@ builder.Services.AddHttpClient("Unsplash", client =>
     client.DefaultRequestHeaders.Add("Accept-Version", "v1");
 });
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();
+builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
+
+var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = notesImportFileSizeLimit;
+});
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
