@@ -58,10 +58,16 @@ builder.Services.AddStackExchangeRedisCache(options =>
 builder.Services.AddHttpClient("Unsplash", client =>
 {
     client.BaseAddress = new Uri("https://api.unsplash.com/");
-    client.DefaultRequestHeaders.Add(
-        "Authorization",
-        $"Client-ID {builder.Configuration["Unsplash:AccessKey"]}"
-    );
+
+    var unsplashAccessKey = builder.Configuration["Unsplash:AccessKey"];
+    if (!string.IsNullOrWhiteSpace(unsplashAccessKey))
+    {
+        client.DefaultRequestHeaders.Add(
+            "Authorization",
+            $"Client-ID {unsplashAccessKey}"
+        );
+    }
+
     client.DefaultRequestHeaders.Add("Accept-Version", "v1");
 });
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();

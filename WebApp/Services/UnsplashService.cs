@@ -14,6 +14,7 @@ public class UnsplashService : IUnsplashService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICacheHandler _cache;
     private readonly ILogger<UnsplashService> _logger;
+    private readonly string? _accessKey;
     private const string CacheKey = "unsplash:book-photo";
 
     private static readonly string[] Queries =
@@ -25,15 +26,22 @@ public class UnsplashService : IUnsplashService
         "literary study room"
     ];
 
-    public UnsplashService(IHttpClientFactory httpClientFactory, ICacheHandler cache, ILogger<UnsplashService> logger)
+    public UnsplashService(IHttpClientFactory httpClientFactory, ICacheHandler cache, ILogger<UnsplashService> logger, IConfiguration configuration)
     {
         _httpClientFactory = httpClientFactory;
         _cache = cache;
         _logger = logger;
+        _accessKey = configuration["Unsplash:AccessKey"];
     }
 
     public async Task<UnsplashPhoto?> GetBookPhotoAsync()
     {
+        if (string.IsNullOrWhiteSpace(_accessKey))
+        {
+            _logger.LogInformation("Unsplash access key not configured. Using default solid background.");
+            return null;
+        }
+
         var cached = await _cache.GetAsync(CacheKey);
         if (!string.IsNullOrEmpty(cached))
         {

@@ -55,3 +55,6 @@ nunit-*.xml
 
 # Environment secrets
 .env
+# Generated local CSS
+WebApp/wwwroot/css/
+
