@@ -29,27 +29,39 @@
                       class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
                       style="background-color: var(--background-transparency-default); border-color: #3d3d3d; border-radius: var(--book-radius);"
                       hx-post="/chat/send"
-                      hx-target="#chat"
-                      hx-swap="beforeend"
+                      hx-swap="none"
                       onfocusin="this.style.borderColor='var(--sl-color-primary-300)'"
                       onfocusout="this.style.borderColor='#3d3d3d'"
-                      _="
-                          on submit
-                              set userMsg to #message.value
-                              if userMsg is ''
-                                  halt the event
-                              end
-                              make a <div/> called wrapper
-                              set wrapper's innerHTML to `<div class='bg-stone-800/90 text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);'><p>${userMsg}</p></div>`
-                              add .flex to wrapper
-                              add .{'flex-col'} to wrapper
-                              add .{'items-end'} to wrapper
-                              add .{'max-w-[75%]'} to wrapper
-                              add .{'ml-auto'} to wrapper
-                              add .{'w-full'} to wrapper
-                              put wrapper at the end of #chat
-                              set #message.value to ''
-                      ">
+                    _="
+                        on submit
+                            set userMsg to #message.value
+                            if userMsg is ''
+                                halt the event
+                            end
+
+                            make a <div/> called wrapper
+                            make a <div/> called thinker
+
+                            set wrapper's innerHTML to `<div class='bg-stone-800/90 text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);'><p>${userMsg}</p></div>`
+                            set thinker.id to 'agent-response'
+                            set thinker's innerHTML to `<div class='text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);background-color: var(--background-transparency-default)'><p><sl-spinner></sl-spinner> Let me think on that...</p></div>`
+
+                            add .flex to wrapper
+                            add .flex-col to wrapper
+                            add .items-end to wrapper
+                            add .ml-auto to wrapper
+                            add .w-full to wrapper
+
+                            add .flex to thinker
+                            add .flex-col to thinker
+                            add .items-start to thinker
+                            add .w-full to thinker
+
+                            put wrapper at the end of #chat
+                            set #message.value to ''
+                            put thinker at the end of #chat
+                        end
+                    ">
 
                     <input type="file" id="file-attach" class="hidden"
                            accept=".txt" data-chat-file-input="true" />
