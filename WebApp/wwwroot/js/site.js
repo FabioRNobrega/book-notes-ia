@@ -151,12 +151,20 @@
 
         if (target.id === "chat-container") {
             syncContainerScroll(target);
+        }
+    });
+
+    document.body.addEventListener("htmx:afterSettle", () => {
+        const container = document.getElementById("chat-container");
+        const agentResponse = document.getElementById("agent-response");
+
+        if (!container || !agentResponse || agentResponse.querySelector("sl-spinner")) {
             return;
         }
 
-        if (target.id === "chat") {
-            scrollChatToBottom();
-        }
+        const containerTop = container.getBoundingClientRect().top;
+        const responseTop = agentResponse.getBoundingClientRect().top;
+        container.scrollBy({ top: responseTop - containerTop - 16, behavior: "smooth" });
     });
 
     window.BookNotesChat = {

@@ -69,6 +69,14 @@
                                     elapsed++;
                                     el.innerText = elapsed + 's';
                                 }, 1000);
+
+                                const container = document.getElementById('chat-container');
+                                const thinker = document.getElementById('agent-response');
+                                if (container && thinker) {
+                                    const containerTop = container.getBoundingClientRect().top;
+                                    const thinkerTop = thinker.getBoundingClientRect().top;
+                                    container.scrollBy({ top: thinkerTop - containerTop - 16, behavior: 'smooth' });
+                                }
                             end
                         end
                     ">
