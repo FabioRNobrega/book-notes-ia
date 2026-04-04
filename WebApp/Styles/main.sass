@@ -18,3 +18,31 @@ body
 
 .font-base
   font-family: var(--font-family-base)
+
+.paper-style
+  position: relative
+  height: 100vh
+  width: 100%
+  box-shadow: 0 0 10px rgba(0,0,0,0.3)
+  margin: 26px auto 0
+
+  &::before, &::after
+    content: ""
+    height: 98%
+    position: absolute
+    width: 100%
+    z-index: -1
+
+  &::before
+    background: var(--sl-color-primary-900)
+    box-shadow: 0 0 8px rgba(0,0,0,0.2)
+    left: -5px
+    top: 4px
+    transform: rotate(-2.5deg)
+
+  &::after
+    background: var(--sl-color-primary-950)
+    box-shadow: 0 0 3px rgba(0,0,0,0.2)
+    right: -3px
+    top: 1px
+    transform: rotate(1.4deg)
