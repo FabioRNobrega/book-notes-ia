@@ -162,9 +162,9 @@
             return;
         }
 
-        const containerTop = container.getBoundingClientRect().top;
-        const responseTop = agentResponse.getBoundingClientRect().top;
-        container.scrollBy({ top: responseTop - containerTop - 16, behavior: "smooth" });
+        agentResponse.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        window.setTimeout(() => document.getElementById("message")?.focus(), 0);
     });
 
     window.BookNotesChat = {
