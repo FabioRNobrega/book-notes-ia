@@ -34,8 +34,8 @@
 
   &::before, &::after
     content: ""
-    height: 98%
     position: absolute
+    height: 100vh
     width: 100%
     z-index: -1
 
@@ -44,6 +44,7 @@
     box-shadow: 0 0 8px rgba(0,0,0,0.2)
     left: -5px
     top: 4px
+    height: 100vh
     transform: rotate(-2.5deg)
     animation: sunrise-before 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both
 
@@ -51,6 +52,7 @@
     background: var(--sl-color-primary-950)
     box-shadow: 0 0 3px rgba(0,0,0,0.2)
     right: -3px
+    height: 100vh
     top: 1px
     transform: rotate(1.4deg)
     animation: sunrise-after 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both

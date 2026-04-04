@@ -10,14 +10,15 @@
 </div>
 
 <div class="flex flex-col flex-1 min-h-0">
-    <div id="chat-container"
-         class="flex-1 min-h-0 overflow-y-auto px-[30px] pt-3 pb-0"
-         hx-get="@Url.Action("Chat", "Chat")"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-        <div class="mx-auto border border-white/10 bg-black/30 p-6 text-lg text-white/70 backdrop-blur-sm"
-             style="max-width: var(--paper-style-width); border-radius: var(--book-radius);">
-            Loading your assistant...
+    <div id="chat-container" class="flex-1 min-h-0 flex flex-col overflow-hidden px-[30px] pt-3 pb-0">
+        <div class="flex-1 min-h-0 overflow-y-auto"
+            hx-get="@Url.Action("Chat", "Chat")"
+            hx-trigger="load"
+            hx-swap="innerHTML">
+            <div class="mx-auto border border-white/10 bg-black/30 p-6 text-lg text-white/70 backdrop-blur-sm"
+                style="max-width: var(--paper-style-width); border-radius: var(--book-radius);">
+                Loading your assistant...
+            </div>
         </div>
     </div>
 
