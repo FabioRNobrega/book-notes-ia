@@ -26,7 +26,7 @@ The project is set up for a Docker-first development flow and is designed to kee
 - `postgres` on port `5432`
 - `redis` on port `6379`
 
-The Ollama container automatically pulls `qwen2.5:3b`.
+The Ollama container automatically pulls `qwen3.5:4b`.
 
 ## Features
 
@@ -117,6 +117,8 @@ Check Ollama models:
 docker exec -it ollama ollama list
 ```
 
+> Use ollama helpers: `make ollama-logs` and `make ollama-chat`
+
 Open a shell in the web container:
 
 ```bash
@@ -138,7 +140,7 @@ Configured in `WebApp/appsettings.json` and container env:
 - `Ollama:OllamaURL`
 - `Ollama:OllamaModel`
 
-The app currently uses `qwen2.5:3b` in Docker.
+The app currently uses `qwen3.5:4b` in Docker.
 
 ### Database and Cache
 

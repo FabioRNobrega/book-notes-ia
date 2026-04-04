@@ -29,8 +29,15 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 builder.Services.AddSingleton<IChatClient>(_ =>
 {
     var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
-    var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen2.5:3b";
-    return new OllamaApiClient(new Uri(ollamaUrl), ollamaModel);
+    var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen3.5:4b";
+    return ((IChatClient)new OllamaApiClient(new Uri(ollamaUrl), ollamaModel))
+        .AsBuilder()
+        .ConfigureOptions(options =>
+        {
+            options.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            options.AdditionalProperties["think"] = false; // This disable think mode on qwen to faster responses
+        })
+        .Build();
 });
 
 builder.Services.AddSingleton<AIAgent>(sp =>
