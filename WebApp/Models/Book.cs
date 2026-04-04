@@ -14,6 +14,7 @@ public class Book
     public string NormalizedTitle { get; set; } = default!;
     public string NormalizedAuthor { get; set; } = default!;
     public string? CoverUrl { get; set; }
+    public string? Context { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
