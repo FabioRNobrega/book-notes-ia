@@ -44,7 +44,7 @@
 
                             set wrapper's innerHTML to `<div class='bg-stone-800/90 text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);'><p>${userMsg}</p></div>`
                             set thinker.id to 'agent-response'
-                            set thinker's innerHTML to `<div class='text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);background-color: var(--background-transparency-default)'><p><sl-spinner></sl-spinner> Let me think on that...</p></div>`
+                            set thinker's innerHTML to `<div class='flex items-center gap-3 text-white/95 px-4 py-3 break-words' style='border-radius: var(--book-radius);background-color: var(--background-transparency-default)'><sl-spinner></sl-spinner><span>Let me think on that...</span><span id='thinker-counter' class='text-white/60 text-lg font-semibold'>0s</span></div>`
 
                             add .flex to wrapper
                             add .flex-col to wrapper
@@ -60,6 +60,16 @@
                             put wrapper at the end of #chat
                             set #message.value to ''
                             put thinker at the end of #chat
+
+                            js
+                                let elapsed = 0;
+                                const timer = setInterval(function() {
+                                    const el = document.getElementById('thinker-counter');
+                                    if (!el) { clearInterval(timer); return; }
+                                    elapsed++;
+                                    el.innerText = elapsed + 's';
+                                }, 1000);
+                            end
                         end
                     ">
 
