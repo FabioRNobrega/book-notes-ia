@@ -78,9 +78,41 @@
     var isExisting = Model is not null && Model.Id != Guid.Empty && !string.IsNullOrWhiteSpace(Model.UserId);
 }
 
+<style>
+    sl-input, sl-select, sl-textarea {
+        --sl-input-background-color: rgba(255,255,255,0.05);
+        --sl-input-background-color-hover: rgba(255,255,255,0.08);
+        --sl-input-background-color-focus: rgba(255,255,255,0.10);
+        --sl-input-border-color: rgba(255,255,255,0.15);
+        --sl-input-border-color-hover: rgba(255,255,255,0.30);
+        --sl-input-border-color-focus: var(--sl-color-primary-400);
+        --sl-input-color: rgba(255,255,255,0.90);
+        --sl-input-color-placeholder: rgba(255,255,255,0.30);
+        --sl-input-label-color: rgba(255,255,255,0.70);
+        --sl-input-help-text-color: rgba(255,255,255,0.40);
+        --sl-input-icon-color: rgba(255,255,255,0.40);
+    }
+    sl-details::part(base) {
+        background-color: rgba(255,255,255,0.04);
+        border-color: rgba(255,255,255,0.10);
+        border-radius: var(--book-radius);
+    }
+    sl-details::part(summary) {
+        color: rgba(255,255,255,0.85);
+    }
+    sl-details::part(summary-icon) {
+        color: rgba(255,255,255,0.50);
+    }
+    sl-radio, sl-checkbox {
+        --sl-color-neutral-700: rgba(255,255,255,0.70);
+        --sl-color-neutral-600: rgba(255,255,255,0.50);
+        color: rgba(255,255,255,0.80);
+    }
+</style>
+
 <section class="mx-auto flex h-full w-full flex-col overflow-hidden border border-white/10 text-white/90 shadow-2xl backdrop-blur-md"
-         style="max-width: var(--book-panel-width); background-color: var(--sl-color-primary-800); border-radius: var(--book-radius) var(--book-radius) 0 0;">
-    <div class="shrink-0 border-b p-6" style="border-bottom-color: var(--sl-color-primary-950);">
+         style="max-width: var(--book-panel-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius) var(--book-radius) 0 0;">
+    <div class="shrink-0 border-b border-white/10 p-6">
         <div class="space-y-2">
             <p class="font-title text-2xl">@(isExisting ? "My Profile" : "Create Your Profile")</p>
             <p class="max-w-3xl text-lg text-white/70">
@@ -91,8 +123,7 @@
         </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-6"
-         style="background: var(--sl-color-primary-800); color: var(--sl-color-primary-950);">
+    <div class="flex-1 overflow-y-auto p-6">
         <form method="post"
               hx-post="@Url.Action("Upsert", "UserProfile")"
               hx-target="#alert"
@@ -142,9 +173,9 @@
                     <span asp-validation-for="TonePreference" class="text-sm text-rose-900"></span>
                 </div>
 
-                <div class="border px-4 py-3"
-                     style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.24);">
-                    <label class="mb-2 block font-title" style="color: var(--sl-color-primary-950);">Learning style</label>
+                <div class="border border-white/10 px-4 py-3"
+                     style="border-radius: var(--book-radius); background-color: rgba(255,255,255,0.05);">
+                    <label class="mb-2 block font-title text-white/70">Learning style</label>
                     <sl-radio-group name="LearningStyle" value="@selectedLearningStyle">
                         <div class="flex flex-wrap gap-3">
                             @foreach (var (val, label) in learningStyles)
@@ -153,7 +184,7 @@
                             }
                         </div>
                     </sl-radio-group>
-                    <div class="mt-2 text-sm" style="color: var(--book-paper-muted);">How you prefer explanations.</div>
+                    <div class="mt-2 text-sm text-white/40">How you prefer explanations.</div>
                 </div>
             </div>
 
@@ -172,14 +203,14 @@
                 <sl-details summary="Reading preferences (optional)">
                     <div class="mt-3 space-y-4">
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Reading languages</div>
+                            <div class="mb-2 font-title" class="text-white/70">Reading languages</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in readingLanguages)
                                 {
                                     <sl-checkbox name="ReadingLanguages[]" value="@val" checked="@(selectedReading.Contains(val))">@label</sl-checkbox>
                                 }
                             </div>
-                            <div class="mt-2 text-sm" style="color: var(--book-paper-muted);">Helps recommendations and summaries.</div>
+                            <div class="mt-2 text-sm" class="text-white/40">Helps recommendations and summaries.</div>
                         </div>
 
                         <div>
@@ -197,7 +228,7 @@
                 <sl-details summary="Genres (optional)">
                     <div class="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Loved genres</div>
+                            <div class="mb-2 font-title" class="text-white/70">Loved genres</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in genres)
                                 {
@@ -207,7 +238,7 @@
                         </div>
 
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Disliked genres</div>
+                            <div class="mb-2 font-title" class="text-white/70">Disliked genres</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in genres)
                                 {

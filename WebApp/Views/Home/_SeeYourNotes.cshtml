@@ -1,8 +1,8 @@
 @model NotesLibraryViewModel
 
 <section class="mx-auto flex h-full w-full flex-col overflow-hidden border border-white/10 text-white/90 shadow-2xl backdrop-blur-md"
-         style="max-width: var(--book-panel-width); background-color: var(--sl-color-primary-800); border-radius: var(--book-radius) var(--book-radius) 0 0;">
-    <div class="flex shrink-0 items-start justify-between gap-4 border-b p-6" style="border-bottom-color: var(--sl-color-primary-950);">
+         style="max-width: var(--book-panel-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius) var(--book-radius) 0 0;">
+    <div class="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 p-6">
         <div class="space-y-2">
             <p class="font-title text-2xl">See Your Notes</p>
             <p class="max-w-2xl text-lg text-white/70">
@@ -10,7 +10,7 @@
             </p>
         </div>
         <sl-button variant="default"
-                   style="border-color: var(--sl-color-primary-950); color: var(--sl-color-primary-50);"
+                   outline
                    hx-get="@Url.Action("Upload", "Notes")"
                    hx-target="#chat-container"
                    hx-swap="innerHTML">
@@ -19,13 +19,12 @@
         </sl-button>
     </div>
 
-    <div class="flex-1 overflow-y-auto"
-         style="background: var(--sl-color-primary-800); color: var(--sl-color-primary-950);">
+    <div class="flex-1 overflow-y-auto">
         @if (Model.Books.Count == 0)
         {
             <div class="p-6">
-                <div class="border border-dashed px-5 py-8 text-center"
-                     style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); color: var(--book-paper-muted); background-color: rgba(255,255,255,0.22);">
+                <div class="border border-dashed border-white/15 px-5 py-8 text-center text-white/50"
+                     style="border-radius: var(--book-radius); background-color: rgba(255,255,255,0.04);">
                     No imported books yet. Upload your <code>My Clippings.txt</code> file to build your library.
                 </div>
             </div>
