@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -14,6 +15,8 @@ using WebApp.Services;
 
 namespace WebApp.Controllers;
 
+public record ChatEntry(string Role, string Content);
+
 [Authorize]
 public class ChatController : Controller
 {
@@ -28,7 +31,58 @@ public class ChatController : Controller
         _logger = logger;
     }
 
-    public IActionResult Chat() => PartialView("Chat");
+    public async Task<IActionResult> Chat(CancellationToken ct = default)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return PartialView("Chat", new List<ChatEntry>());
+
+        var history = new List<ChatEntry>();
+
+        var sessionJson = await _cache.GetAsync($"agentsession:{userId}", ct);
+        if (!string.IsNullOrWhiteSpace(sessionJson))
+        {
+            try
+            {
+                var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+                using var doc = JsonDocument.Parse(sessionJson);
+
+                if (doc.RootElement.TryGetProperty("chatHistoryProviderState", out var state) &&
+                    state.TryGetProperty("messages", out var messages) &&
+                    messages.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var msg in messages.EnumerateArray())
+                    {
+                        var role = msg.TryGetProperty("role", out var r) ? r.GetString() : null;
+                        if (role is not "user" and not "assistant") continue;
+
+                        var text = "";
+                        if (msg.TryGetProperty("contents", out var contents) &&
+                            contents.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var part in contents.EnumerateArray())
+                            {
+                                if (part.TryGetProperty("$type", out var t) && t.GetString() == "text" &&
+                                    part.TryGetProperty("text", out var textProp))
+                                    text += textProp.GetString();
+                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+
+                        var content = role == "assistant" ? Markdown.ToHtml(text, pipeline) : text;
+                        history.Add(new ChatEntry(role!, content));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse session history for user {UserId}", userId);
+            }
+        }
+
+        return PartialView("Chat", history);
+    }
 
     [HttpPost("/chat/send")]
     public async Task<IActionResult> Send([FromForm] string message, CancellationToken ct)

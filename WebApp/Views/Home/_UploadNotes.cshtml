@@ -12,7 +12,7 @@
     </div>
 
     <div class="flex-1 overflow-y-auto p-6"
-         style="background: var(--book-paper-surface); color: var(--book-paper-ink);">
+         style="background: var(--sl-color-primary-800); color: var(--sl-color-primary-950);">
         <div class="space-y-5">
             @if (!string.IsNullOrWhiteSpace(Model?.StatusMessage))
             {
@@ -34,12 +34,12 @@
                   enctype="multipart/form-data"
                   class="space-y-4">
                 <label class="block space-y-2">
-                    <span class="font-title text-lg" style="color: var(--book-paper-ink);">Kindle clippings file</span>
+                    <span class="font-title text-lg" style="color: var(--sl-color-primary-950);">Kindle clippings file</span>
                     <input type="file"
                            name="file"
                            accept=".txt"
                            class="block w-full border px-4 py-3 text-base file:mr-4 file:border-0 file:bg-[rgba(45,45,45,0.12)] file:px-3 file:py-2"
-                           style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.28); color: var(--book-paper-ink);" />
+                           style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.28); color: var(--sl-color-primary-950);" />
                 </label>
 
                 <div class="flex flex-wrap gap-3">

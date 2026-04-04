@@ -92,7 +92,7 @@
     </div>
 
     <div class="flex-1 overflow-y-auto p-6"
-         style="background: var(--book-paper-surface); color: var(--book-paper-ink);">
+         style="background: var(--sl-color-primary-800); color: var(--sl-color-primary-950);">
         <form method="post"
               hx-post="@Url.Action("Upsert", "UserProfile")"
               hx-target="#alert"
@@ -144,7 +144,7 @@
 
                 <div class="border px-4 py-3"
                      style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.24);">
-                    <label class="mb-2 block font-title" style="color: var(--book-paper-ink);">Learning style</label>
+                    <label class="mb-2 block font-title" style="color: var(--sl-color-primary-950);">Learning style</label>
                     <sl-radio-group name="LearningStyle" value="@selectedLearningStyle">
                         <div class="flex flex-wrap gap-3">
                             @foreach (var (val, label) in learningStyles)
@@ -172,7 +172,7 @@
                 <sl-details summary="Reading preferences (optional)">
                     <div class="mt-3 space-y-4">
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--book-paper-ink);">Reading languages</div>
+                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Reading languages</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in readingLanguages)
                                 {
@@ -197,7 +197,7 @@
                 <sl-details summary="Genres (optional)">
                     <div class="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--book-paper-ink);">Loved genres</div>
+                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Loved genres</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in genres)
                                 {
@@ -207,7 +207,7 @@
                         </div>
 
                         <div>
-                            <div class="mb-2 font-title" style="color: var(--book-paper-ink);">Disliked genres</div>
+                            <div class="mb-2 font-title" style="color: var(--sl-color-primary-950);">Disliked genres</div>
                             <div class="flex flex-wrap gap-3">
                                 @foreach (var (val, label) in genres)
                                 {

@@ -1,9 +1,38 @@
+@model IReadOnlyList<WebApp.Controllers.ChatEntry>
+
 <div id="chat" class="flex flex-col gap-3">
 
-    <!-- Initial bot greeting -->
-    <div class="flex flex-col max-w-[75%]">
-        <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
-            <p>Welcome to the Literary Chat. How may I assist you today?</p>
+    @if (Model == null || Model.Count == 0)
+    {
+        <div class="flex flex-col max-w-[75%]">
+            <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+                <p>Welcome to the Literary Chat. How may I assist you today?</p>
+            </div>
         </div>
-    </div>
+    }
+    else
+    {
+        @foreach (var entry in Model)
+        {
+            if (entry.Role == "user")
+            {
+                <div class="flex flex-col items-end ml-auto w-full">
+                    <div class="bg-stone-800/90 text-white/95 px-4 py-3 break-words" style="border-radius: var(--book-radius);">
+                        <p>@entry.Content</p>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="flex flex-col max-w-[75%]">
+                    <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+                        <div class="prose prose-invert max-w-none prose-sm">
+                            @Html.Raw(entry.Content)
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    }
+
 </div>

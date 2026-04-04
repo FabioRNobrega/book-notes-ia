@@ -34,20 +34,20 @@
     </div>
 
     <div class="flex-1 overflow-y-auto p-6"
-         style="background: var(--book-paper-surface); color: var(--book-paper-ink);">
+         style="background: var(--sl-color-primary-800); color: var(--sl-color-primary-950);">
         <div class="space-y-3">
             @foreach (var note in Model.Notes)
             {
                 <article class="border p-4 shadow-sm"
                          style="border-radius: var(--book-radius); border-color: var(--book-paper-rule); background-color: rgba(255,255,255,0.24);">
                     <div class="mb-3 flex flex-wrap items-center gap-2 text-sm" style="color: var(--book-paper-muted);">
-                        <span class="font-title" style="color: var(--book-paper-ink);">@note.EntryType</span>
+                        <span class="font-title" style="color: var(--sl-color-primary-950);">@note.EntryType</span>
                         <span>•</span>
                         <span>@note.LocationText</span>
                         <span>•</span>
                         <span>@note.ClippedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
                     </div>
-                    <p class="whitespace-pre-wrap text-base leading-relaxed" style="color: var(--book-paper-ink);">@note.Content</p>
+                    <p class="whitespace-pre-wrap text-base leading-relaxed" style="color: var(--sl-color-primary-950);">@note.Content</p>
                 </article>
             }
         </div>
