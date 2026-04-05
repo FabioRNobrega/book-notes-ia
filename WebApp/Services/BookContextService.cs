@@ -1,0 +1,69 @@
+using Microsoft.EntityFrameworkCore;
+using WebApp.Models;
+
+namespace WebApp.Services;
+
+public class BookContextService(AppDbContext db, IOllamaService ollamaService) : IBookContextService
+{
+    public async Task<string?> GetContextAsync(Guid bookId, string userId)
+    {
+        var book = await db.Books
+            .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId);
+
+        return book?.Context;
+    }
+
+    public async Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
+    {
+        var book = await db.Books
+            .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId, ct)
+            ?? throw new KeyNotFoundException($"Book {bookId} not found for user.");
+
+        var profile = await db.UserProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId, ct);
+
+        var language = profile?.PreferredLanguage ?? "English";
+
+        var prompt = $"""
+            You are a literary assistant. Write a concise contextual paragraph for the following book.
+            Author: {book.Author}
+            Book: {book.Title}
+
+            Include: the author's life period and nationality, the historical/political context when written,
+            the literary movement, the main themes, and any other relevant cultural context.
+            Respond in {language}. Keep it under 120 words. Plain text only, no markdown, no lists.
+            """;
+
+        var context = await ollamaService.CompleteAsync(prompt, ct);
+
+        book.Context = context;
+        book.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return context;
+    }
+
+    public async Task<string> SaveManualAsync(Guid bookId, string userId, string context)
+    {
+        var book = await db.Books
+            .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId)
+            ?? throw new KeyNotFoundException($"Book {bookId} not found for user.");
+
+        book.Context = context;
+        book.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return context;
+    }
+
+    public async Task ClearAsync(Guid bookId, string userId)
+    {
+        var book = await db.Books
+            .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId)
+            ?? throw new KeyNotFoundException($"Book {bookId} not found for user.");
+
+        book.Context = null;
+        book.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+}

@@ -1,4 +1,5 @@
 @model BookDetailsViewModel
+@using WebApp.Models
 
 <div class="paper-style mb-1 flex-1 min-h-0 flex flex-col">
 <section class="mx-auto flex h-full w-full flex-col overflow-hidden text-white/90 shadow-2xl backdrop-blur-md"
@@ -31,6 +32,10 @@
             <sl-icon slot="prefix" name="arrow-left"></sl-icon>
             Back to Library
         </sl-button>
+    </div>
+
+    <div class="shrink-0 border-b border-white/10 px-6 pb-4">
+        @await Html.PartialAsync("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = Model.Id, Context = Model.Context })
     </div>
 
     <div class="flex-1 overflow-y-auto p-6">

@@ -14,13 +14,15 @@ public class NotesController : Controller
     private const string PermittedExtension = ".txt";
     private readonly AppDbContext _db;
     private readonly IKindleClippingsImportService _importService;
+    private readonly IBookContextService _bookContextService;
     private readonly ILogger<NotesController> _logger;
     private readonly long _maxFileSizeBytes;
 
-    public NotesController(AppDbContext db, IKindleClippingsImportService importService, ILogger<NotesController> logger, IConfiguration configuration)
+    public NotesController(AppDbContext db, IKindleClippingsImportService importService, IBookContextService bookContextService, ILogger<NotesController> logger, IConfiguration configuration)
     {
         _db = db;
         _importService = importService;
+        _bookContextService = bookContextService;
         _logger = logger;
         _maxFileSizeBytes = configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
     }
@@ -145,6 +147,7 @@ public class NotesController : Controller
                 Title = x.Title,
                 Author = x.Author,
                 CoverUrl = x.CoverUrl,
+                Context = x.Context,
                 Notes = x.Notes
                     .OrderByDescending(n => n.ClippedAtUtc)
                     .Select(n => new BookNoteViewModel
@@ -164,6 +167,29 @@ public class NotesController : Controller
         }
 
         return PartialView("~/Views/Notes/_BookDetails.cshtml", book);
+    }
+
+    [HttpPost("/notes/book/{id:guid}/context/generate")]
+    public async Task<IActionResult> GenerateContext(Guid id, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        try
+        {
+            var context = await _bookContextService.GenerateAndSaveAsync(id, userId, ct);
+            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = context });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Context generation failed for book {BookId}", id);
+            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = null });
+        }
     }
 
     private string? ValidateFile(IFormFile? file)

@@ -80,6 +80,8 @@ builder.Services.AddHttpClient("Unsplash", client =>
 });
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
+builder.Services.AddScoped<IOllamaService, OllamaService>();
+builder.Services.AddScoped<IBookContextService, BookContextService>();
 
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>

@@ -78,37 +78,6 @@
     var isExisting = Model is not null && Model.Id != Guid.Empty && !string.IsNullOrWhiteSpace(Model.UserId);
 }
 
-<style>
-    sl-input, sl-select, sl-textarea {
-        --sl-input-background-color: rgba(255,255,255,0.05);
-        --sl-input-background-color-hover: rgba(255,255,255,0.08);
-        --sl-input-background-color-focus: rgba(255,255,255,0.10);
-        --sl-input-border-color: rgba(255,255,255,0.15);
-        --sl-input-border-color-hover: rgba(255,255,255,0.30);
-        --sl-input-border-color-focus: var(--sl-color-primary-400);
-        --sl-input-color: rgba(255,255,255,0.90);
-        --sl-input-color-placeholder: rgba(255,255,255,0.30);
-        --sl-input-label-color: rgba(255,255,255,0.70);
-        --sl-input-help-text-color: rgba(255,255,255,0.40);
-        --sl-input-icon-color: rgba(255,255,255,0.40);
-    }
-    sl-details::part(base) {
-        background-color: rgba(255,255,255,0.04);
-        border-color: rgba(255,255,255,0.10);
-        border-radius: var(--book-radius);
-    }
-    sl-details::part(summary) {
-        color: rgba(255,255,255,0.85);
-    }
-    sl-details::part(summary-icon) {
-        color: rgba(255,255,255,0.50);
-    }
-    sl-radio, sl-checkbox {
-        --sl-color-neutral-700: rgba(255,255,255,0.70);
-        --sl-color-neutral-600: rgba(255,255,255,0.50);
-        color: rgba(255,255,255,0.80);
-    }
-</style>
 
 <div class="paper-style mb-1 flex-1 min-h-0 flex flex-col">
 <section class="mx-auto flex h-full w-full flex-col overflow-hidden text-white/90 shadow-2xl backdrop-blur-md"
