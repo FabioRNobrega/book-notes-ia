@@ -87,6 +87,14 @@ make docker-build
 make docker-run
 ```
 
+Platform-specific startup targets:
+
+```bash
+make docker-run          # Linux AMD
+make docker-run-mac      # macOS Apple Silicon (arm64, CPU-only in Docker)
+make docker-run-windows  # Windows + Docker Desktop/WSL2 + NVIDIA GPU
+```
+
 Or directly with Docker Compose:
 
 ```bash
