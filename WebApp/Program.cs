@@ -34,6 +34,7 @@ builder.Services.AddSingleton<IChatClient>(_ =>
         .AsBuilder()
         .ConfigureOptions(options =>
         {
+            options.Temperature = 0; // sets the temperature 0 to 1 [higher is more creative, lower is more coherent]
             options.AdditionalProperties ??= new AdditionalPropertiesDictionary();
             options.AdditionalProperties["think"] = false; // This disable think mode on qwen to faster responses
         })

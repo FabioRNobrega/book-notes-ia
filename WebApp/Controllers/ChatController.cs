@@ -9,25 +9,44 @@ using Markdig;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Agents.AI;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using WebApp.Models;
 using WebApp.Services;
 
 namespace WebApp.Controllers;
 
 public record ChatEntry(string Role, string Content);
+internal sealed record OrchestratorRouteDecision(string Tool, Guid? BookId);
+internal sealed record BookRoutingCandidate(Guid Id, string Title, string Author);
 
 [Authorize]
 public class ChatController : Controller
 {
     private readonly AIAgent _agent;
+    private readonly AppDbContext _db;
     private readonly ICacheHandler _cache;
+    private readonly IBookContextService _bookContextService;
+    private readonly IChatClient _chatClient;
     private readonly ILogger<ChatController> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+    private static readonly TimeSpan SessionTtl = TimeSpan.FromDays(7);
 
-    public ChatController(AIAgent agent, ICacheHandler cache, ILogger<ChatController> logger)
+    public ChatController(
+        AIAgent agent,
+        AppDbContext db,
+        ICacheHandler cache,
+        IBookContextService bookContextService,
+        IChatClient chatClient,
+        ILogger<ChatController> logger)
     {
         _agent = agent;
+        _db = db;
         _cache = cache;
+        _bookContextService = bookContextService;
+        _chatClient = chatClient;
         _logger = logger;
     }
 
@@ -44,7 +63,6 @@ public class ChatController : Controller
         {
             try
             {
-                var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
                 using var doc = JsonDocument.Parse(sessionJson);
 
                 if (doc.RootElement.TryGetProperty("chatHistoryProviderState", out var state) &&
@@ -70,7 +88,7 @@ public class ChatController : Controller
 
                         if (string.IsNullOrWhiteSpace(text)) continue;
 
-                        var content = role == "assistant" ? Markdown.ToHtml(text, pipeline) : text;
+                        var content = role == "assistant" ? Markdown.ToHtml(text, MarkdownPipeline) : text;
                         history.Add(new ChatEntry(role!, content));
                     }
                 }
@@ -95,48 +113,39 @@ public class ChatController : Controller
             return Unauthorized();
 
         var sessionKey = $"agentsession:{userId}";
+        var contextKey = $"agentcontext:{userId}";
         var userProfileKey = $"agentprofile:{userId}";
-        var sessionTtl = TimeSpan.FromDays(7);
 
         try
         {
-            // 1) Load or create session
-            AgentSession session;
-            var sessionJson = await _cache.GetAsync(sessionKey, ct);
-
-            if (!string.IsNullOrWhiteSpace(sessionJson))
-            {
-                using var doc = JsonDocument.Parse(sessionJson);
-                session = await _agent.DeserializeSessionAsync(doc.RootElement);
-            }
-            else
-            {
-                session = await _agent.CreateSessionAsync(ct);
-            }
-
-            // 2) Load user profile and build per-invocation instructions
+            var session = await LoadOrCreateSessionAsync(sessionKey, ct);
+            var workingContext = await _cache.GetAsync(contextKey, ct);
             var userProfileJson = await _cache.GetAsync(userProfileKey, ct);
             var profileInstructions = BuildProfileInstructions(userProfileJson);
+            var routeDecision = await RouteAsync(userId, message, ct);
 
-            // 3) Run message with per-invocation instructions
+            if (routeDecision.Tool == "GenerateBookContext" && routeDecision.BookId is Guid bookId)
+            {
+                var toolResult = await _bookContextService.GenerateToolResponseAsync(bookId, userId, workingContext, ct);
+                workingContext = toolResult.AppendedContext;
+                await _cache.SetAsync(contextKey, workingContext, SessionTtl, ct);
+            }
+
             var runOptions = new ChatClientAgentRunOptions
             {
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = profileInstructions
+                    Instructions = BuildOrchestratorInstructions(profileInstructions, workingContext)
                 }
             };
 
             var response = await _agent.RunAsync(message, session, runOptions, ct);
 
-            // 4) Persist updated session
             var serialized = await _agent.SerializeSessionAsync(session, cancellationToken: ct);
             var serializedJson = serialized.GetRawText();
-            await _cache.SetAsync(sessionKey, serializedJson, sessionTtl, ct);
+            await _cache.SetAsync(sessionKey, serializedJson, SessionTtl, ct);
 
-            // 5) Render markdown
-            var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
-            var html = Markdown.ToHtml(response.Text ?? string.Empty, pipeline);
+            var html = Markdown.ToHtml(response.Text ?? string.Empty, MarkdownPipeline);
 
             return PartialView("_BotMessage", html);
         }
@@ -155,11 +164,190 @@ public class ChatController : Controller
             return Unauthorized();
 
         var sessionKey = $"agentsession:{userId}";
+        var contextKey = $"agentcontext:{userId}";
 
         await _cache.RemoveAsync(sessionKey, ct);
+        await _cache.RemoveAsync(contextKey, ct);
         return PartialView("~/Views/Shared/Components/_Alert.cshtml",
             (true, "Chat session history has been deleted"));
     }
+
+    private async Task<AgentSession> LoadOrCreateSessionAsync(string sessionKey, CancellationToken ct)
+    {
+        var sessionJson = await _cache.GetAsync(sessionKey, ct);
+
+        if (!string.IsNullOrWhiteSpace(sessionJson))
+        {
+            using var doc = JsonDocument.Parse(sessionJson);
+            return await _agent.DeserializeSessionAsync(doc.RootElement);
+        }
+
+        return await _agent.CreateSessionAsync(ct);
+    }
+
+    private async Task<OrchestratorRouteDecision> RouteAsync(string userId, string message, CancellationToken ct)
+    {
+        var books = await _db.Books
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.UpdatedAt)
+            .Select(x => new BookRoutingCandidate(x.Id, x.Title, x.Author))
+            .Take(25)
+            .ToListAsync(ct);
+
+        if (books.Count == 0)
+            return new OrchestratorRouteDecision("none", null);
+
+        var heuristicBookId = TryRouteGenerateBookContext(message, books);
+        if (heuristicBookId is not null)
+            return new OrchestratorRouteDecision("GenerateBookContext", heuristicBookId);
+
+        var booksList = string.Join(Environment.NewLine, books.Select(book => $"- {book.Id} | {book.Title} | {book.Author}"));
+        var routingPrompt = $$"""
+            You are the orchestration router for a book notes assistant.
+            Decide whether to call a tool before the assistant answers.
+
+            Available tool:
+            - GenerateBookContext(bookId): Use when the user explicitly asks to generate, create, regenerate, or provide book context/background for one specific book.
+
+            Rules:
+            - Return JSON only.
+            - Use the tool only for one clear matching book from the available books list.
+            - If the request is ambiguous, references multiple books, or is not clearly about generating book context, return tool "none".
+            - Never invent a book id.
+
+            Response schema:
+            {"tool":"none","bookId":null}
+            or
+            {"tool":"GenerateBookContext","bookId":"GUID"}
+
+            User message:
+            {{message}}
+
+            Available books:
+            {{booksList}}
+            """;
+
+        try
+        {
+            var response = await _chatClient.GetResponseAsync(
+                [new ChatMessage(ChatRole.User, routingPrompt)],
+                cancellationToken: ct);
+
+            var parsed = ParseRouteDecision(response.Text);
+            return parsed ?? new OrchestratorRouteDecision("none", null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to route tool invocation for user {UserId}", userId);
+            return new OrchestratorRouteDecision("none", null);
+        }
+    }
+
+    private static Guid? TryRouteGenerateBookContext(string message, IReadOnlyList<BookRoutingCandidate> books)
+    {
+        if (!IsBookContextRequest(message))
+            return null;
+
+        if (Guid.TryParse(message.Trim(), out var directBookId))
+            return books.Any(book => book.Id == directBookId) ? directBookId : null;
+
+        foreach (var book in books)
+        {
+            if (ContainsBookReference(message, book))
+                return book.Id;
+        }
+
+        return null;
+    }
+
+    private static bool IsBookContextRequest(string message)
+    {
+        var normalized = Normalize(message);
+        return normalized.Contains("context")
+            || normalized.Contains("background")
+            || normalized.Contains("historical")
+            || normalized.Contains("literarymovement")
+            || normalized.Contains("aboutthisbook");
+    }
+
+    private static bool ContainsBookReference(string message, BookRoutingCandidate book)
+    {
+        var normalizedMessage = Normalize(message);
+        var normalizedTitle = Normalize(book.Title);
+        var normalizedAuthor = Normalize(book.Author);
+
+        return normalizedMessage.Contains(normalizedTitle) || normalizedMessage.Contains(normalizedAuthor);
+    }
+
+    private static string Normalize(string value)
+        => new(value
+            .ToLowerInvariant()
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
+
+    private static OrchestratorRouteDecision? ParseRouteDecision(string? responseText)
+    {
+        if (string.IsNullOrWhiteSpace(responseText))
+            return null;
+
+        var json = ExtractJsonObject(responseText);
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            var decision = JsonSerializer.Deserialize<OrchestratorRouteDecision>(json, JsonOptions);
+            return decision is null
+                ? null
+                : new OrchestratorRouteDecision(
+                    string.IsNullOrWhiteSpace(decision.Tool) ? "none" : decision.Tool,
+                    decision.BookId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ExtractJsonObject(string responseText)
+    {
+        var start = responseText.IndexOf('{');
+        var end = responseText.LastIndexOf('}');
+
+        if (start < 0 || end <= start)
+            return null;
+
+        return responseText[start..(end + 1)];
+    }
+
+    private static string? BuildOrchestratorInstructions(string? profileInstructions, string? workingContext)
+    {
+        var sections = new List<string>
+        {
+            """
+            You are the orchestrator for the Book Notes IA chat experience.
+            Use any supplied working context as authoritative reference material for the current conversation.
+            If working context is missing relevant facts, be honest about that instead of inventing details.
+            Prefer grounded answers that explicitly use the user's saved books and notes context when available.
+            """
+        };
+
+        if (!string.IsNullOrWhiteSpace(profileInstructions))
+            sections.Add(profileInstructions);
+
+        if (!string.IsNullOrWhiteSpace(workingContext))
+        {
+            sections.Add(
+                $"""
+                Working context gathered from tools:
+                {workingContext}
+                """);
+        }
+
+        return string.Join($"{Environment.NewLine}{Environment.NewLine}", sections);
+    }
+
     private static string? BuildProfileInstructions(string? userProfileJson)
     {
         // No profile => no extra instructions for this invocation.
