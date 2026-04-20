@@ -1,0 +1,15 @@
+services:
+  tests:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    container_name: book-notes-tests
+    working_dir: /src
+    volumes:
+      - ./:/src
+      - nuget_cache:/root/.nuget/packages
+    command:
+      - sh
+      - -lc
+      - dotnet restore book-notes-ia.sln && dotnet test WebApp.Tests/WebApp.Tests.csproj --no-restore --logger "console;verbosity=minimal"
+
+volumes:
+  nuget_cache:

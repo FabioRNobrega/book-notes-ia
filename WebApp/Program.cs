@@ -56,6 +56,8 @@ builder.Services.AddSingleton<AIAgent>(sp =>
             """
     );
 });
+builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
+builder.Services.AddScoped<IChatToolRouter, ChatToolRouter>();
 
 // Build Redis for cache handler
 builder.Services.AddStackExchangeRedisCache(options =>
