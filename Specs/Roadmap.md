@@ -1,0 +1,51 @@
+# Roadmap
+
+## Table of Contents
+
+- [Roadmap](#roadmap)
+  - [Current State](#current-state)
+  - [Phases](#phases)
+  - [Gantt](#gantt)
+  - [Milestones](#milestones)
+  - [Evidence and Gaps](#evidence-and-gaps)
+
+## Current State
+
+The checked-out app has a working ASP.NET Core MVC structure with Identity authentication, PostgreSQL persistence, Redis-backed cache, local Ollama chat through Microsoft Agent Framework, Kindle `.txt` notes import, a per-user notes library, and generated book context stored on `Book.Context`. The test project currently covers the chat tool path, book context API generation response, and book context service persistence behavior.
+
+No completed priority-labeled spec files exist yet. The only spec folder is [21-04-2026-example-task](21-04-2026-example-task/Requirements.md), so the phases below use that real feature as P0 and leave explicit TODOs for missing P1/P2 specs.
+
+## Phases
+
+| Phase | Priority | Item | Spec | Effort | Source |
+| --- | --- | --- | --- | --- | --- |
+| Phase 1 | P0 | Document and harden chat-triggered book context generation | [21-04-2026-example-task/Requirements.md](21-04-2026-example-task/Requirements.md) | Medium | Existing `IChatToolRouter`, `ChatController`, `BookContextService`, and tests. |
+| Phase 2 | P1 | ⚠️ TODO: Add a real P1 spec for the next planned feature. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P1 item. |
+| Phase 3 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
+
+## Gantt
+
+```mermaid
+gantt
+    title BOOK-NOTES-IA Spec-Driven Roadmap
+    dateFormat DD-MM-YYYY
+    axisFormat %d-%m-%Y
+    section P0
+    Chat-triggered book context generation spec :p0, 21-04-2026, 3d
+    section P1
+    TODO: Define next priority spec :p1, after p0, 3d
+    section P2
+    TODO: Define later priority spec :p2, after p1, 3d
+```
+
+## Milestones
+
+- Book context tool path documented: [21-04-2026-example-task/Plan.md](21-04-2026-example-task/Plan.md), [Requirements.md](21-04-2026-example-task/Requirements.md), and [Validation.md](21-04-2026-example-task/Validation.md) describe the existing chat-triggered context generation flow.
+- Testable local stack: `make docker-run`, `make docker-run-mac`, or `make docker-run-windows` starts the app, Ollama, PostgreSQL, and Redis with the appropriate compose override.
+- Testable regression suite: `make test` runs `dotnet test WebApp.Tests/WebApp.Tests.csproj` through `docker-compose.test.yml`.
+
+## Evidence and Gaps
+
+- Current implementation evidence: [../README.md](../README.md), [../CHANGELOG.md](../CHANGELOG.md), [../WebApp/Controllers/ChatController.cs](../WebApp/Controllers/ChatController.cs), [../WebApp/Services/IChatToolRouter.cs](../WebApp/Services/IChatToolRouter.cs), [../WebApp/Services/BookContextService.cs](../WebApp/Services/BookContextService.cs).
+- ⚠️ TODO: Add explicit P0/P1/P2 labels to future spec folders so prioritization does not need to be inferred from code history.
+- ⚠️ TODO: Decide whether the stashed spec-kit/devcontainer work visible in `git stash list` should become checked-in roadmap scope.
