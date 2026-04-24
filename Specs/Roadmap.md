@@ -20,7 +20,7 @@ No completed priority-labeled spec files exist yet. The only spec folder is [21-
 | Phase | Priority | Item | Spec | Effort | Source |
 | --- | --- | --- | --- | --- | --- |
 | Phase 1 | P0 | Document and harden chat-triggered book context generation | [21-04-2026-example-task/Requirements.md](21-04-2026-example-task/Requirements.md) | Medium | Existing `IChatToolRouter`, `ChatController`, `BookContextService`, and tests. |
-| Phase 2 | P1 | ⚠️ TODO: Add a real P1 spec for the next planned feature. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P1 item. |
+| Phase 2 | P1 | Add a `make release` command that updates CHANGELOG, commits, and tags | [20260424165257-release-command/Requirements.md](20260424165257-release-command/Requirements.md) | Small | New `scripts/release.sh` + `Makefile` target; no application code changes. |
 | Phase 3 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
 
 ## Gantt

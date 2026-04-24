@@ -5,7 +5,7 @@ MAC_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.mac.yml
 WINDOWS_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.windows.yml
 TEST_COMPOSE_FILES := -f docker-compose.test.yml
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release
 
 
 docker-run:
@@ -45,6 +45,9 @@ docker-test-build:
 
 docker-test-shell:
 	$(COMPOSE) $(TEST_COMPOSE_FILES) run --rm tests sh
+
+release:
+	Scripts/release.sh $(VERSION)
 
 ollama-chat:
 	docker exec -it ollama ollama run $(MODEL)

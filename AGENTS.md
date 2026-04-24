@@ -67,9 +67,23 @@ Use `docker-compose.yml` as the base configuration. Add exactly one OS-specific 
 - Follow the SDD workflow: spec -> plan -> tasks -> implement.
 - All new features must have a spec file in `Specs/` before implementation begins.
 - Match the existing code style and naming conventions.
-- Spec folder names follow `DD-MM-YYYY-feature-name`, for example `21-04-2026-example-task`.
+- Spec folder names follow `YYYYMMDDHHMMSS-feature-name`, for example `20260421162607-example-task`.
 - Always describe the AI integration as Microsoft Agent Framework.
 - Do not commit `.env`, generated CSS, `bin/`, or `obj/` content.
+
+## Execution Environment
+
+All code execution happens inside Docker. Never run `dotnet`, `nuget`, or any other native CLI tool directly on the host. Use the Make targets or `docker compose exec` equivalents instead.
+
+| Intent | Command to use |
+| --- | --- |
+| Run tests | `make test` |
+| Open a shell in the test container | `make docker-test-shell` |
+| Install/restore packages | `make docker-test-shell` then `dotnet restore` inside the container |
+| Debug or inspect app output | `docker compose logs -f webapp` |
+| Run a migration | `make docker-test-shell` then the EF command inside the container |
+
+If a task requires a command not listed here, use `docker compose exec <service> <command>` rather than running the command on the host.
 
 ## Make Commands
 
@@ -99,9 +113,26 @@ Ollama:
 - `ollama-logs-mac` - follow macOS Ollama logs.
 - `ollama-logs-windows` - follow Windows Ollama logs.
 
+## Agent-Agnostic Commands
+
+Slash commands are stored in `.agents/commands/` — the canonical, agent-neutral location. Any agent or tool that supports slash commands should read command definitions from there.
+
+| Command | File |
+| --- | --- |
+| `/implement-spec` | `.agents/commands/implement-spec.md` |
+| `/new-spec` | `.agents/commands/new-spec.md` |
+| `/pr-description` | `.agents/commands/pr-description.md` |
+| `/prompt-generator` | `.agents/commands/prompt-generator.md` |
+
+**Claude Code** resolves these via a symlink: `.claude/commands → .agents/commands`. No extra configuration needed.
+
+**Codex** resolves these via the `claude-commands` skill in `.claude/codex/skills/claude-commands/`, which reads from `.agents/commands/` directly.
+
+To add a new command that works in all agents: create a single `.md` file in `.agents/commands/`.
+
 ## Spec-Kit Workflow
 
-The repository has a `Specs/` directory and the current documentation follows the spec-driven sequence: specify requirements, plan implementation, validate with tests, then implement. Slash commands referenced by the project context are `/speckit.specify`, `/speckit.plan`, and `/speckit.tasks`. ⚠️ TODO: No checked-in command implementation is present in the current tree; a stash entry named `spec kit implementation` exists but is not applied.
+The repository follows a spec-driven sequence: specify requirements → plan implementation → validate with tests → implement. Use the `/new-spec` command to create a spec folder under `Specs/`, then `/implement-spec` to carry out the implementation.
 
 ## Key Documentation
 

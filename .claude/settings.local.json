@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version:*)",
+      "Bash(kubectl get:*)",
+      "Bash(gh pr:*)",
+      "Bash(brew list:*)",
+      "Read(//usr/local/bin/**)"
+    ]
+  }
+}

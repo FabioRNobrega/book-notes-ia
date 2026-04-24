@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude Commands"
+  short_description: "Run slash-style command files from .agents/commands."
+  default_prompt: "Use slash commands such as /implement-spec by loading and following the matching .agents/commands markdown file."
