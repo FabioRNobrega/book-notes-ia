@@ -21,7 +21,9 @@ No completed priority-labeled spec files exist yet. The only spec folder is [21-
 | --- | --- | --- | --- | --- | --- |
 | Phase 1 | P0 | Document and harden chat-triggered book context generation | [21-04-2026-example-task/Requirements.md](21-04-2026-example-task/Requirements.md) | Medium | Existing `IChatToolRouter`, `ChatController`, `BookContextService`, and tests. |
 | Phase 2 | P1 | Add a `make release` command that updates CHANGELOG, commits, and tags | [20260424165257-release-command/Requirements.md](20260424165257-release-command/Requirements.md) | Small | New `scripts/release.sh` + `Makefile` target; no application code changes. |
-| Phase 3 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
+| Phase 3 | P1 | Add a GitHub Actions CI workflow that runs `dotnet test` on push/PR to `main` | [20260424212700-ci-test-workflow/Requirements.md](20260424212700-ci-test-workflow/Requirements.md) | Small | New `.github/workflows/ci.yml`; no application code changes. |
+| Phase 4 | P1 | Upgrade `Microsoft.Agents.AI` from `1.0.0-preview.260212.1` to stable `1.3.0` | [20260424212800-upgrade-microsoft-agents-ai/Requirements.md](20260424212800-upgrade-microsoft-agents-ai/Requirements.md) | Small | One `PackageReference` change + possible API call-site fixes in `WebApp.csproj`, `Program.cs`, `IChatOrchestratorAgent.cs`. |
+| Phase 5 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
 
 ## Gantt
 

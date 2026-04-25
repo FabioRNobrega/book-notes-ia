@@ -44,7 +44,24 @@ Do not ask questions you can answer by reading the code.
 
 ### Step 3 — Determine the folder name
 
-- Timestamp is like `20250224162607` format.
+**Timestamp rules — read carefully before creating any folder:**
+
+- Format is `YYYYMMDDHHMMSS` (14 digits, no separators).
+- The timestamp MUST reflect the real wall-clock time at the moment the spec is created.
+  Use the `currentDate` value injected into your context for the date portion (`YYYYMMDD`),
+  and the actual current time for the time portion (`HHMMSS`).
+- NEVER invent or approximate a timestamp (e.g. `120000`, `130000`). If you are unsure of
+  the current time, ask the user before creating any files.
+- After computing the timestamp, verify it is strictly greater than every existing timestamp
+  prefix already present under `Specs/`. List the existing folders with `ls Specs/` and
+  compare. If your timestamp would sort before an existing spec, you have the wrong time —
+  stop and correct it before writing any files.
+
+Example for a spec created at 21:27:05 on 2026-04-24:
+
+- Date: `20260424`, time: `212705` → folder prefix: `20260424212705`
+- Full path: `Specs/20260424212705-my-feature/`
+
 - Slug from `$ARGUMENTS`: lowercase, hyphens only, no spaces (e.g. `improve-demand-build-cache`).
 - Full path: `Specs/<timestamp>-<slug>/`
 

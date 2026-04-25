@@ -105,4 +105,14 @@ rm -f "$BACKUP"
 # FR8: annotated tag
 git tag -a "v$VERSION" -m "Release v$VERSION"
 
-echo "Tagged v$VERSION. Run: git push && git push --tags"
+# Push commit and tag to remote
+git push
+git push --tags
+
+# Create GitHub release from the tag
+REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+gh release create "v$VERSION" \
+  --title "v$VERSION" \
+  --notes "See [CHANGELOG.md](CHANGELOG.md) for details."
+
+echo "Released v$VERSION — https://github.com/$REPO/releases/tag/v$VERSION"
