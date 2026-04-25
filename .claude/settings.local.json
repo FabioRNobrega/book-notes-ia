@@ -5,7 +5,8 @@
       "Bash(kubectl get:*)",
       "Bash(gh pr:*)",
       "Bash(brew list:*)",
-      "Read(//usr/local/bin/**)"
+      "Read(//usr/local/bin/**)",
+      "Bash(docker compose exec webapp bash*"
     ]
   }
 }

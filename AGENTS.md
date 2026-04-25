@@ -73,15 +73,40 @@ Use `docker-compose.yml` as the base configuration. Add exactly one OS-specific 
 
 ## Execution Environment
 
-All code execution happens inside Docker. Never run `dotnet`, `nuget`, or any other native CLI tool directly on the host. Use the Make targets or `docker compose exec` equivalents instead.
+All code execution happens inside Docker. Never run `dotnet`, `nuget`, or any other native CLI tool directly on the host — these are not installed there. Use `docker compose exec` or Make targets instead.
+
+The `webapp` container runs the full `.NET SDK 9.0` image (not a slim runtime). When the stack is running you can open a shell inside it and use any `dotnet` command:
+
+```bash
+docker compose exec webapp bash
+# then inside the container:
+dotnet build WebApp/WebApp.csproj
+dotnet test WebApp.Tests/WebApp.Tests.csproj
+dotnet ef migrations list
+```
 
 | Intent | Command to use |
 | --- | --- |
-| Run tests | `make test` |
-| Open a shell in the test container | `make docker-test-shell` |
-| Install/restore packages | `make docker-test-shell` then `dotnet restore` inside the container |
+| Open a dev shell with full .NET SDK | `docker compose exec webapp bash` |
+| Build the application | `docker compose exec webapp bash` → `dotnet build WebApp/WebApp.csproj` |
+| Run tests (isolated container) | `make test` |
+| Open a shell in the isolated test container | `make docker-test-shell` |
+| Run a migration | `docker compose exec webapp bash` → `dotnet ef migrations add <Name>` |
+| Restore packages | `docker compose exec webapp bash` → `dotnet restore` |
 | Debug or inspect app output | `docker compose logs -f webapp` |
-| Run a migration | `make docker-test-shell` then the EF command inside the container |
+
+> **Note:** `make test` spins up a separate, ephemeral `mcr.microsoft.com/dotnet/sdk:9.0` container via `docker-compose.test.yml`. Use it for clean CI-style test runs. Use `docker compose exec webapp bash` for interactive development against the already-running stack.
+
+### Pre-installed tools in the `webapp` container
+
+The following global .NET tools are installed in `WebApp/Dockerfile` and available inside the container without any extra setup:
+
+| Tool | Command |
+| --- | --- |
+| Entity Framework Core CLI | `dotnet ef` |
+| ASP.NET Core Code Generator | `dotnet-aspnet-codegenerator` |
+
+If a task requires a tool that is not in this list, **add it to `WebApp/Dockerfile`** with a `RUN dotnet tool install --global <tool>` line — do not install it at runtime inside the container. After editing the Dockerfile, rebuild with `make docker-build` (or the platform-specific equivalent) before using the new tool.
 
 If a task requires a command not listed here, use `docker compose exec <service> <command>` rather than running the command on the host.
 

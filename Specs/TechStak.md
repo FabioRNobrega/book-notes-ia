@@ -38,7 +38,7 @@
 
 | Service | Compose file(s) | Image / Build | Purpose |
 | --- | --- | --- | --- |
-| `webapp` | `docker-compose.yml` | Builds `./WebApp/Dockerfile` | Runs the ASP.NET Core MVC app on `http://localhost:8080`. |
+| `webapp` | `docker-compose.yml` | Builds `./WebApp/Dockerfile` (final stage: `mcr.microsoft.com/dotnet/sdk:9.0`) | Runs the ASP.NET Core MVC app on `http://localhost:8080`; the full .NET SDK is available inside — exec with `docker compose exec webapp bash` to run `dotnet` commands against the live stack. |
 | `ollama` | `docker-compose.yml`, `docker-compose.linux.yml`, `docker-compose.mac.yml`, `docker-compose.windows.yml` | `ollama/ollama:latest` | Runs local model inference and pulls `qwen3.5:4b`. |
 | `postgres` | `docker-compose.yml` | `postgres:16-alpine` | Stores Identity, profile, book, note, and context data. |
 | `redis` | `docker-compose.yml` | `redis:7-alpine` | Stores chat session/context/profile cache entries. |
