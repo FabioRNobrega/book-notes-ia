@@ -14,6 +14,8 @@
 
 `WebApp/WebApp.csproj` pins `Microsoft.Agents.AI` at `1.0.0-preview.260212.1`, a pre-release package from February 2026. As of 2026-04-24, the package has reached stable `1.3.0` on NuGet (https://www.nuget.org/packages/Microsoft.Agents.AI). Pinning a preview release in production code means the project misses stability fixes and API refinements shipped across `1.0.0`, `1.1.0`, `1.2.0`, and `1.3.0`. It also signals to contributors that the AI agent integration is experimental when it is not.
 
+`Microsoft.Extensions.AI` and `Microsoft.Extensions.AI.Abstractions` are pinned at `10.3.0`. Version `10.5.0` was released alongside `Microsoft.Agents.AI 1.3.0` and is required as a compatible transitive baseline for the stable agent package. Both packages are upgraded as part of this spec.
+
 The two files that consume the package's public API directly are `WebApp/Services/IChatOrchestratorAgent.cs` and `WebApp/Program.cs`. The types used are `AIAgent`, `AgentSession`, `ChatClientAgent`, and `ChatClientAgentRunOptions`. Any breaking API changes between the preview and `1.3.0` must be identified and adapted.
 
 ## User Stories
@@ -28,7 +30,7 @@ The two files that consume the package's public API directly are `WebApp/Service
 2. FR2 — `WebApp/Services/IChatOrchestratorAgent.cs` must compile without errors against the `1.3.0` API; any renamed or removed types (`AIAgent`, `AgentSession`, `ChatClientAgent`, `ChatClientAgentRunOptions`) must be updated to their `1.3.0` equivalents.
 3. FR3 — `WebApp/Program.cs` must compile without errors; the `ChatClientAgent` construction and `AIAgent` singleton registration must be valid under `1.3.0`.
 4. FR4 — `make test` (`docker compose -f docker-compose.test.yml run --rm tests`) must exit with code 0 after the upgrade.
-5. FR5 — No other packages in `WebApp.csproj` or `WebApp.Tests.csproj` may be inadvertently upgraded or downgraded as a side effect of this change.
+5. FR5 — `Microsoft.Extensions.AI` and `Microsoft.Extensions.AI.Abstractions` must be upgraded from `10.3.0` to `10.5.0` in `WebApp/WebApp.csproj`. No other packages in `WebApp.csproj` or `WebApp.Tests.csproj` may be changed.
 
 ## Non-Functional Requirements
 
@@ -38,7 +40,7 @@ The two files that consume the package's public API directly are `WebApp/Service
 ## Out of Scope
 
 - Adopting new features introduced in `1.1.0`–`1.3.0` beyond what is required to keep the existing code compiling and passing tests.
-- Upgrading `Microsoft.Extensions.AI` or `Microsoft.Extensions.AI.Abstractions` (currently `10.3.0`); those are separate packages with their own release cadence.
+- Adopting new features introduced by the `Microsoft.Extensions.AI 10.5.0` update beyond what is needed for compatibility.
 - Upgrading any other `Microsoft.Agents.*` packages not currently referenced.
 
 ## Open Questions

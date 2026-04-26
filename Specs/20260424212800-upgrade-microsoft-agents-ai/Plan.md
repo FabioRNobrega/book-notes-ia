@@ -12,7 +12,7 @@
 
 ## Summary
 
-Update the single `PackageReference` for `Microsoft.Agents.AI` in `WebApp/WebApp.csproj` from `1.0.0-preview.260212.1` to `1.3.0`, then adapt any API call sites in `WebApp/Program.cs` and `WebApp/Services/IChatOrchestratorAgent.cs` to compile cleanly. No architectural changes are required.
+Update three `PackageReference` entries in `WebApp/WebApp.csproj`: `Microsoft.Agents.AI` from `1.0.0-preview.260212.1` to `1.3.0`, and `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` from `10.3.0` to `10.5.0`. Adapt any API call sites in `WebApp/Program.cs` and `WebApp/Services/IChatOrchestratorAgent.cs` to compile cleanly. No architectural changes are required.
 
 ## Technical Approach
 
@@ -35,7 +35,7 @@ Because `WebApp.Tests` does not reference `Microsoft.Agents.AI` directly (it moc
 
 **Existing files to modify:**
 
-- [WebApp/WebApp.csproj](../WebApp/WebApp.csproj) — change `Version="1.0.0-preview.260212.1"` to `Version="1.3.0"` on the `Microsoft.Agents.AI` `PackageReference`.
+- [WebApp/WebApp.csproj](../WebApp/WebApp.csproj) — change `Microsoft.Agents.AI` to `1.3.0`; change `Microsoft.Extensions.AI` and `Microsoft.Extensions.AI.Abstractions` to `10.5.0`.
 - [WebApp/Program.cs](../WebApp/Program.cs) — fix any API call sites that changed in `1.3.0` (most likely none, but must be verified after restore).
 - [WebApp/Services/IChatOrchestratorAgent.cs](../WebApp/Services/IChatOrchestratorAgent.cs) — fix any API call sites that changed in `1.3.0`.
 

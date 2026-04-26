@@ -66,6 +66,61 @@ public class ChatControllerTests
         Assert.Null(await cache.GetAsync($"agentcontext:{userId}"));
     }
 
+    [Fact]
+    public async Task Send_WhenMessageIsEmpty_ReturnsEmptyContent()
+    {
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            new FakeCacheHandler(),
+            new FakeBookContextService(),
+            new FakeChatToolRouter(new ChatToolRouteDecision("none", null)),
+            "user-1");
+
+        var result = await controller.Send("", CancellationToken.None);
+
+        var content = Assert.IsType<Microsoft.AspNetCore.Mvc.ContentResult>(result);
+        Assert.Equal("", content.Content);
+    }
+
+    [Fact]
+    public async Task Send_WhenNoToolRouted_CallsAgentAndSavesSession()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        var agent = new FakeChatOrchestratorAgent();
+        var controller = CreateController(
+            agent,
+            cache,
+            new FakeBookContextService(),
+            new FakeChatToolRouter(new ChatToolRouteDecision("none", null)),
+            userId);
+
+        var result = await controller.Send("Hello", CancellationToken.None);
+
+        var partial = Assert.IsType<Microsoft.AspNetCore.Mvc.PartialViewResult>(result);
+        Assert.Equal("_BotMessage", partial.ViewName);
+        Assert.Equal("Hello", agent.LastMessage);
+        Assert.DoesNotContain("Working context gathered from tools:", agent.LastInstructions);
+        Assert.Equal("""{"session":"updated"}""", await cache.GetAsync($"agentsession:{userId}"));
+    }
+
+    [Fact]
+    public async Task Send_WhenAgentThrows_ReturnsErrorBotMessage()
+    {
+        var controller = CreateController(
+            new ThrowingChatOrchestratorAgent(),
+            new FakeCacheHandler(),
+            new FakeBookContextService(),
+            new FakeChatToolRouter(new ChatToolRouteDecision("none", null)),
+            "user-1");
+
+        var result = await controller.Send("Hello", CancellationToken.None);
+
+        var partial = Assert.IsType<Microsoft.AspNetCore.Mvc.PartialViewResult>(result);
+        Assert.Equal("_BotMessage", partial.ViewName);
+        Assert.Contains("Error", Assert.IsType<string>(partial.Model));
+    }
+
     private static ChatController CreateController(
         IChatOrchestratorAgent agent,
         ICacheHandler cache,
@@ -127,6 +182,12 @@ public class ChatControllerTests
         }
 
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);
+    }
+
+    private sealed class ThrowingChatOrchestratorAgent : IChatOrchestratorAgent
+    {
+        public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, CancellationToken ct = default)
+            => throw new InvalidOperationException("agent failure");
     }
 
     private sealed class FakeCacheHandler : ICacheHandler
