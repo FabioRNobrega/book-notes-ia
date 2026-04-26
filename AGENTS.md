@@ -110,6 +110,22 @@ If a task requires a tool that is not in this list, **add it to `WebApp/Dockerfi
 
 If a task requires a command not listed here, use `docker compose exec <service> <command>` rather than running the command on the host.
 
+### GitHub CLI (`gh`)
+
+`gh` is installed on the host via Homebrew and available at
+`/home/linuxbrew/.linuxbrew/bin/gh`. Use it for all GitHub
+operations: creating PRs, listing issues, checking CI status, etc.
+
+```bash
+/home/linuxbrew/.linuxbrew/bin/gh pr create --base main --title "…" --body "…"
+/home/linuxbrew/.linuxbrew/bin/gh pr list
+/home/linuxbrew/.linuxbrew/bin/gh issue list
+```
+
+Authentication is stored in the system keyring. If `gh auth status`
+reports no active account, prompt the user to run
+`/home/linuxbrew/.linuxbrew/bin/gh auth login` before retrying.
+
 ## Make Commands
 
 Infrastructure:
