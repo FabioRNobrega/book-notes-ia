@@ -17,7 +17,7 @@
 | FR2 | `dotnet build WebApp/WebApp.csproj` (inside the test container) exits with code 0 and zero errors; `IChatOrchestratorAgent.cs` compiles cleanly. |
 | FR3 | `dotnet build WebApp/WebApp.csproj` exits with code 0; `Program.cs` compiles cleanly with the updated `AIAgent`/`ChatClientAgent` registration. |
 | FR4 | `make test` exits with code 0; all tests in `ChatControllerTests`, `BookContextControllerTests`, and `BookContextServiceTests` pass. |
-| FR5 | `git diff WebApp.Tests/WebApp.Tests.csproj` shows no package version changes; `git diff WebApp/WebApp.csproj` shows only the `Microsoft.Agents.AI` version line changed. |
+| FR5 | `git diff WebApp/WebApp.csproj` shows exactly three version lines changed: `Microsoft.Agents.AI` (`1.3.0`), `Microsoft.Extensions.AI` (`10.5.0`), and `Microsoft.Extensions.AI.Abstractions` (`10.5.0`). `git diff WebApp.Tests/WebApp.Tests.csproj` shows no changes. |
 
 ## Test Cases
 
@@ -38,7 +38,7 @@
 3. Run `dotnet build WebApp/WebApp.csproj --no-restore` and confirm zero build errors.
 4. Exit the container shell and run `make test` on the host.
 5. Confirm the output shows all tests passed and the exit code is 0.
-6. Run `git diff WebApp/WebApp.csproj` and confirm only the `Microsoft.Agents.AI` version line changed.
+6. Run `git diff WebApp/WebApp.csproj` and confirm exactly three version lines changed: `Microsoft.Agents.AI` (`1.3.0`), `Microsoft.Extensions.AI` (`10.5.0`), and `Microsoft.Extensions.AI.Abstractions` (`10.5.0`).
 
 ## Definition of Done
 

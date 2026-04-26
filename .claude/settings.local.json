@@ -8,5 +8,8 @@
       "Read(//usr/local/bin/**)",
       "Bash(docker compose exec webapp bash*"
     ]
+  },
+  "env": {
+    "PATH": "/home/linuxbrew/.linuxbrew/bin:/usr/bin:/bin"
   }
 }

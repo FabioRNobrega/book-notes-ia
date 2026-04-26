@@ -21,8 +21,8 @@
 | Database service | PostgreSQL | `postgres:16-alpine` | Base compose defines the `postgres` service for `booknotes`. | https://www.postgresql.org/docs/ |
 | Cache service | Redis | `redis:7-alpine` | Base compose defines Redis; app registers `AddStackExchangeRedisCache`. | https://redis.io/docs/latest/ |
 | Distributed cache package | Microsoft.Extensions.Caching.StackExchangeRedis | `9.0.*` | `CacheHandler` uses the registered distributed cache for chat/session keys. | https://learn.microsoft.com/aspnet/core/performance/caching/distributed |
-| AI abstraction | Microsoft.Extensions.AI | `10.3.0` | `IChatClient` is the app-wide chat abstraction. | https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai |
-| Agent framework | Microsoft Agent Framework | `Microsoft.Agents.AI` `1.0.0-preview.260212.1` | `ChatClientAgent`, `AIAgent`, `AgentSession`, and agent serialization power chat sessions. | https://learn.microsoft.com/agent-framework/ |
+| AI abstraction | Microsoft.Extensions.AI | `10.5.0` | `IChatClient` is the app-wide chat abstraction. | https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai |
+| Agent framework | Microsoft Agent Framework | `Microsoft.Agents.AI` `1.3.0` | `ChatClientAgent`, `AIAgent`, `AgentSession`, and agent serialization power chat sessions. | https://learn.microsoft.com/agent-framework/ |
 | Local LLM client | OllamaSharp | `5.4.16` | `OllamaApiClient` connects the app to the local Ollama model. | https://github.com/awaescher/OllamaSharp |
 | Local LLM runtime | Ollama | `ollama/ollama:latest`; model `qwen3.5:4b` | Compose starts Ollama and pulls `qwen3.5:4b`; appsettings uses the same model. | https://ollama.com/ |
 | Markdown rendering | Markdig | `0.43.0` | Chat assistant responses are rendered to HTML with Markdig advanced extensions. | https://github.com/xoofx/markdig |
