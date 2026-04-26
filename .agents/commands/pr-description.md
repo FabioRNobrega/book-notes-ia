@@ -23,9 +23,9 @@ Optional: `/pr-description <extra context or focus hint>`
 
 Run these commands to understand what changed:
 
-1. `git diff master...HEAD` — full diff of all commits on this branch.
-2. `git log --oneline master..HEAD` — list of commits included.
-3. `git diff --stat master...HEAD` — files changed at a glance.
+1. `git diff main...HEAD` — full diff of all commits on this branch.
+2. `git log --oneline main..HEAD` — list of commits included.
+3. `git diff --stat main...HEAD` — files changed at a glance.
 
 If `$ARGUMENTS` is provided, treat it as extra context or a focus
 hint (e.g. a specific service, ticket number, or emphasis area) and
@@ -89,3 +89,29 @@ Changes:
 - Sort group members alphabetically for consistency
 ```
 ~~~
+
+### Step 5 — Open the PR
+
+After the user confirms the description, open the PR on GitHub
+using `gh pr create`. Derive a short title (≤ 70 chars) from the
+branch name and the "Changes" bullets. Pass the body via heredoc
+and always append the attribution line at the end.
+
+```bash
+/home/linuxbrew/.linuxbrew/bin/gh pr create \
+  --base main \
+  --title "<title>" \
+  --body "$(cat <<'EOF'
+<description body>
+
+EOF
+)"
+```
+
+If `gh` is not authenticated, prompt the user to run:
+
+```bash
+/home/linuxbrew/.linuxbrew/bin/gh auth login
+```
+
+Then retry `gh pr create` once authentication is confirmed.
