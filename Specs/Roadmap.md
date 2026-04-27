@@ -23,7 +23,8 @@ No completed priority-labeled spec files exist yet. The only spec folder is [21-
 | Phase 2 | P1 | Add a `make release` command that updates CHANGELOG, commits, and tags | [20260424165257-release-command/Requirements.md](20260424165257-release-command/Requirements.md) | Small | New `scripts/release.sh` + `Makefile` target; no application code changes. |
 | Phase 3 | P1 | Add a GitHub Actions CI workflow that runs `dotnet test` on push/PR to `main` | [20260424212700-ci-test-workflow/Requirements.md](20260424212700-ci-test-workflow/Requirements.md) | Small | New `.github/workflows/ci.yml`; no application code changes. |
 | Phase 4 | P1 | Upgrade `Microsoft.Agents.AI` from `1.0.0-preview.260212.1` to stable `1.3.0` | [20260424212800-upgrade-microsoft-agents-ai/Requirements.md](20260424212800-upgrade-microsoft-agents-ai/Requirements.md) | Small | One `PackageReference` change + possible API call-site fixes in `WebApp.csproj`, `Program.cs`, `IChatOrchestratorAgent.cs`. |
-| Phase 5 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `DD-MM-YYYY-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
+| Phase 5 | P0 | Refactor agent to MAF agent-as-tools pattern: replace `ChatToolRouter` with native `AIFunction` registration on `ChatClientAgent` | [20260427110015-maf-agent-as-tools-refactor/Requirements.md](20260427110015-maf-agent-as-tools-refactor/Requirements.md) | Medium | Delete `IChatToolRouter`/`ChatToolRouter`; create `BookContextAgentTool`; update `ChatOrchestratorAgent` and `ChatController`. |
+| Phase 6 | P2 | ⚠️ TODO: Add a real P2 spec for later polish or expansion. | ⚠️ TODO: Create a `YYYYMMDDHHMMSS-feature-name` folder in `Specs/`. | ⚠️ TODO | Existing Specs do not define a P2 item. |
 
 ## Gantt
 

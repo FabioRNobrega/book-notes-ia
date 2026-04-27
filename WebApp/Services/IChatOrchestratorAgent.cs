@@ -8,12 +8,12 @@ public sealed record ChatAgentRunResult(string ResponseText, string SerializedSe
 
 public interface IChatOrchestratorAgent
 {
-    Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, CancellationToken ct = default);
+    Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default);
 }
 
 public sealed class ChatOrchestratorAgent(AIAgent agent) : IChatOrchestratorAgent
 {
-    public async Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, CancellationToken ct = default)
+    public async Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
     {
         AgentSession session;
 
@@ -31,7 +31,8 @@ public sealed class ChatOrchestratorAgent(AIAgent agent) : IChatOrchestratorAgen
         {
             ChatOptions = new ChatOptions
             {
-                Instructions = instructions
+                Instructions = instructions,
+                Tools = tools?.ToList()
             }
         };
 

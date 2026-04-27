@@ -57,7 +57,7 @@ builder.Services.AddSingleton<AIAgent>(sp =>
     );
 });
 builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
-builder.Services.AddScoped<IChatToolRouter, ChatToolRouter>();
+builder.Services.AddScoped<IBookContextAgentTool, BookContextAgentTool>();
 
 // Build Redis for cache handler
 builder.Services.AddStackExchangeRedisCache(options =>

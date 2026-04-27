@@ -9,29 +9,17 @@ namespace WebApp.Tests.Controllers;
 public class BookContextControllerTests
 {
     [Fact]
-    public async Task Generate_ReturnsToolPayloadWithAppendedContext()
+    public async Task Generate_ReturnsContextWhenBookExists()
     {
         var bookId = Guid.NewGuid();
-        var service = new FakeBookContextService
-        {
-            GenerateResult = new GenerateBookContextToolResult(
-                bookId,
-                "Dune",
-                "Frank Herbert",
-                "Fresh summary",
-                "Existing context\n\n[GenerateBookContext]\nBook: Dune")
-        };
+        var service = new FakeBookContextService { GenerateAndSaveResult = "Fresh literary context." };
         var controller = CreateController(service, "user-1");
 
-        var result = await controller.Generate(bookId, new GenerateBookContextToolRequest("Existing context"), CancellationToken.None);
+        var result = await controller.Generate(bookId, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var payload = Assert.IsType<GenerateBookContextToolResponse>(ok.Value);
-        Assert.Equal("GenerateBookContext", payload.ToolName);
-        Assert.Equal(bookId, payload.BookId);
-        Assert.Equal("Fresh summary", payload.GeneratedContext);
-        Assert.Contains("Existing context", payload.AppendedContext);
-        Assert.Equal("Existing context", service.LastGenerateContext);
+        var json = System.Text.Json.JsonSerializer.Serialize(ok.Value);
+        Assert.Contains("Fresh literary context.", json);
     }
 
     [Fact]
@@ -42,7 +30,7 @@ public class BookContextControllerTests
             GenerateException = new KeyNotFoundException("missing book")
         }, "user-1");
 
-        var result = await controller.Generate(Guid.NewGuid(), new GenerateBookContextToolRequest(null), CancellationToken.None);
+        var result = await controller.Generate(Guid.NewGuid(), CancellationToken.None);
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -59,32 +47,23 @@ public class BookContextControllerTests
                     "TestAuth"))
             }
         };
-
         return controller;
     }
 
     private sealed class FakeBookContextService : IBookContextService
     {
-        public GenerateBookContextToolResult GenerateResult { get; set; } =
-            new(Guid.NewGuid(), "Book", "Author", "Context", "Appended");
-
+        public string GenerateAndSaveResult { get; set; } = "Context.";
         public Exception? GenerateException { get; set; }
-        public string? LastGenerateContext { get; private set; }
 
         public Task ClearAsync(Guid bookId, string userId) => Task.CompletedTask;
 
         public Task<string?> GetContextAsync(Guid bookId, string userId) => Task.FromResult<string?>(null);
 
         public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
-            => Task.FromResult(GenerateResult.GeneratedContext);
-
-        public Task<GenerateBookContextToolResult> GenerateToolResponseAsync(Guid bookId, string userId, string? context, CancellationToken ct = default)
         {
             if (GenerateException is not null)
                 throw GenerateException;
-
-            LastGenerateContext = context;
-            return Task.FromResult(GenerateResult);
+            return Task.FromResult(GenerateAndSaveResult);
         }
 
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);

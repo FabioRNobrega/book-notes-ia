@@ -7,7 +7,7 @@ namespace WebApp.Tests.Services;
 public class BookContextServiceTests
 {
     [Fact]
-    public async Task GenerateToolResponseAsync_AppendsContextAndPersistsGeneratedSummary()
+    public async Task GenerateAndSaveAsync_PersistsGeneratedContextToBook()
     {
         await using var db = CreateDbContext();
         var userId = "user-1";
@@ -33,13 +33,9 @@ public class BookContextServiceTests
         var ollama = new FakeOllamaService("Generated summary from Ollama.");
         var service = new BookContextService(db, ollama);
 
-        var result = await service.GenerateToolResponseAsync(book.Id, userId, "Existing context block", CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, CancellationToken.None);
 
-        Assert.Equal(book.Id, result.BookId);
-        Assert.Equal("Generated summary from Ollama.", result.GeneratedContext);
-        Assert.Contains("Existing context block", result.AppendedContext);
-        Assert.Contains("[GenerateBookContext]", result.AppendedContext);
-        Assert.Contains("Summary: Generated summary from Ollama.", result.AppendedContext);
+        Assert.Equal("Generated summary from Ollama.", result);
 
         var savedBook = await db.Books.SingleAsync();
         Assert.Equal("Generated summary from Ollama.", savedBook.Context);
@@ -71,8 +67,6 @@ public class BookContextServiceTests
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
-
-            // The in-memory provider used by this unit test can't bind JsonDocument properties.
             builder.Entity<UserProfile>().Ignore(x => x.ReadingLanguages);
             builder.Entity<UserProfile>().Ignore(x => x.LearningStyle);
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
