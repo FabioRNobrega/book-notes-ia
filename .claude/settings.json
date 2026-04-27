@@ -3,7 +3,8 @@
     "allow": [
       "Bash(docker build:*)",
       "Bash(git -C /Users/fabiorodriguesnobrega/Library/CloudStorage/OneDrive-LOTSGroup/Programs/book-notes-ia diff WebApp/WebApp.csproj)",
-      "Bash(git -C /Users/fabiorodriguesnobrega/Library/CloudStorage/OneDrive-LOTSGroup/Programs/book-notes-ia diff WebApp.Tests/WebApp.Tests.csproj)"
+      "Bash(git -C /Users/fabiorodriguesnobrega/Library/CloudStorage/OneDrive-LOTSGroup/Programs/book-notes-ia diff WebApp.Tests/WebApp.Tests.csproj)",
+      "Bash(make test *)"
     ]
   }
 }
