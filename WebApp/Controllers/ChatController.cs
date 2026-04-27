@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Markdig;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using WebApp.Services;
 
@@ -20,8 +17,8 @@ public class ChatController : Controller
 {
     private readonly IChatOrchestratorAgent _agent;
     private readonly ICacheHandler _cache;
-    private readonly IBookContextService _bookContextService;
-    private readonly IChatToolRouter _toolRouter;
+    private readonly IBookContextAgentTool _bookContextTool;
+    private readonly AppDbContext _db;
     private readonly ILogger<ChatController> _logger;
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
     private static readonly TimeSpan SessionTtl = TimeSpan.FromDays(7);
@@ -29,14 +26,14 @@ public class ChatController : Controller
     public ChatController(
         IChatOrchestratorAgent agent,
         ICacheHandler cache,
-        IBookContextService bookContextService,
-        IChatToolRouter toolRouter,
+        IBookContextAgentTool bookContextTool,
+        AppDbContext db,
         ILogger<ChatController> logger)
     {
         _agent = agent;
         _cache = cache;
-        _bookContextService = bookContextService;
-        _toolRouter = toolRouter;
+        _bookContextTool = bookContextTool;
+        _db = db;
         _logger = logger;
     }
 
@@ -103,34 +100,38 @@ public class ChatController : Controller
             return Unauthorized();
 
         var sessionKey = $"agentsession:{userId}";
-        var contextKey = $"agentcontext:{userId}";
         var userProfileKey = $"agentprofile:{userId}";
 
         try
         {
             var sessionJson = await _cache.GetAsync(sessionKey, ct);
-            var workingContext = await _cache.GetAsync(contextKey, ct);
             var userProfileJson = await _cache.GetAsync(userProfileKey, ct);
-            var profileInstructions = BuildProfileInstructions(userProfileJson);
-            var routeDecision = await _toolRouter.RouteAsync(userId, message, ct);
 
-            if (routeDecision.Tool == "GenerateBookContext" && routeDecision.BookId is Guid bookId)
-            {
-                var toolResult = await _bookContextService.GenerateToolResponseAsync(bookId, userId, workingContext, ct);
-                workingContext = toolResult.AppendedContext;
-                await _cache.SetAsync(contextKey, workingContext, SessionTtl, ct);
-            }
+            var books = await _db.Books
+                .AsNoTracking()
+                .Where(b => b.UserId == userId)
+                .OrderByDescending(b => b.UpdatedAt)
+                .Select(b => new { b.Title, b.Author })
+                .Take(25)
+                .ToListAsync(ct);
+
+            var bookTitles = books.Select(b => $"{b.Title} by {b.Author}").ToList();
+            var profileInstructions = BuildProfileInstructions(userProfileJson);
+
+            IReadOnlyList<AITool>? tools = books.Count > 0
+                ? [_bookContextTool.Create(userId)]
+                : null;
 
             var runResult = await _agent.RunAsync(
                 message,
                 sessionJson,
-                BuildOrchestratorInstructions(profileInstructions, workingContext),
+                BuildOrchestratorInstructions(profileInstructions, bookTitles),
+                tools,
                 ct);
 
             await _cache.SetAsync(sessionKey, runResult.SerializedSessionJson, SessionTtl, ct);
 
             var html = Markdown.ToHtml(runResult.ResponseText, MarkdownPipeline);
-
             return PartialView("_BotMessage", html);
         }
         catch (Exception ex)
@@ -147,23 +148,19 @@ public class ChatController : Controller
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        var sessionKey = $"agentsession:{userId}";
-        var contextKey = $"agentcontext:{userId}";
-
-        await _cache.RemoveAsync(sessionKey, ct);
-        await _cache.RemoveAsync(contextKey, ct);
+        await _cache.RemoveAsync($"agentsession:{userId}", ct);
         return PartialView("~/Views/Shared/Components/_Alert.cshtml",
             (true, "Chat session history has been deleted"));
     }
 
-    private static string? BuildOrchestratorInstructions(string? profileInstructions, string? workingContext)
+    private static string BuildOrchestratorInstructions(string? profileInstructions, IReadOnlyList<string> bookTitles)
     {
         var sections = new List<string>
         {
             """
             You are the orchestrator for the Book Notes IA chat experience.
-            Use any supplied working context as authoritative reference material for the current conversation.
-            If working context is missing relevant facts, be honest about that instead of inventing details.
+            When the user asks about a book in their library, use the GenerateBookContext tool to retrieve its context.
+            If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
             """
         };
@@ -171,12 +168,14 @@ public class ChatController : Controller
         if (!string.IsNullOrWhiteSpace(profileInstructions))
             sections.Add(profileInstructions);
 
-        if (!string.IsNullOrWhiteSpace(workingContext))
+        if (bookTitles.Count > 0)
         {
             sections.Add(
                 $"""
-                Working context gathered from tools:
-                {workingContext}
+                User's book library ({bookTitles.Count} books):
+                {string.Join(Environment.NewLine, bookTitles.Select(t => $"- {t}"))}
+
+                When the user asks about one of these books, call the GenerateBookContext tool with the book title.
                 """);
         }
 
@@ -185,7 +184,6 @@ public class ChatController : Controller
 
     private static string? BuildProfileInstructions(string? userProfileJson)
     {
-        // No profile => no extra instructions for this invocation.
         if (string.IsNullOrWhiteSpace(userProfileJson))
             return null;
 
@@ -227,8 +225,6 @@ public class ChatController : Controller
             var lovedGenres = JoinArray(root, "loved_genres");
             var dislikedGenres = JoinArray(root, "disliked_genres");
 
-            // Keep it compact but explicit.
-            // This is per-invocation, so avoid excessive tokens.
             return
                 $"""
                 User profile (authoritative):
