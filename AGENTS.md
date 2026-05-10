@@ -7,6 +7,7 @@
   - [Repository Map](#repository-map)
   - [Architecture Summary](#architecture-summary)
   - [Docker Strategy](#docker-strategy)
+  - [OS-Aware Environment](#os-aware-environment)
   - [Coding Conventions](#coding-conventions)
   - [Constraints](#constraints)
   - [Make Commands](#make-commands)
@@ -51,6 +52,41 @@ Use `docker-compose.yml` as the base configuration. Add exactly one OS-specific 
 - macOS Apple Silicon: `docker-compose.yml` + `docker-compose.mac.yml`, or `make docker-run-mac`.
 - Windows with Docker Desktop/WSL2 and NVIDIA GPU: `docker-compose.yml` + `docker-compose.windows.yml`, or `make docker-run-windows`.
 - Tests: `docker-compose.test.yml`, or `make test`.
+
+## OS-Aware Environment
+
+**Always use `make` targets for standard operations.** The Makefile auto-detects the correct Docker/Podman socket and exports `DOCKER_HOST` for every command. This works transparently on macOS, Linux, SteamOS (which uses Podman), and Windows.
+
+If you need to run `docker` or `docker compose` commands directly (e.g. `docker compose exec webapp bash`), first export `DOCKER_HOST` into your shell session:
+
+```bash
+eval $(make -s docker-env)
+docker compose exec webapp bash
+```
+
+### Why this matters
+
+Different platforms expose the container runtime on different socket paths:
+
+| Platform | Socket |
+| --- | --- |
+| macOS (Docker Desktop) | `unix:///var/run/docker.sock` |
+| Linux (Docker daemon) | `unix:///var/run/docker.sock` |
+| SteamOS (rootless Podman) | `unix:///run/user/<uid>/podman/podman.sock` |
+| Windows (Docker Desktop) | `npipe:////./pipe/docker_engine` |
+
+The Makefile probes these in order and sets `DOCKER_HOST` automatically — you do not need to set it manually or detect the OS yourself.
+
+### Compose File Selection
+
+| Platform | Make target |
+| --- | --- |
+| Linux / SteamOS | `make docker-run` |
+| macOS Apple Silicon | `make docker-run-mac` |
+| Windows (Docker Desktop + NVIDIA) | `make docker-run-windows` |
+| Tests (all platforms) | `make test` |
+
+Do not ask the user which OS they are on — use the appropriate `make` target based on `uname -s` output.
 
 ## Coding Conventions
 
