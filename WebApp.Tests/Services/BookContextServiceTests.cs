@@ -71,6 +71,7 @@ public class BookContextServiceTests
             builder.Entity<UserProfile>().Ignore(x => x.LearningStyle);
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
             builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
+            builder.Ignore<BookEmbedding>();
         }
     }
 }

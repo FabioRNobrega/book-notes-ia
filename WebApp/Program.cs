@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
 using OllamaSharp;
+using Pgvector.EntityFrameworkCore;
 using WebApp.Services;
 
 
@@ -13,7 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add Postgres connection
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsql => npgsql.UseVector()
     )
 );
 
@@ -39,6 +41,12 @@ builder.Services.AddSingleton<IChatClient>(_ =>
             options.AdditionalProperties["think"] = false; // This disable think mode on qwen to faster responses
         })
         .Build();
+});
+
+builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
+{
+    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
+    return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(new Uri(ollamaUrl), "mxbai-embed-large");
 });
 
 builder.Services.AddSingleton<AIAgent>(sp =>
@@ -85,6 +93,7 @@ builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
 builder.Services.AddScoped<IOllamaService, OllamaService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>

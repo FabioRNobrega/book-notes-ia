@@ -33,7 +33,7 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.2-pg18-trixie
     container_name: postgres
     restart: unless-stopped
     environment: 
@@ -56,7 +56,7 @@ services:
     environment:
       - OLLAMA_KEEP_ALIVE=60
     entrypoint: /bin/bash
-    command: -c "ollama serve & sleep 8 && ollama pull qwen3.5:4b && wait"
+    command: -c "ollama serve & sleep 8 && ollama pull qwen3.5:4b && ollama pull mxbai-embed-large && wait"
 
 volumes:
   ollama_models:

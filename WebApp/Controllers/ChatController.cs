@@ -52,9 +52,7 @@ public class ChatController : Controller
             {
                 using var doc = JsonDocument.Parse(sessionJson);
 
-                if (doc.RootElement.TryGetProperty("chatHistoryProviderState", out var state) &&
-                    state.TryGetProperty("messages", out var messages) &&
-                    messages.ValueKind == JsonValueKind.Array)
+                if (TryGetSessionMessages(doc.RootElement, out var messages))
                 {
                     foreach (var msg in messages.EnumerateArray())
                     {
@@ -89,6 +87,24 @@ public class ChatController : Controller
         return PartialView("Chat", history);
     }
 
+    private static bool TryGetSessionMessages(JsonElement root, out JsonElement messages)
+    {
+        messages = default;
+
+        if (root.TryGetProperty("chatHistoryProviderState", out var state) &&
+            state.TryGetProperty("messages", out messages) &&
+            messages.ValueKind == JsonValueKind.Array)
+            return true;
+
+        if (root.TryGetProperty("stateBag", out var stateBag) &&
+            stateBag.TryGetProperty("InMemoryChatHistoryProvider", out var historyProvider) &&
+            historyProvider.TryGetProperty("messages", out messages) &&
+            messages.ValueKind == JsonValueKind.Array)
+            return true;
+
+        return false;
+    }
+
     [HttpPost("/chat/send")]
     public async Task<IActionResult> Send([FromForm] string message, CancellationToken ct)
     {
@@ -112,10 +128,9 @@ public class ChatController : Controller
                 .Where(b => b.UserId == userId)
                 .OrderByDescending(b => b.UpdatedAt)
                 .Select(b => new { b.Title, b.Author })
-                .Take(25)
                 .ToListAsync(ct);
 
-            var bookTitles = books.Select(b => $"{b.Title} by {b.Author}").ToList();
+            var bookTitles = books.Select(b => $"Title: \"{b.Title}\" | Author: \"{b.Author}\"").ToList();
             var profileInstructions = BuildProfileInstructions(userProfileJson);
 
             IReadOnlyList<AITool>? tools = books.Count > 0
@@ -159,7 +174,9 @@ public class ChatController : Controller
         {
             """
             You are the orchestrator for the Book Notes IA chat experience.
-            When the user asks about a book in their library, use the GenerateBookContext tool to retrieve its context.
+            When the user asks about any specific book or title, call the GenerateBookContext tool before answering.
+            Do not say a book is missing from the library unless GenerateBookContext returns a not found result.
+            The GenerateBookContext tool searches the authenticated user's full library, retrieves existing Book.Context when available, and generates and saves context when it is missing.
             If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
             """
@@ -175,7 +192,7 @@ public class ChatController : Controller
                 User's book library ({bookTitles.Count} books):
                 {string.Join(Environment.NewLine, bookTitles.Select(t => $"- {t}"))}
 
-                When the user asks about one of these books, call the GenerateBookContext tool with the book title.
+                When the user asks about one of these books, call the GenerateBookContext tool with the exact title text or the user-provided title text.
                 """);
         }
 

@@ -74,7 +74,110 @@ public class ChatControllerTests
 
         await controller.Send("Hello", CancellationToken.None);
 
-        Assert.Contains("Foundation by Isaac Asimov", agent.LastInstructions);
+        Assert.Contains("Title: \"Foundation\" | Author: \"Isaac Asimov\"", agent.LastInstructions);
+        Assert.Contains("call the GenerateBookContext tool before answering", agent.LastInstructions);
+        Assert.Contains("Do not say a book is missing from the library unless GenerateBookContext returns a not found result", agent.LastInstructions);
+    }
+
+    [Fact]
+    public async Task Send_WhenUserHasMoreThanTwentyFiveBooks_IncludesOlderBooksInInstructions()
+    {
+        var userId = "user-1";
+        var agent = new FakeChatOrchestratorAgent();
+        var db = CreateDbContext();
+
+        db.Books.Add(new Book
+        {
+            UserId = userId,
+            Title = "Dick, Philip K - Gather Yourselves Together",
+            Author = "Philip K Dick",
+            NormalizedTitle = "dickphilipkgatheryourselvestogether",
+            NormalizedAuthor = "philipkdick",
+            UpdatedAt = DateTime.UtcNow.AddDays(-40)
+        });
+
+        for (var i = 0; i < 30; i++)
+        {
+            db.Books.Add(new Book
+            {
+                UserId = userId,
+                Title = $"Recent Book {i}",
+                Author = "Test Author",
+                NormalizedTitle = $"recentbook{i}",
+                NormalizedAuthor = "testauthor",
+                UpdatedAt = DateTime.UtcNow.AddDays(-i)
+            });
+        }
+
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(agent, new FakeCacheHandler(), new FakeBookContextAgentTool(), userId, db);
+
+        await controller.Send("Tell me about Gather Yourselves Together", CancellationToken.None);
+
+        Assert.Contains("Dick, Philip K - Gather Yourselves Together", agent.LastInstructions);
+    }
+
+    [Fact]
+    public async Task Chat_WhenSessionUsesStateBagHistory_RendersSavedMessages()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync(
+            $"agentsession:{userId}",
+            """
+            {
+              "stateBag": {
+                "InMemoryChatHistoryProvider": {
+                  "messages": [
+                    {
+                      "role": "user",
+                      "contents": [
+                        { "$type": "text", "text": "Tell me about Leviathan Wakes" }
+                      ]
+                    },
+                    {
+                      "authorName": "LocalOllamaAgent",
+                      "role": "tool",
+                      "contents": [
+                        { "$type": "functionResult", "result": "Tool output", "callId": "call-1" }
+                      ]
+                    },
+                    {
+                      "authorName": "LocalOllamaAgent",
+                      "role": "assistant",
+                      "contents": [
+                        { "$type": "text", "text": "Leviathan Wakes context." }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """,
+            TimeSpan.FromMinutes(5));
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            cache,
+            new FakeBookContextAgentTool(),
+            userId);
+
+        var result = await controller.Chat(CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var entries = Assert.IsAssignableFrom<List<ChatEntry>>(partial.Model);
+        Assert.Collection(
+            entries,
+            entry =>
+            {
+                Assert.Equal("user", entry.Role);
+                Assert.Equal("Tell me about Leviathan Wakes", entry.Content);
+            },
+            entry =>
+            {
+                Assert.Equal("assistant", entry.Role);
+                Assert.Contains("Leviathan Wakes context.", entry.Content);
+            });
     }
 
     [Fact]
@@ -220,6 +323,7 @@ public class ChatControllerTests
             builder.Entity<UserProfile>().Ignore(x => x.LearningStyle);
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
             builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
+            builder.Ignore<BookEmbedding>();
         }
     }
 }

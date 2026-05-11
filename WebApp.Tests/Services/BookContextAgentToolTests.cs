@@ -1,34 +1,32 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Pgvector;
 using WebApp.Models;
 using WebApp.Services;
+using WebApp.Tests.Integration;
 
 namespace WebApp.Tests.Services;
 
 public class BookContextAgentToolTests
 {
     [Fact]
-    public async Task Create_WhenBookTitleMatchesUserBook_ReturnsGeneratedContext()
+    public async Task Create_WhenEmbeddingMatchesUserBook_ReturnsGeneratedContext()
     {
-        await using var db = CreateDbContext();
-        db.Books.Add(new Book
-        {
-            UserId = "user-1",
-            Title = "Dune",
-            Author = "Frank Herbert",
-            NormalizedTitle = "dune",
-            NormalizedAuthor = "frankherbert"
-        });
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var book = await SeedUserAndBookAsync(db, "user-1", "Dune", "Frank Herbert");
+        db.BookEmbeddings.Add(CreateBookEmbedding(book, VectorA()));
         await db.SaveChangesAsync();
 
         var service = new FakeBookContextService("Arrakis literary context.");
-        var tool = new BookContextAgentTool(db, service);
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         Assert.Equal("GenerateBookContext", function.Name);
 
         var result = await function.InvokeAsync(
-            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            new AIFunctionArguments { ["bookTitle"] = "desert planet messiah novel" },
             CancellationToken.None);
 
         Assert.Equal("Arrakis literary context.", result?.ToString());
@@ -36,38 +34,35 @@ public class BookContextAgentToolTests
     }
 
     [Fact]
-    public async Task Create_WhenBookHasExistingContext_ReturnsCachedContextWithoutGenerating()
+    public async Task Create_WhenBookBelongsToOtherUser_ReturnsNotFoundOrFallback()
     {
-        await using var db = CreateDbContext();
-        db.Books.Add(new Book
-        {
-            UserId = "user-1",
-            Title = "Foundation",
-            Author = "Isaac Asimov",
-            NormalizedTitle = "foundation",
-            NormalizedAuthor = "isaacasimov",
-            Context = "Existing cached context."
-        });
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var book = await SeedUserAndBookAsync(db, "user-2", "Dune", "Frank Herbert");
+        db.BookEmbeddings.Add(CreateBookEmbedding(book, VectorA()));
         await db.SaveChangesAsync();
 
-        var service = new FakeBookContextService("Should not be called.");
-        var tool = new BookContextAgentTool(db, service);
+        var service = new FakeBookContextService("context");
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
-            new AIFunctionArguments { ["bookTitle"] = "Foundation" },
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
             CancellationToken.None);
 
-        Assert.Equal("Existing cached context.", result?.ToString());
+        Assert.Contains("not found", result?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.False(service.GenerateAndSaveCalled);
     }
 
     [Fact]
-    public async Task Create_WhenBookTitleDoesNotMatch_ReturnsNotFoundMessage()
+    public async Task Create_WhenNoEmbeddingExistsAndStringMatchFails_ReturnsNotFound()
     {
-        await using var db = CreateDbContext();
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        await SeedUserAndBookAsync(db, "user-1", "Dune", "Frank Herbert");
+
         var service = new FakeBookContextService("context");
-        var tool = new BookContextAgentTool(db, service);
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
@@ -79,37 +74,100 @@ public class BookContextAgentToolTests
     }
 
     [Fact]
-    public async Task Create_WhenBookBelongsToOtherUser_ReturnsNotFoundMessage()
+    public async Task Create_WhenNoEmbeddingExistsButStringMatchSucceeds_ReturnsContext()
     {
-        await using var db = CreateDbContext();
-        db.Books.Add(new Book
-        {
-            UserId = "user-2",
-            Title = "Dune",
-            Author = "Frank Herbert",
-            NormalizedTitle = "dune",
-            NormalizedAuthor = "frankherbert"
-        });
-        await db.SaveChangesAsync();
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        await SeedUserAndBookAsync(db, "user-1", "Dick, Philip K - Gather Yourselves Together", "Philip K Dick");
 
-        var service = new FakeBookContextService("context");
-        var tool = new BookContextAgentTool(db, service);
+        var service = new FakeBookContextService("Gather Yourselves Together context.");
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
-            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
             CancellationToken.None);
 
-        Assert.Contains("not found", result?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Gather Yourselves Together context.", result?.ToString());
+        Assert.True(service.GenerateAndSaveCalled);
+    }
+
+    [Fact]
+    public async Task Create_WhenBookHasExistingContext_ReturnsCachedContextWithoutGenerating()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var book = await SeedUserAndBookAsync(db, "user-1", "Foundation", "Isaac Asimov", "Existing cached context.");
+        db.BookEmbeddings.Add(CreateBookEmbedding(book, VectorA()));
+        await db.SaveChangesAsync();
+
+        var service = new FakeBookContextService("Should not be called.");
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var function = tool.Create("user-1");
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Foundation" },
+            CancellationToken.None);
+
+        Assert.Equal("Existing cached context.", result?.ToString());
         Assert.False(service.GenerateAndSaveCalled);
     }
 
-    private static AppDbContext CreateDbContext()
+    private static async Task<Book> SeedUserAndBookAsync(
+        AppDbContext db,
+        string userId,
+        string title,
+        string author,
+        string? context = null)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new TestAppDbContext(options);
+        db.Users.Add(new IdentityUser
+        {
+            Id = userId,
+            UserName = $"{userId}@example.test",
+            NormalizedUserName = $"{userId}@EXAMPLE.TEST",
+            Email = $"{userId}@example.test",
+            NormalizedEmail = $"{userId}@EXAMPLE.TEST"
+        });
+
+        var book = new Book
+        {
+            UserId = userId,
+            Title = title,
+            Author = author,
+            NormalizedTitle = NormalizeKey(title),
+            NormalizedAuthor = NormalizeKey(author),
+            Context = context
+        };
+
+        db.Books.Add(book);
+        await db.SaveChangesAsync();
+        return book;
+    }
+
+    private static BookEmbedding CreateBookEmbedding(Book book, float[] vector) =>
+        new()
+        {
+            UserId = book.UserId,
+            BookId = book.Id,
+            Title = book.Title,
+            Author = book.Author,
+            Embedding = new Vector(vector)
+        };
+
+    private static string NormalizeKey(string value) =>
+        new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+    private static float[] VectorA()
+    {
+        var vector = new float[1024];
+        vector[0] = 1;
+        return vector;
+    }
+
+    private sealed class FakeEmbeddingService(float[] vector) : IEmbeddingService
+    {
+        public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
+            Task.FromResult(vector);
     }
 
     private sealed class FakeBookContextService(string context) : IBookContextService
@@ -126,17 +184,5 @@ public class BookContextAgentToolTests
 
         public Task<string> SaveManualAsync(Guid bookId, string userId, string ctx) => Task.FromResult(ctx);
         public Task ClearAsync(Guid bookId, string userId) => Task.CompletedTask;
-    }
-
-    private sealed class TestAppDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
-    {
-        protected override void OnModelCreating(ModelBuilder builder)
-        {
-            base.OnModelCreating(builder);
-            builder.Entity<UserProfile>().Ignore(x => x.ReadingLanguages);
-            builder.Entity<UserProfile>().Ignore(x => x.LearningStyle);
-            builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
-            builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
-        }
     }
 }

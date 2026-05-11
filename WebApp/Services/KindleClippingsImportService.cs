@@ -30,10 +30,12 @@ public class KindleClippingsImportService : IKindleClippingsImportService
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     private readonly AppDbContext _db;
+    private readonly IEmbeddingService _embeddingService;
 
-    public KindleClippingsImportService(AppDbContext db)
+    public KindleClippingsImportService(AppDbContext db, IEmbeddingService embeddingService)
     {
         _db = db;
+        _embeddingService = embeddingService;
     }
 
     public async Task<KindleImportSummary> ImportAsync(string userId, Stream stream, CancellationToken ct = default)
@@ -68,6 +70,8 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             x => BuildBookLookupKey(x.NormalizedTitle, x.NormalizedAuthor),
             x => x);
 
+        var newBooks = new List<Book>();
+
         foreach (var parsedBook in normalizedBooks)
         {
             var lookupKey = BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor);
@@ -88,9 +92,26 @@ public class KindleClippingsImportService : IKindleClippingsImportService
 
             _db.Books.Add(book);
             bookMap[lookupKey] = book;
+            newBooks.Add(book);
         }
 
         await _db.SaveChangesAsync(ct);
+
+        foreach (var book in newBooks)
+        {
+            var embedding = await _embeddingService.EmbedAsync($"{book.Title} by {book.Author}", ct);
+            _db.BookEmbeddings.Add(new BookEmbedding
+            {
+                UserId = userId,
+                BookId = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                Embedding = new Pgvector.Vector(embedding)
+            });
+        }
+
+        if (newBooks.Count > 0)
+            await _db.SaveChangesAsync(ct);
 
         var dedupeKeys = parsedEntries.Select(x => x.DedupeKey).Distinct().ToList();
         var existingNotes = await _db.BookNotes
