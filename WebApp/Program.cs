@@ -4,17 +4,29 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
+using Npgsql;
 using OllamaSharp;
 using Pgvector.EntityFrameworkCore;
+using Pgvector.Npgsql;
 using WebApp.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
+var postgresConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+
+builder.Services.AddSingleton(_ =>
+{
+    var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
+    dataSourceBuilder.UseVector();
+    return dataSourceBuilder.Build();
+});
+
 // Add Postgres connection
-builder.Services.AddDbContext<AppDbContext>(options => 
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sp.GetRequiredService<NpgsqlDataSource>(),
         npgsql => npgsql.UseVector()
     )
 );
@@ -134,7 +146,9 @@ app.MapControllerRoute(
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var dataSource = scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>();
     db.Database.Migrate();
+    dataSource.ReloadTypes();
 }
 
 app.Run();

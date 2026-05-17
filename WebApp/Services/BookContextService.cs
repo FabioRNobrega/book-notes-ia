@@ -3,7 +3,9 @@ using WebApp.Models;
 
 namespace WebApp.Services;
 
-public class BookContextService(AppDbContext db, IOllamaService ollamaService) : IBookContextService
+public class BookContextService(
+    AppDbContext db,
+    IOllamaService ollamaService) : IBookContextService
 {
     public async Task<string?> GetContextAsync(Guid bookId, string userId)
     {

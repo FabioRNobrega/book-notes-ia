@@ -7,7 +7,8 @@ public interface IEmbeddingService
     Task<float[]> EmbedAsync(string text, CancellationToken ct = default);
 }
 
-public sealed class EmbeddingService(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator) : IEmbeddingService
+public sealed class EmbeddingService(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator) : IEmbeddingService
 {
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct = default)
     {

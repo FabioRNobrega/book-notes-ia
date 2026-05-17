@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Npgsql;
 using Pgvector.EntityFrameworkCore;
+using Pgvector.Npgsql;
 
 namespace WebApp.Tests.Integration;
 
@@ -8,9 +11,13 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
     private PostgresTestDatabase(string connectionString)
     {
         ConnectionString = connectionString;
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        dataSourceBuilder.UseVector();
+        DataSource = dataSourceBuilder.Build();
     }
 
     private string ConnectionString { get; }
+    private NpgsqlDataSource DataSource { get; }
 
     public static async Task<PostgresTestDatabase> CreateAsync()
     {
@@ -23,6 +30,7 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
         await using var db = database.CreateDbContext();
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
+        await database.DataSource.ReloadTypesAsync();
 
         return database;
     }
@@ -30,7 +38,8 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
     public AppDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(ConnectionString, npgsql => npgsql.UseVector())
+            .UseNpgsql(DataSource, npgsql => npgsql.UseVector())
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
         return new AppDbContext(options);
     }
@@ -39,6 +48,7 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
     {
         await using var db = CreateDbContext();
         await db.Database.EnsureDeletedAsync();
+        await DataSource.DisposeAsync();
     }
 
     private static string ReplaceDatabaseName(string connectionString, string databaseName)

@@ -61,6 +61,33 @@ public class AgentToolsPostgresTests
     }
 
     [Fact]
+    public async Task GenerateBookContext_WithPostgresVectorLookup_UsesClosestEmbeddingAndPersistsContext()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-vector-e2e";
+        var dune = await SeedUserBookAndNoteAsync(db, userId, "Dune", "Frank Herbert");
+        var beach = await SeedUserBookAndNoteAsync(db, userId, "On the Beach", "Nevil Shute");
+        db.BookEmbeddings.Add(CreateBookEmbedding(dune, VectorWithFirstValue(1)));
+        db.BookEmbeddings.Add(CreateBookEmbedding(beach, VectorWithFirstValue(-1)));
+        await db.SaveChangesAsync();
+
+        var service = new BookContextService(db, new FakeOllamaService("Generated On the Beach context."));
+        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorWithFirstValue(-1))).Create(userId);
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "post nuclear australian novel" },
+            CancellationToken.None);
+
+        Assert.Equal("Generated On the Beach context.", result?.ToString());
+
+        var duneAfterLookup = await db.Books.SingleAsync(b => b.Id == dune.Id);
+        var beachAfterLookup = await db.Books.SingleAsync(b => b.Id == beach.Id);
+        Assert.Null(duneAfterLookup.Context);
+        Assert.Equal("Generated On the Beach context.", beachAfterLookup.Context);
+    }
+
+    [Fact]
     public async Task ChatRefresh_WithPostgresSeededUserAndMafSession_RendersCachedMessages()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -160,14 +187,28 @@ public class AgentToolsPostgresTests
 
     private static async Task<Book> SeedUserBookAndNoteAsync(AppDbContext db, string userId, string title, string author)
     {
-        var user = new IdentityUser
+        if (!await db.Users.AnyAsync(u => u.Id == userId))
         {
-            Id = userId,
-            UserName = $"{userId}@example.test",
-            NormalizedUserName = $"{userId}@EXAMPLE.TEST",
-            Email = $"{userId}@example.test",
-            NormalizedEmail = $"{userId}@EXAMPLE.TEST"
-        };
+            db.Users.Add(new IdentityUser
+            {
+                Id = userId,
+                UserName = $"{userId}@example.test",
+                NormalizedUserName = $"{userId}@EXAMPLE.TEST",
+                Email = $"{userId}@example.test",
+                NormalizedEmail = $"{userId}@EXAMPLE.TEST"
+            });
+        }
+
+        if (!await db.UserProfiles.AnyAsync(p => p.UserId == userId))
+        {
+            db.UserProfiles.Add(new UserProfile
+            {
+                UserId = userId,
+                Nickname = "Reader",
+                PreferredLanguage = "English",
+                AgentProfileCompact = "{}"
+            });
+        }
 
         var book = new Book
         {
@@ -178,14 +219,6 @@ public class AgentToolsPostgresTests
             NormalizedAuthor = NormalizeKey(author)
         };
 
-        db.Users.Add(user);
-        db.UserProfiles.Add(new UserProfile
-        {
-            UserId = userId,
-            Nickname = "Reader",
-            PreferredLanguage = "English",
-            AgentProfileCompact = "{}"
-        });
         db.Books.Add(book);
         db.BookNotes.Add(new BookNote
         {
@@ -215,6 +248,13 @@ public class AgentToolsPostgresTests
     {
         var vector = new float[1024];
         vector[0] = 1;
+        return vector;
+    }
+
+    private static float[] VectorWithFirstValue(float value)
+    {
+        var vector = new float[1024];
+        vector[0] = value;
         return vector;
     }
 

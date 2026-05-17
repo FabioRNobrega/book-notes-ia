@@ -32,7 +32,9 @@ public class KindleClippingsImportService : IKindleClippingsImportService
     private readonly AppDbContext _db;
     private readonly IEmbeddingService _embeddingService;
 
-    public KindleClippingsImportService(AppDbContext db, IEmbeddingService embeddingService)
+    public KindleClippingsImportService(
+        AppDbContext db,
+        IEmbeddingService embeddingService)
     {
         _db = db;
         _embeddingService = embeddingService;

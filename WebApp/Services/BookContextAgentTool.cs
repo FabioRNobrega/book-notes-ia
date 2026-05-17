@@ -1,7 +1,7 @@
+using System.Data;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
-using Pgvector;
-using Pgvector.EntityFrameworkCore;
 using WebApp.Models;
 
 namespace WebApp.Services;
@@ -17,6 +17,8 @@ public sealed class BookContextAgentTool(
     IEmbeddingService embeddingService) : IBookContextAgentTool
 {
     private const double MaxCosineDistance = 0.5;
+
+    private sealed record ClosestBookEmbedding(Guid BookId, double Distance);
 
     public AIFunction Create(string userId)
     {
@@ -42,25 +44,73 @@ public sealed class BookContextAgentTool(
 
     private async Task<Book?> FindByEmbeddingAsync(string bookTitle, string userId, CancellationToken ct)
     {
-        var queryVector = new Vector(await embeddingService.EmbedAsync(bookTitle, ct));
+        var queryEmbedding = await embeddingService.EmbedAsync(bookTitle, ct);
 
-        var closest = await db.BookEmbeddings
-            .AsNoTracking()
-            .Where(e => e.UserId == userId)
-            .OrderBy(e => e.Embedding.CosineDistance(queryVector))
-            .Select(e => new
-            {
-                e.BookId,
-                Distance = e.Embedding.CosineDistance(queryVector)
-            })
-            .FirstOrDefaultAsync(ct);
+        ClosestBookEmbedding? closest;
+        try
+        {
+            closest = await FindClosestEmbeddingAsync(userId, queryEmbedding, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
 
-        if (closest is null || closest.Distance > MaxCosineDistance)
+        if (closest is null)
+            return null;
+
+        if (closest.Distance > MaxCosineDistance)
             return null;
 
         return await db.Books
             .AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == closest.BookId && b.UserId == userId, ct);
+    }
+
+    private async Task<ClosestBookEmbedding?> FindClosestEmbeddingAsync(
+        string userId,
+        IReadOnlyList<float> queryEmbedding,
+        CancellationToken ct)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State != ConnectionState.Open;
+
+        if (shouldCloseConnection)
+            await db.Database.OpenConnectionAsync(ct);
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT "BookId", "Embedding" <=> @query_vector::vector AS "Distance"
+                FROM book_embedding
+                WHERE "UserId" = @user_id
+                ORDER BY "Embedding" <=> @query_vector::vector
+                LIMIT 1
+                """;
+
+            var userParameter = command.CreateParameter();
+            userParameter.ParameterName = "user_id";
+            userParameter.Value = userId;
+            command.Parameters.Add(userParameter);
+
+            var vectorParameter = command.CreateParameter();
+            vectorParameter.ParameterName = "query_vector";
+            vectorParameter.Value = ToVectorLiteral(queryEmbedding);
+            command.Parameters.Add(vectorParameter);
+
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return null;
+
+            return new ClosestBookEmbedding(reader.GetGuid(0), reader.GetDouble(1));
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+                await db.Database.CloseConnectionAsync();
+        }
     }
 
     private async Task<Book?> FindByStringMatchAsync(string bookTitle, string userId, CancellationToken ct)
@@ -109,6 +159,9 @@ public sealed class BookContextAgentTool(
 
         return titles.Where(t => t.Length > 0).ToList();
     }
+
+    private static string ToVectorLiteral(IReadOnlyList<float> values) =>
+        $"[{string.Join(",", values.Select(value => value.ToString("R", CultureInfo.InvariantCulture)))}]";
 
     private static string NormalizeKey(string value) =>
         new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
