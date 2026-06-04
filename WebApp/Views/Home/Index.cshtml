@@ -1,4 +1,6 @@
 @using WebApp.Services
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<IdentityUser> SignInManager
 @{
     ViewData["Title"] = "Home";
     var photo = ViewData["BackgroundPhoto"] as UnsplashPhoto;
@@ -176,6 +178,25 @@
                     <sl-icon slot="prefix" name="person-circle"></sl-icon>
                     My Profile
                 </sl-button>
+                @if (SignInManager.IsSignedIn(User))
+                {
+                    <form asp-area="Identity"
+                          asp-page="/Account/Logout"
+                          asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })"
+                          method="post"
+                          id="logoutForm"
+                          class="m-0 shrink-0">
+                        <sl-tooltip content="Logout">
+                            <sl-button
+                                variant="default"
+                                outline
+                                class="shrink-0"
+                                onclick="document.getElementById('logoutForm').submit()">
+                                <sl-icon name="box-arrow-right" slot="prefix"></sl-icon>
+                            </sl-button>
+                        </sl-tooltip>
+                    </form>
+                }
                 </div>
             </div>
         </div>
