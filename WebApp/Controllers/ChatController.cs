@@ -18,6 +18,7 @@ public class ChatController : Controller
     private readonly IChatOrchestratorAgent _agent;
     private readonly ICacheHandler _cache;
     private readonly IBookContextAgentTool _bookContextTool;
+    private readonly IBookNotesAgentTool _bookNotesTool;
     private readonly AppDbContext _db;
     private readonly ILogger<ChatController> _logger;
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -27,12 +28,14 @@ public class ChatController : Controller
         IChatOrchestratorAgent agent,
         ICacheHandler cache,
         IBookContextAgentTool bookContextTool,
+        IBookNotesAgentTool bookNotesTool,
         AppDbContext db,
         ILogger<ChatController> logger)
     {
         _agent = agent;
         _cache = cache;
         _bookContextTool = bookContextTool;
+        _bookNotesTool = bookNotesTool;
         _db = db;
         _logger = logger;
     }
@@ -132,15 +135,16 @@ public class ChatController : Controller
 
             var bookTitles = books.Select(b => $"Title: \"{b.Title}\" | Author: \"{b.Author}\"").ToList();
             var profileInstructions = BuildProfileInstructions(userProfileJson);
+            var orchestratorInstructions = BuildOrchestratorInstructions(profileInstructions, bookTitles);
 
             IReadOnlyList<AITool>? tools = books.Count > 0
-                ? [_bookContextTool.Create(userId)]
+                ? [_bookContextTool.Create(userId), _bookNotesTool.Create(userId)]
                 : null;
 
             var runResult = await _agent.RunAsync(
                 message,
                 sessionJson,
-                BuildOrchestratorInstructions(profileInstructions, bookTitles),
+                orchestratorInstructions,
                 tools,
                 ct);
 
@@ -175,8 +179,12 @@ public class ChatController : Controller
             """
             You are the orchestrator for the Book Notes IA chat experience.
             When the user asks about any specific book or title, call the GenerateBookContext tool before answering.
+            When the user asks about personal notes, highlights, or annotations for a specific book, call the GetBookNotesWithAnalysis tool before answering.
+            When the user asks for both literary context and personal notes for the same book, you may call both GenerateBookContext and GetBookNotesWithAnalysis and combine their results.
             Do not say a book is missing from the library unless GenerateBookContext returns a not found result.
             The GenerateBookContext tool searches the authenticated user's full library, retrieves existing Book.Context when available, and generates and saves context when it is missing.
+            The GetBookNotesWithAnalysis tool searches the authenticated user's full library, retrieves their notes or highlights for the resolved book, and returns a short thematic analysis grounded in those notes.
+            When GetBookNotesWithAnalysis returns an analysis, use it as memory/context and answer naturally. Do not list or quote the user's raw notes unless they explicitly ask to see the exact notes or highlights.
             If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
             """
@@ -193,6 +201,7 @@ public class ChatController : Controller
                 {string.Join(Environment.NewLine, bookTitles.Select(t => $"- {t}"))}
 
                 When the user asks about one of these books, call the GenerateBookContext tool with the exact title text or the user-provided title text.
+                When the user asks about their notes, highlights, or annotations for one of these books, call GetBookNotesWithAnalysis with the exact title text or the user-provided title text.
                 """);
         }
 

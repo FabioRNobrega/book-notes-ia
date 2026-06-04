@@ -13,7 +13,7 @@ namespace WebApp.Tests.Controllers;
 public class ChatControllerTests
 {
     [Fact]
-    public async Task Send_WhenUserHasBooks_PassesGenerateBookContextToolToAgent()
+    public async Task Send_WhenUserHasBooks_PassesBookToolsToAgent()
     {
         var userId = "user-1";
         var agent = new FakeChatOrchestratorAgent();
@@ -33,8 +33,9 @@ public class ChatControllerTests
         await controller.Send("Tell me about Dune", CancellationToken.None);
 
         Assert.NotNull(agent.LastTools);
-        Assert.Single(agent.LastTools);
+        Assert.Equal(2, agent.LastTools.Count);
         Assert.Equal("GenerateBookContext", agent.LastTools[0].Name);
+        Assert.Equal("GetBookNotesWithAnalysis", agent.LastTools[1].Name);
     }
 
     [Fact]
@@ -76,6 +77,8 @@ public class ChatControllerTests
 
         Assert.Contains("Title: \"Foundation\" | Author: \"Isaac Asimov\"", agent.LastInstructions);
         Assert.Contains("call the GenerateBookContext tool before answering", agent.LastInstructions);
+        Assert.Contains("GetBookNotesWithAnalysis", agent.LastInstructions);
+        Assert.Contains("personal notes, highlights, or annotations", agent.LastInstructions);
         Assert.Contains("Do not say a book is missing from the library unless GenerateBookContext returns a not found result", agent.LastInstructions);
     }
 
@@ -238,7 +241,13 @@ public class ChatControllerTests
         AppDbContext? db = null)
     {
         db ??= CreateDbContext();
-        var controller = new ChatController(agent, cache, bookContextTool, db, NullLogger<ChatController>.Instance);
+        var controller = new ChatController(
+            agent,
+            cache,
+            bookContextTool,
+            new FakeBookNotesAgentTool(),
+            db,
+            NullLogger<ChatController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -280,6 +289,14 @@ public class ChatControllerTests
             AIFunctionFactory.Create(
                 (string bookTitle) => Task.FromResult<string>("context"),
                 name: "GenerateBookContext");
+    }
+
+    private sealed class FakeBookNotesAgentTool : IBookNotesAgentTool
+    {
+        public AIFunction Create(string userId) =>
+            AIFunctionFactory.Create(
+                (string bookTitle) => Task.FromResult<string>("notes"),
+                name: "GetBookNotesWithAnalysis");
     }
 
     private sealed class ThrowingChatOrchestratorAgent : IChatOrchestratorAgent

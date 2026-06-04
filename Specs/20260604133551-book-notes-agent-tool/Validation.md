@@ -14,7 +14,7 @@
 | --- | --- |
 | FR1 | `IBookNotesAnalysisService` exists in `WebApp/Services/BookNotesAnalysisService.cs` with a single method; `BookNotesAnalysisService` implements it and does not access `IOllamaService` from `BookNotesAgentTool`. |
 | FR2 | An integration test confirms that when a book has seeded `BookNote` rows, all of them are returned ordered by `ClippedAtUtc` with no truncation; querying with a different `userId` returns the no-notes message. |
-| FR3 | The returned string for a book with notes contains lines matching `<note>{Content}</note>` for each note, with no `[Type @ Location]` prefix. |
+| FR3 | The prompt sent to `FakeOllamaService` contains lines matching `<note>{Content}</note>` for each note, while the returned tool string does not list raw `<note>` lines by default. |
 | FR4 | The Ollama prompt passed to `FakeOllamaService` in tests contains the substring `Book Context:`, the formatted notes block, and the user's `PreferredLanguage` value (e.g. `"English"`). |
 | FR5 | When no `BookNote` rows exist for the book + user, the tool returns a string containing "No notes or highlights found" without calling `IOllamaService`. |
 | FR6 | `BookNotesAgentTool` constructor parameters are `IBookLookupService` and `IBookNotesAnalysisService` only; no `AppDbContext` or `IOllamaService` injection. |
@@ -29,8 +29,8 @@
 
 **Integration tests** (`WebApp.Tests/Integration/AgentToolsPostgresTests.cs`):
 
-- `GetBookNotesWithAnalysis_WithSeededNotes_ReturnsFormattedNotesAndAnalysis`:
-  Seed a user, book, and two `BookNote` rows with distinct `LocationText` and `Content`. Create a `BookNotesAnalysisService` with a `FakeOllamaService`. Invoke the `AIFunction` with the book title. Assert the result string contains both note lines and the `--- Analysis ---` separator. Assert `FakeOllamaService` was called exactly once.
+- `GetBookNotesWithAnalysis_WithSeededNotes_ReturnsAnalysisWithoutRawNotes`:
+  Seed a user, book, and two `BookNote` rows with distinct `LocationText` and `Content`. Create a `BookNotesAnalysisService` with a `FakeOllamaService`. Invoke the `AIFunction` with the book title. Assert the result string contains the analysis and does not contain raw `<note>` lines. Assert the captured prompt contains both formatted note lines. Assert `FakeOllamaService` was called exactly once.
 
 - `GetBookNotesWithAnalysis_WithNoNotes_ReturnsNoNotesMessage`:
   Seed a user and book but no `BookNote` rows. Invoke the tool. Assert the result contains "No notes or highlights found". Assert `FakeOllamaService` was never called.
@@ -57,7 +57,7 @@
 1. Start the stack: `make docker-run` (Linux) or the appropriate platform target.
 2. Sign in and import a Kindle clippings file that has highlights for at least one book.
 3. Navigate to chat and ask: "What highlights do I have from [book title]?"
-4. Verify the agent calls `GetBookNotesWithAnalysis` (visible in `docker compose logs -f webapp` as the tool invocation) and returns a message that includes note lines and a thematic analysis paragraph.
+4. Verify the agent calls `GetBookNotesWithAnalysis` (visible in `docker compose logs -f webapp` as the tool invocation) and returns a natural thematic analysis paragraph without listing raw note lines unless explicitly asked.
 5. Ask about a book in your library with no imported notes. Verify the agent returns a clear "no notes found" message.
 6. Ask about a title not in your library. Verify the agent returns a "not found" message.
 7. Ask a combined question: "Tell me about Dune and what I highlighted." Verify the agent calls both `GenerateBookContext` and `GetBookNotesWithAnalysis` and incorporates both results.

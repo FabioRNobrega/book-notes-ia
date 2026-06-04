@@ -44,7 +44,14 @@ builder.Services.AddSingleton<IChatClient>(_ =>
 {
     var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
     var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen3.5:4b";
-    return ((IChatClient)new OllamaApiClient(new Uri(ollamaUrl), ollamaModel))
+    var ollamaTimeoutSeconds = builder.Configuration.GetValue<int?>("Ollama:TimeoutSeconds") ?? 300;
+    var httpClient = new HttpClient
+    {
+        BaseAddress = new Uri(ollamaUrl),
+        Timeout = TimeSpan.FromSeconds(ollamaTimeoutSeconds)
+    };
+
+    return ((IChatClient)new OllamaApiClient(httpClient, ollamaModel))
         .AsBuilder()
         .ConfigureOptions(options =>
         {
@@ -58,7 +65,14 @@ builder.Services.AddSingleton<IChatClient>(_ =>
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
 {
     var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
-    return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(new Uri(ollamaUrl), "mxbai-embed-large");
+    var ollamaTimeoutSeconds = builder.Configuration.GetValue<int?>("Ollama:TimeoutSeconds") ?? 300;
+    var httpClient = new HttpClient
+    {
+        BaseAddress = new Uri(ollamaUrl),
+        Timeout = TimeSpan.FromSeconds(ollamaTimeoutSeconds)
+    };
+
+    return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(httpClient, "mxbai-embed-large");
 });
 
 builder.Services.AddSingleton<AIAgent>(sp =>
@@ -78,6 +92,8 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 });
 builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
 builder.Services.AddScoped<IBookContextAgentTool, BookContextAgentTool>();
+builder.Services.AddScoped<IBookNotesAnalysisService, BookNotesAnalysisService>();
+builder.Services.AddScoped<IBookNotesAgentTool, BookNotesAgentTool>();
 
 // Build Redis for cache handler
 builder.Services.AddStackExchangeRedisCache(options =>

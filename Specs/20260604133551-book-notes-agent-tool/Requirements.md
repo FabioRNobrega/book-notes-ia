@@ -15,7 +15,7 @@ The existing chat experience resolves a book's literary context via `GenerateBoo
 
 ## User Stories
 
-- Given I have imported Kindle highlights for a book, when I ask the chat "What notes do I have on Dune?", then the agent fetches my raw notes and returns them alongside a thematic analysis.
+- Given I have imported Kindle highlights for a book, when I ask the chat "What notes do I have on Dune?", then the agent fetches my raw notes for grounding and returns a natural thematic analysis without listing the raw notes unless I explicitly ask to see them.
 - Given my notes for a book span multiple highlights, when the agent calls `GetBookNotesWithAnalysis`, then the response describes the main relationship between my notes and how their themes connect to the book's literary context.
 - Given a book exists in my library but has no imported notes, when I ask about my notes for it, then the agent returns a clear message that no notes or highlights were found.
 - Given I ask about a title not in my library, when the agent calls `GetBookNotesWithAnalysis`, then it returns a not-found message without querying notes.
@@ -23,11 +23,11 @@ The existing chat experience resolves a book's literary context via `GenerateBoo
 
 ## Functional Requirements
 
-1. **FR1** — A new `IBookNotesAnalysisService` interface must expose a method that accepts a resolved `Book` and `userId` and returns a combined string of formatted raw notes and an LLM-generated analysis. This service owns all `AppDbContext` note queries and `IOllamaService` calls for this feature.
+1. **FR1** — A new `IBookNotesAnalysisService` interface must expose a method that accepts a resolved `Book` and `userId` and returns an LLM-generated analysis grounded in the user's notes. This service owns all `AppDbContext` note queries and `IOllamaService` calls for this feature.
 
 2. **FR2** — `BookNotesAnalysisService` must query `AppDbContext.BookNotes` filtered by `BookId` and `UserId`, ordered by `ClippedAtUtc` ascending. All matching notes must be returned — no cap is applied.
 
-3. **FR3** — Each note must be formatted as `<note>{Content}</note>` in the returned string, one entry per line. This tag format is the canonical representation shared with the follow-up spec `20260604140620-book-note-embeddings`, which introduces semantic note retrieval using the same format.
+3. **FR3** — Each note must be formatted as `<note>{Content}</note>` in the Ollama analysis prompt, one entry per line. This tag format is the canonical representation shared with the follow-up spec `20260604140620-book-note-embeddings`, which introduces semantic note retrieval using the same format. Raw note lines must not be included in the tool result unless a future explicit exact-notes path is added.
 
 4. **FR4** — `BookNotesAnalysisService` must query `AppDbContext.UserProfiles` for the user's `PreferredLanguage` (defaulting to `"English"` if not set) and include it in the `IOllamaService.CompleteAsync` prompt. The prompt must also include the book's existing `Book.Context` (or "Not available." if absent), the full formatted notes block, and ask for a ≤150-word plain-text analysis answering:
    - What is the main relationship between these notes?

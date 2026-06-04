@@ -47,20 +47,23 @@ ChatController
 
 **Analysis generation:** A single `IOllamaService.CompleteAsync` call with a prompt containing the resolved language, the book's existing `Book.Context` (or "Not available."), the full formatted notes block, and two explicit questions. Response in the user's preferred language, plain-text ≤150 words.
 
-**Tool output format:**
+**Analysis prompt note format:**
 
 ```text
-Notes for "{Title}" by {Author} ({count} notes):
-
 <note>First highlight content</note>
 <note>Second highlight content</note>
 ...
+```
 
---- Analysis ---
+**Tool output format:**
+
+```text
+Thematic analysis for "{Title}" by {Author} based on {count} personal notes:
+
 {analysis text}
 ```
 
-The `<note>` tag format is the canonical representation for note content shared with `20260604140620-book-note-embeddings`. LLMs parse XML-style boundary tags reliably due to training data patterns, making each note boundary unambiguous to the agent.
+The `<note>` tag format is the canonical representation for note content shared with `20260604140620-book-note-embeddings`. LLMs parse XML-style boundary tags reliably due to training data patterns, making each note boundary unambiguous during analysis. The tool result intentionally omits raw note lines by default so the final chat response feels conversational instead of dumping the user's highlights back at them.
 
 ## Component Breakdown
 
@@ -121,7 +124,7 @@ sequenceDiagram
     AppDbContext-->>BookNotesAnalysisService: List<BookNote> (all notes)
     BookNotesAnalysisService->>OllamaService: CompleteAsync(prompt with language + context + notes)
     OllamaService-->>BookNotesAnalysisService: analysis text
-    BookNotesAnalysisService-->>BookNotesAgentTool: formatted notes + "--- Analysis ---" + analysis
+    BookNotesAnalysisService-->>BookNotesAgentTool: thematic analysis grounded in formatted notes
     BookNotesAgentTool-->>MAFAgent: tool result string
     MAFAgent-->>ChatController: final response text + serialized session
     ChatController-->>Browser: _BotMessage partial (rendered HTML)

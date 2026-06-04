@@ -102,6 +102,7 @@ public class AgentToolsPostgresTests
             new FakeChatOrchestratorAgent(),
             cache,
             new FakeBookContextAgentTool(),
+            new FakeBookNotesAgentTool(),
             db,
             userId);
 
@@ -122,6 +123,120 @@ public class AgentToolsPostgresTests
                 Assert.Equal("assistant", entry.Role);
                 Assert.Contains("Galactic Pot-Healer context", entry.Content);
             });
+    }
+
+    [Fact]
+    public async Task GetBookNotesWithAnalysis_WithSeededNotes_ReturnsAnalysisWithoutRawNotes()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-notes-e2e-1";
+        var book = await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert", "Arrakis context.");
+        AddBookNote(db, book, "The mystery of life isn't a problem to solve.", DateTime.UtcNow.AddMinutes(-2));
+        AddBookNote(db, book, "Fear is the mind-killer.", DateTime.UtcNow.AddMinutes(-1));
+        await db.SaveChangesAsync();
+
+        var ollama = new FakeOllamaService("The notes connect fear, mystery, and disciplined perception.");
+        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            CancellationToken.None);
+
+        var text = result?.ToString();
+        Assert.Contains("Thematic analysis for", text);
+        Assert.Contains("The notes connect fear, mystery, and disciplined perception.", text);
+        Assert.DoesNotContain("<note>The mystery of life isn't a problem to solve.</note>", text);
+        Assert.DoesNotContain("<note>Fear is the mind-killer.</note>", text);
+        Assert.DoesNotContain("[Highlight @", text);
+        Assert.Equal(1, ollama.CallCount);
+        Assert.Contains("Book Context:", ollama.LastPrompt);
+        Assert.Contains("Arrakis context.", ollama.LastPrompt);
+        Assert.Contains("<note>The mystery of life isn't a problem to solve.</note>", ollama.LastPrompt);
+        Assert.Contains("<note>Fear is the mind-killer.</note>", ollama.LastPrompt);
+        Assert.Contains("English", ollama.LastPrompt);
+    }
+
+    [Fact]
+    public async Task GetBookNotesWithAnalysis_WithNoNotes_ReturnsNoNotesMessage()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-notes-e2e-2";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var ollama = new FakeOllamaService("Should not be called.");
+        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            CancellationToken.None);
+
+        Assert.Contains("No notes or highlights found", result?.ToString());
+        Assert.Equal(0, ollama.CallCount);
+    }
+
+    [Fact]
+    public async Task GetBookNotesWithAnalysis_WithUnknownTitle_ReturnsNotFoundMessage()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-notes-e2e-3";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var analysis = new FakeBookNotesAnalysisService("Should not be called.");
+        var function = CreateBookNotesTool(db, analysis, new FakeEmbeddingService(SameVector()), userId);
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Unknown Title" },
+            CancellationToken.None);
+
+        Assert.Contains("was not found in your library", result?.ToString());
+        Assert.False(analysis.Called);
+    }
+
+    [Fact]
+    public async Task GetBookNotesWithAnalysis_IsolatesNotesByUserId_DoesNotReturnOtherUserNotes()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userA = "user-notes-e2e-4a";
+        var userB = "user-notes-e2e-4b";
+        var bookA = await SeedUserAndBookAsync(db, userA, "Dune", "Frank Herbert");
+        await SeedUserAndBookAsync(db, userB, "Dune", "Frank Herbert");
+        AddBookNote(db, bookA, "Other user's private highlight.", DateTime.UtcNow);
+        await db.SaveChangesAsync();
+
+        var ollama = new FakeOllamaService("Should not be called.");
+        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userB);
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            CancellationToken.None);
+
+        Assert.Contains("No notes or highlights found", result?.ToString());
+        Assert.DoesNotContain("Other user's private highlight.", result?.ToString());
+        Assert.Equal(0, ollama.CallCount);
+    }
+
+    [Fact]
+    public async Task GetBookNotesWithAnalysis_WithPreferredLanguage_IncludesLanguageInPrompt()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-notes-e2e-5";
+        var book = await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert", preferredLanguage: "Portuguese");
+        AddBookNote(db, book, "A note about ecology and power.", DateTime.UtcNow);
+        await db.SaveChangesAsync();
+
+        var ollama = new FakeOllamaService("As notas conectam ecologia e poder.");
+        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+
+        await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            CancellationToken.None);
+
+        Assert.Contains("Portuguese", ollama.LastPrompt);
     }
 
     private const string MafSessionJson =
@@ -169,10 +284,11 @@ public class AgentToolsPostgresTests
         IChatOrchestratorAgent agent,
         ICacheHandler cache,
         IBookContextAgentTool bookContextTool,
+        IBookNotesAgentTool bookNotesTool,
         AppDbContext db,
         string userId)
     {
-        var controller = new ChatController(agent, cache, bookContextTool, db, NullLogger<ChatController>.Instance);
+        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, db, NullLogger<ChatController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -186,6 +302,20 @@ public class AgentToolsPostgresTests
     }
 
     private static async Task<Book> SeedUserBookAndNoteAsync(AppDbContext db, string userId, string title, string author)
+    {
+        var book = await SeedUserAndBookAsync(db, userId, title, author);
+        AddBookNote(db, book, "A seeded note for the integration test.", DateTime.UtcNow);
+        await db.SaveChangesAsync();
+        return book;
+    }
+
+    private static async Task<Book> SeedUserAndBookAsync(
+        AppDbContext db,
+        string userId,
+        string title,
+        string author,
+        string? context = null,
+        string preferredLanguage = "English")
     {
         if (!await db.Users.AnyAsync(u => u.Id == userId))
         {
@@ -205,7 +335,7 @@ public class AgentToolsPostgresTests
             {
                 UserId = userId,
                 Nickname = "Reader",
-                PreferredLanguage = "English",
+                PreferredLanguage = preferredLanguage,
                 AgentProfileCompact = "{}"
             });
         }
@@ -216,22 +346,27 @@ public class AgentToolsPostgresTests
             Title = title,
             Author = author,
             NormalizedTitle = NormalizeKey(title),
-            NormalizedAuthor = NormalizeKey(author)
+            NormalizedAuthor = NormalizeKey(author),
+            Context = context
         };
 
         db.Books.Add(book);
+        await db.SaveChangesAsync();
+        return book;
+    }
+
+    private static void AddBookNote(AppDbContext db, Book book, string content, DateTime clippedAtUtc)
+    {
         db.BookNotes.Add(new BookNote
         {
-            UserId = userId,
+            UserId = book.UserId,
             BookId = book.Id,
             EntryType = "Highlight",
             LocationText = "Location 42",
-            Content = "A seeded note for the integration test.",
-            ClippedAtUtc = DateTime.UtcNow,
+            Content = content,
+            ClippedAtUtc = clippedAtUtc,
             DedupeKey = Guid.NewGuid().ToString("N")
         });
-        await db.SaveChangesAsync();
-        return book;
     }
 
     private static BookEmbedding CreateBookEmbedding(Book book, float[] vector) =>
@@ -254,6 +389,16 @@ public class AgentToolsPostgresTests
         return new BookContextAgentTool(bookContextService, lookup).Create(userId);
     }
 
+    private static AIFunction CreateBookNotesTool(
+        AppDbContext db,
+        IBookNotesAnalysisService bookNotesAnalysisService,
+        IEmbeddingService embeddingService,
+        string userId)
+    {
+        var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
+        return new BookNotesAgentTool(lookup, bookNotesAnalysisService).Create(userId);
+    }
+
     private static float[] SameVector()
     {
         var vector = new float[1024];
@@ -273,8 +418,15 @@ public class AgentToolsPostgresTests
 
     private sealed class FakeOllamaService(string response) : IOllamaService
     {
-        public Task<string> CompleteAsync(string prompt, CancellationToken ct = default) =>
-            Task.FromResult(response);
+        public int CallCount { get; private set; }
+        public string LastPrompt { get; private set; } = string.Empty;
+
+        public Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
+        {
+            CallCount++;
+            LastPrompt = prompt;
+            return Task.FromResult(response);
+        }
     }
 
     private sealed class FakeEmbeddingService(float[] vector) : IEmbeddingService
@@ -293,6 +445,23 @@ public class AgentToolsPostgresTests
     {
         public AIFunction Create(string userId) =>
             AIFunctionFactory.Create((string bookTitle) => Task.FromResult("context"), name: "GenerateBookContext");
+    }
+
+    private sealed class FakeBookNotesAgentTool : IBookNotesAgentTool
+    {
+        public AIFunction Create(string userId) =>
+            AIFunctionFactory.Create((string bookTitle) => Task.FromResult("notes"), name: "GetBookNotesWithAnalysis");
+    }
+
+    private sealed class FakeBookNotesAnalysisService(string result) : IBookNotesAnalysisService
+    {
+        public bool Called { get; private set; }
+
+        public Task<string> GetNotesWithAnalysisAsync(Book book, string userId, CancellationToken ct = default)
+        {
+            Called = true;
+            return Task.FromResult(result);
+        }
     }
 
     private sealed class FakeCacheHandler : ICacheHandler
