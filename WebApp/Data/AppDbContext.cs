@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Book> Books => Set<Book>();
     public DbSet<BookNote> BookNotes => Set<BookNote>();
     public DbSet<BookEmbedding> BookEmbeddings => Set<BookEmbedding>();
+    public DbSet<BookNoteEmbedding> BookNoteEmbeddings => Set<BookNoteEmbedding>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -149,6 +150,38 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.UserId);
 
             e.HasIndex(x => x.BookId)
+             .IsUnique();
+
+            e.HasIndex(x => x.Embedding)
+             .HasMethod("hnsw")
+             .HasOperators("vector_cosine_ops");
+        });
+
+        builder.Entity<BookNoteEmbedding>(e =>
+        {
+            e.ToTable("book_note_embedding");
+
+            e.HasKey(x => x.Id);
+
+            e.HasOne(x => x.Book)
+             .WithMany()
+             .HasForeignKey(x => x.BookId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.BookNote)
+             .WithMany()
+             .HasForeignKey(x => x.BookNoteId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.Property(x => x.Embedding)
+             .HasColumnType("vector(1024)")
+             .IsRequired();
+
+            e.HasIndex(x => x.UserId);
+
+            e.HasIndex(x => new { x.UserId, x.BookId });
+
+            e.HasIndex(x => x.BookNoteId)
              .IsUnique();
 
             e.HasIndex(x => x.Embedding)

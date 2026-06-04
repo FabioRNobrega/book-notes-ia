@@ -21,7 +21,7 @@ public sealed class BookNotesAgentTool(
                 if (match is null)
                     return $"Book '{bookTitle}' was not found in your library.";
 
-                return await bookNotesAnalysisService.GetNotesWithAnalysisAsync(match, userId, ct);
+                return await bookNotesAnalysisService.GetNotesAsync(match, userId, ct);
             },
             name: "GetBookNotesWithAnalysis",
             description: "Retrieves the user's personal notes, highlights, or annotations for a specific book in their library " +

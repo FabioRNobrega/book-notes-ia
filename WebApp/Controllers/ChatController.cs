@@ -19,6 +19,7 @@ public class ChatController : Controller
     private readonly ICacheHandler _cache;
     private readonly IBookContextAgentTool _bookContextTool;
     private readonly IBookNotesAgentTool _bookNotesTool;
+    private readonly IBookNoteSearchAgentTool _bookNoteSearchTool;
     private readonly AppDbContext _db;
     private readonly ILogger<ChatController> _logger;
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -29,6 +30,7 @@ public class ChatController : Controller
         ICacheHandler cache,
         IBookContextAgentTool bookContextTool,
         IBookNotesAgentTool bookNotesTool,
+        IBookNoteSearchAgentTool bookNoteSearchTool,
         AppDbContext db,
         ILogger<ChatController> logger)
     {
@@ -36,6 +38,7 @@ public class ChatController : Controller
         _cache = cache;
         _bookContextTool = bookContextTool;
         _bookNotesTool = bookNotesTool;
+        _bookNoteSearchTool = bookNoteSearchTool;
         _db = db;
         _logger = logger;
     }
@@ -138,7 +141,7 @@ public class ChatController : Controller
             var orchestratorInstructions = BuildOrchestratorInstructions(profileInstructions, bookTitles);
 
             IReadOnlyList<AITool>? tools = books.Count > 0
-                ? [_bookContextTool.Create(userId), _bookNotesTool.Create(userId)]
+                ? [_bookContextTool.Create(userId), _bookNotesTool.Create(userId), _bookNoteSearchTool.Create(userId)]
                 : null;
 
             var runResult = await _agent.RunAsync(
@@ -180,11 +183,12 @@ public class ChatController : Controller
             You are the orchestrator for the Book Notes IA chat experience.
             When the user asks about any specific book or title, call the GenerateBookContext tool before answering.
             When the user asks about personal notes, highlights, or annotations for a specific book, call the GetBookNotesWithAnalysis tool before answering.
+            When the user asks a focused question about a specific topic, theme, or idea within a book's notes (e.g. "what did I highlight about power in Dune?"), call GetRelevantBookNotes instead, passing the user's question as searchQuery.
             When the user asks for both literary context and personal notes for the same book, you may call both GenerateBookContext and GetBookNotesWithAnalysis and combine their results.
             Do not say a book is missing from the library unless GenerateBookContext returns a not found result.
             The GenerateBookContext tool searches the authenticated user's full library, retrieves existing Book.Context when available, and generates and saves context when it is missing.
-            The GetBookNotesWithAnalysis tool searches the authenticated user's full library, retrieves their notes or highlights for the resolved book, and returns a short thematic analysis grounded in those notes.
-            When GetBookNotesWithAnalysis returns an analysis, use it as memory/context and answer naturally. Do not list or quote the user's raw notes unless they explicitly ask to see the exact notes or highlights.
+            The GetBookNotesWithAnalysis tool retrieves the user's highlights for a book as <note>...</note> blocks. Reason over these notes yourself to produce a thematic answer — do not list the raw notes back unless the user explicitly asks to see them.
+            The GetRelevantBookNotes tool performs semantic search over the user's highlights for a specific book and returns only the most relevant notes as <note loc="...">...</note> blocks. Use the loc attribute to cite the location when relevant.
             If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
             """

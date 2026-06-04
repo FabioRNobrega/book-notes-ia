@@ -51,6 +51,8 @@ builder.Services.AddSingleton<IChatClient>(_ =>
         Timeout = TimeSpan.FromSeconds(ollamaTimeoutSeconds)
     };
 
+    var numCtx = builder.Configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
+
     return ((IChatClient)new OllamaApiClient(httpClient, ollamaModel))
         .AsBuilder()
         .ConfigureOptions(options =>
@@ -58,6 +60,7 @@ builder.Services.AddSingleton<IChatClient>(_ =>
             options.Temperature = 0; // sets the temperature 0 to 1 [higher is more creative, lower is more coherent]
             options.AdditionalProperties ??= new AdditionalPropertiesDictionary();
             options.AdditionalProperties["think"] = false; // This disable think mode on qwen to faster responses
+            options.AdditionalProperties["num_ctx"] = numCtx;
         })
         .Build();
 });
@@ -94,6 +97,8 @@ builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
 builder.Services.AddScoped<IBookContextAgentTool, BookContextAgentTool>();
 builder.Services.AddScoped<IBookNotesAnalysisService, BookNotesAnalysisService>();
 builder.Services.AddScoped<IBookNotesAgentTool, BookNotesAgentTool>();
+builder.Services.AddScoped<IBookNoteSearchService, BookNoteSearchService>();
+builder.Services.AddScoped<IBookNoteSearchAgentTool, BookNoteSearchAgentTool>();
 
 // Build Redis for cache handler
 builder.Services.AddStackExchangeRedisCache(options =>

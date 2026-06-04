@@ -41,7 +41,7 @@ ChatController
 - `IBookNotesAnalysisService` is narrow — one method, no overlap with context generation or embedding.
 - EF Core queries in `BookNotesAnalysisService` use `AsNoTracking`, are scoped by `UserId`, and are parameterized — no raw SQL required since `book_note` has no provider-specific operators.
 
-**Note retrieval:** `AppDbContext.BookNotes.AsNoTracking().Where(n => n.BookId == book.Id && n.UserId == userId).OrderBy(n => n.ClippedAtUtc)` — pure LINQ, no cap, no raw SQL. All highlights for a single book are expected to fit within the Ollama context window.
+**Note retrieval:** `AppDbContext.BookNotes.AsNoTracking().Where(n => n.BookId == book.Id && n.UserId == userId).OrderBy(n => n.ClippedAtUtc).Take(maxNotes)` — pure LINQ, no raw SQL. `maxNotes` is read from `IConfiguration` key `BookNotes:MaxAnalysisNotes` with a fallback of `50`. The cap is correct because the notes are fed into the Ollama prompt internally to produce the analysis paragraph; they are never placed in the agent's conversation context. Focused highlight retrieval is delegated to `GetRelevantBookNotes` (spec `20260604140620-book-note-embeddings`), which uses semantic search over note embeddings.
 
 **Language resolution:** `AppDbContext.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId)` — same pattern as `BookContextService.GenerateContextAsync`. Defaults to `"English"` if the profile is absent or `PreferredLanguage` is unset.
 
@@ -69,7 +69,7 @@ The `<note>` tag format is the canonical representation for note content shared 
 
 **New files to create:**
 
-- `WebApp/Services/BookNotesAnalysisService.cs` — defines `IBookNotesAnalysisService` interface and `BookNotesAnalysisService` implementation. Owns the `AppDbContext.BookNotes` query (all notes, ordered by `ClippedAtUtc`), `UserProfile` language lookup, note formatting, and the Ollama analysis prompt. Returns the full combined string, or a "no notes found" message.
+- `WebApp/Services/BookNotesAnalysisService.cs` — defines `IBookNotesAnalysisService` interface and `BookNotesAnalysisService` implementation. Reads `BookNotes:MaxAnalysisNotes` from `IConfiguration` (fallback `50`). Owns the `AppDbContext.BookNotes` query (capped, ordered by `ClippedAtUtc`), `UserProfile` language lookup, note formatting, and the Ollama analysis prompt. Returns the analysis string, or a "no notes found" message. Depends on `AppDbContext`, `IOllamaService`, and `IConfiguration`.
 
 - `WebApp/Services/BookNotesAgentTool.cs` — defines `IBookNotesAgentTool` interface and `BookNotesAgentTool` implementation. Calls `IBookLookupService.FindAsync`; on match, delegates to `IBookNotesAnalysisService`; on miss, returns a "not found" string. Registers the `AIFunction` as `GetBookNotesWithAnalysis`.
 

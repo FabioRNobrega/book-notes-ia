@@ -126,7 +126,7 @@ public class AgentToolsPostgresTests
     }
 
     [Fact]
-    public async Task GetBookNotesWithAnalysis_WithSeededNotes_ReturnsAnalysisWithoutRawNotes()
+    public async Task GetBookNotesWithAnalysis_WithSeededNotes_ReturnsFormattedNoteBlocks()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
@@ -136,25 +136,17 @@ public class AgentToolsPostgresTests
         AddBookNote(db, book, "Fear is the mind-killer.", DateTime.UtcNow.AddMinutes(-1));
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("The notes connect fear, mystery, and disciplined perception.");
-        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+        var function = CreateBookNotesTool(db, MakeAnalysisService(db), new FakeEmbeddingService(SameVector()), userId);
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
             CancellationToken.None);
 
         var text = result?.ToString();
-        Assert.Contains("Thematic analysis for", text);
-        Assert.Contains("The notes connect fear, mystery, and disciplined perception.", text);
-        Assert.DoesNotContain("<note>The mystery of life isn't a problem to solve.</note>", text);
-        Assert.DoesNotContain("<note>Fear is the mind-killer.</note>", text);
-        Assert.DoesNotContain("[Highlight @", text);
-        Assert.Equal(1, ollama.CallCount);
-        Assert.Contains("Book Context:", ollama.LastPrompt);
-        Assert.Contains("Arrakis context.", ollama.LastPrompt);
-        Assert.Contains("<note>The mystery of life isn't a problem to solve.</note>", ollama.LastPrompt);
-        Assert.Contains("<note>Fear is the mind-killer.</note>", ollama.LastPrompt);
-        Assert.Contains("English", ollama.LastPrompt);
+        Assert.Contains("Notes for \"Dune\"", text);
+        Assert.Contains("2 highlights", text);
+        Assert.Contains("<note>The mystery of life isn't a problem to solve.</note>", text);
+        Assert.Contains("<note>Fear is the mind-killer.</note>", text);
     }
 
     [Fact]
@@ -165,15 +157,13 @@ public class AgentToolsPostgresTests
         var userId = "user-notes-e2e-2";
         await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
 
-        var ollama = new FakeOllamaService("Should not be called.");
-        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+        var function = CreateBookNotesTool(db, MakeAnalysisService(db), new FakeEmbeddingService(SameVector()), userId);
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
             CancellationToken.None);
 
         Assert.Contains("No notes or highlights found", result?.ToString());
-        Assert.Equal(0, ollama.CallCount);
     }
 
     [Fact]
@@ -207,8 +197,7 @@ public class AgentToolsPostgresTests
         AddBookNote(db, bookA, "Other user's private highlight.", DateTime.UtcNow);
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Should not be called.");
-        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userB);
+        var function = CreateBookNotesTool(db, MakeAnalysisService(db), new FakeEmbeddingService(SameVector()), userB);
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
@@ -216,27 +205,94 @@ public class AgentToolsPostgresTests
 
         Assert.Contains("No notes or highlights found", result?.ToString());
         Assert.DoesNotContain("Other user's private highlight.", result?.ToString());
-        Assert.Equal(0, ollama.CallCount);
     }
 
     [Fact]
-    public async Task GetBookNotesWithAnalysis_WithPreferredLanguage_IncludesLanguageInPrompt()
+    public async Task GetRelevantBookNotes_WithSeededEmbeddings_ReturnsClosestNoteWithLocAttribute()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
-        var userId = "user-notes-e2e-5";
-        var book = await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert", preferredLanguage: "Portuguese");
-        AddBookNote(db, book, "A note about ecology and power.", DateTime.UtcNow);
+        var userId = "user-search-e2e-1";
+        var book = await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+        var noteA = AddBookNoteReturned(db, book, "Paul feels the presence of water within the desert.", "Location 10", DateTime.UtcNow.AddMinutes(-2));
+        var noteB = AddBookNoteReturned(db, book, "Fremen religion is shaped by the ecology of Arrakis.", "Location 200", DateTime.UtcNow.AddMinutes(-1));
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("As notas conectam ecologia e poder.");
-        var function = CreateBookNotesTool(db, new BookNotesAnalysisService(db, ollama), new FakeEmbeddingService(SameVector()), userId);
+        db.BookNoteEmbeddings.Add(CreateBookNoteEmbedding(book, noteA, VectorWithFirstValue(1)));
+        db.BookNoteEmbeddings.Add(CreateBookNoteEmbedding(book, noteB, VectorWithFirstValue(-1)));
+        await db.SaveChangesAsync();
 
-        await function.InvokeAsync(
-            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+        var tool = CreateBookNoteSearchTool(db, new FakeEmbeddingService(VectorWithFirstValue(1)), userId);
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune", ["searchQuery"] = "water and desert" },
             CancellationToken.None);
 
-        Assert.Contains("Portuguese", ollama.LastPrompt);
+        var text = result?.ToString();
+        Assert.Contains("Location 10", text);
+        Assert.Contains("Paul feels the presence of water within the desert.", text);
+        Assert.DoesNotContain("Fremen religion", text);
+        Assert.Contains("<note loc=", text);
+    }
+
+    [Fact]
+    public async Task GetRelevantBookNotes_WithUnknownTitle_ReturnsNotFoundMessage()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-search-e2e-2";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var tool = CreateBookNoteSearchTool(db, new FakeEmbeddingService(SameVector()), userId);
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Unknown Title", ["searchQuery"] = "anything" },
+            CancellationToken.None);
+
+        Assert.Contains("was not found in your library", result?.ToString());
+    }
+
+    [Fact]
+    public async Task GetRelevantBookNotes_WithNoMatchingEmbeddings_ReturnsNoRelevantNotesMessage()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-search-e2e-3";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var tool = CreateBookNoteSearchTool(db, new FakeEmbeddingService(SameVector()), userId);
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune", ["searchQuery"] = "ecology" },
+            CancellationToken.None);
+
+        Assert.Contains("No relevant notes found", result?.ToString());
+    }
+
+    [Fact]
+    public async Task GetRelevantBookNotes_IsolatesEmbeddingsByUserId_DoesNotReturnOtherUserNotes()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userA = "user-search-e2e-4a";
+        var userB = "user-search-e2e-4b";
+        var bookA = await SeedUserAndBookAsync(db, userA, "Dune", "Frank Herbert");
+        await SeedUserAndBookAsync(db, userB, "Dune", "Frank Herbert");
+
+        var noteA = AddBookNoteReturned(db, bookA, "User A private highlight.", "Location 1", DateTime.UtcNow);
+        await db.SaveChangesAsync();
+        db.BookNoteEmbeddings.Add(CreateBookNoteEmbedding(bookA, noteA, VectorWithFirstValue(1)));
+        await db.SaveChangesAsync();
+
+        // Search scoped to userB — who has no embeddings
+        var tool = CreateBookNoteSearchTool(db, new FakeEmbeddingService(VectorWithFirstValue(1)), userB);
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune", ["searchQuery"] = "private" },
+            CancellationToken.None);
+
+        Assert.Contains("No relevant notes found", result?.ToString());
+        Assert.DoesNotContain("User A private highlight.", result?.ToString());
     }
 
     private const string MafSessionJson =
@@ -286,9 +342,10 @@ public class AgentToolsPostgresTests
         IBookContextAgentTool bookContextTool,
         IBookNotesAgentTool bookNotesTool,
         AppDbContext db,
-        string userId)
+        string userId,
+        IBookNoteSearchAgentTool? bookNoteSearchTool = null)
     {
-        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, db, NullLogger<ChatController>.Instance);
+        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, NullLogger<ChatController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -369,6 +426,42 @@ public class AgentToolsPostgresTests
         });
     }
 
+    private static BookNote AddBookNoteReturned(AppDbContext db, Book book, string content, string locationText, DateTime clippedAtUtc)
+    {
+        var note = new BookNote
+        {
+            UserId = book.UserId,
+            BookId = book.Id,
+            EntryType = "Highlight",
+            LocationText = locationText,
+            Content = content,
+            ClippedAtUtc = clippedAtUtc,
+            DedupeKey = Guid.NewGuid().ToString("N")
+        };
+        db.BookNotes.Add(note);
+        return note;
+    }
+
+    private static BookNoteEmbedding CreateBookNoteEmbedding(Book book, BookNote note, float[] vector) =>
+        new()
+        {
+            UserId = book.UserId,
+            BookId = book.Id,
+            BookNoteId = note.Id,
+            Embedding = new Vector(vector)
+        };
+
+    private static AIFunction CreateBookNoteSearchTool(
+        AppDbContext db,
+        IEmbeddingService embeddingService,
+        string userId)
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
+        var searchService = new BookNoteSearchService(db, embeddingService, config);
+        return new BookNoteSearchAgentTool(lookup, searchService).Create(userId);
+    }
+
     private static BookEmbedding CreateBookEmbedding(Book book, float[] vector) =>
         new()
         {
@@ -388,6 +481,9 @@ public class AgentToolsPostgresTests
         var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
         return new BookContextAgentTool(bookContextService, lookup).Create(userId);
     }
+
+    private static BookNotesAnalysisService MakeAnalysisService(AppDbContext db) =>
+        new(db, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 
     private static AIFunction CreateBookNotesTool(
         AppDbContext db,
@@ -453,11 +549,17 @@ public class AgentToolsPostgresTests
             AIFunctionFactory.Create((string bookTitle) => Task.FromResult("notes"), name: "GetBookNotesWithAnalysis");
     }
 
+    private sealed class FakeBookNoteSearchAgentTool : IBookNoteSearchAgentTool
+    {
+        public AIFunction Create(string userId) =>
+            AIFunctionFactory.Create((string bookTitle, string searchQuery) => Task.FromResult("relevant notes"), name: "GetRelevantBookNotes");
+    }
+
     private sealed class FakeBookNotesAnalysisService(string result) : IBookNotesAnalysisService
     {
         public bool Called { get; private set; }
 
-        public Task<string> GetNotesWithAnalysisAsync(Book book, string userId, CancellationToken ct = default)
+        public Task<string> GetNotesAsync(Book book, string userId, CancellationToken ct = default)
         {
             Called = true;
             return Task.FromResult(result);

@@ -25,7 +25,7 @@ The existing chat experience resolves a book's literary context via `GenerateBoo
 
 1. **FR1** — A new `IBookNotesAnalysisService` interface must expose a method that accepts a resolved `Book` and `userId` and returns an LLM-generated analysis grounded in the user's notes. This service owns all `AppDbContext` note queries and `IOllamaService` calls for this feature.
 
-2. **FR2** — `BookNotesAnalysisService` must query `AppDbContext.BookNotes` filtered by `BookId` and `UserId`, ordered by `ClippedAtUtc` ascending. All matching notes must be returned — no cap is applied.
+2. **FR2** — `BookNotesAnalysisService` must query `AppDbContext.BookNotes` filtered by `BookId` and `UserId`, ordered by `ClippedAtUtc` ascending, capped at a configurable maximum read from `IConfiguration` key `BookNotes:MaxAnalysisNotes` with a hardcoded fallback of `50`. The cap exists because the raw notes fed into the Ollama prompt are consumed once to produce the analysis paragraph and never surfaced in the agent's conversation context — so completeness beyond ~50 notes does not improve the answer quality but does burn context window and slow response time. The follow-up tool `GetRelevantBookNotes` (spec `20260604140620-book-note-embeddings`) handles focused, exhaustive retrieval via semantic search.
 
 3. **FR3** — Each note must be formatted as `<note>{Content}</note>` in the Ollama analysis prompt, one entry per line. This tag format is the canonical representation shared with the follow-up spec `20260604140620-book-note-embeddings`, which introduces semantic note retrieval using the same format. Raw note lines must not be included in the tool result unless a future explicit exact-notes path is added.
 
@@ -55,14 +55,14 @@ The existing chat experience resolves a book's literary context via `GenerateBoo
 - **SOLID — Interface Segregation**: `IBookNotesAnalysisService` is narrow. Callers that only need note analysis must not depend on context generation, embedding, or import services.
 - **SOLID — Dependency Inversion**: `BookNotesAgentTool` depends on `IBookLookupService` and `IBookNotesAnalysisService` interfaces, not on `AppDbContext` or `IOllamaService` directly.
 - **User-data isolation**: all `AppDbContext.BookNotes` queries must filter by `UserId` alongside `BookId`. Cross-user data access must be impossible.
-- **No note cap**: all `BookNote` rows for the book and user are fetched. The scope is always a single book's highlights, which is expected to fit within the Ollama context window.
+- **Configurable note cap**: `BookNotesAnalysisService` reads `BookNotes:MaxAnalysisNotes` from `IConfiguration` with a fallback of `50`. The cap is justified because highlights fed into the analysis prompt are consumed internally and never placed in the agent's conversation context — the agent retrieves specific highlights via `GetRelevantBookNotes` instead. This follows the same configurable-with-fallback pattern as `BookNotes:TopKRelevantNotes`.
 - **Testability**: `IBookNotesAnalysisService` must be fakeable with a simple implementation (no EF or Ollama dependency at the call site) so controller and tool tests can substitute it.
 - **No new migrations**: the feature reads from the existing `book_note` table; no schema changes are required.
 
 ## Out of Scope
 
 - Caching the generated analysis. Each call re-queries and re-generates; analysis persistence is a future concern.
-- Configurable note cap. No cap is applied; all notes for the book are returned.
+- Exhaustive note retrieval. A configurable cap applies; focused retrieval is handled by `GetRelevantBookNotes` in spec `20260604140620-book-note-embeddings`.
 - Note-level vector search or semantic filtering of notes before analysis — covered by the follow-up spec `20260604140620-book-note-embeddings`.
 - Filtering by `EntryType` (Highlight vs. Note). All entry types are included.
 - Pagination of notes in the tool response.

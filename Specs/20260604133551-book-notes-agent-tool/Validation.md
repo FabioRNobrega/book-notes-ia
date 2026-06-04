@@ -13,7 +13,7 @@
 | Requirement | Acceptance Criterion |
 | --- | --- |
 | FR1 | `IBookNotesAnalysisService` exists in `WebApp/Services/BookNotesAnalysisService.cs` with a single method; `BookNotesAnalysisService` implements it and does not access `IOllamaService` from `BookNotesAgentTool`. |
-| FR2 | An integration test confirms that when a book has seeded `BookNote` rows, all of them are returned ordered by `ClippedAtUtc` with no truncation; querying with a different `userId` returns the no-notes message. |
+| FR2 | An integration test confirms that when a book has seeded `BookNote` rows, notes are returned ordered by `ClippedAtUtc` up to the configured cap; querying with a different `userId` returns the no-notes message. |
 | FR3 | The prompt sent to `FakeOllamaService` contains lines matching `<note>{Content}</note>` for each note, while the returned tool string does not list raw `<note>` lines by default. |
 | FR4 | The Ollama prompt passed to `FakeOllamaService` in tests contains the substring `Book Context:`, the formatted notes block, and the user's `PreferredLanguage` value (e.g. `"English"`). |
 | FR5 | When no `BookNote` rows exist for the book + user, the tool returns a string containing "No notes or highlights found" without calling `IOllamaService`. |

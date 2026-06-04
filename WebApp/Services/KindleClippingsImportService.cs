@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using WebApp.Models;
 
 namespace WebApp.Services;
@@ -31,13 +32,16 @@ public class KindleClippingsImportService : IKindleClippingsImportService
 
     private readonly AppDbContext _db;
     private readonly IEmbeddingService _embeddingService;
+    private readonly ILogger<KindleClippingsImportService> _logger;
 
     public KindleClippingsImportService(
         AppDbContext db,
-        IEmbeddingService embeddingService)
+        IEmbeddingService embeddingService,
+        ILogger<KindleClippingsImportService> logger)
     {
         _db = db;
         _embeddingService = embeddingService;
+        _logger = logger;
     }
 
     public async Task<KindleImportSummary> ImportAsync(string userId, Stream stream, CancellationToken ct = default)
@@ -180,9 +184,49 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        await EmbedNewNotesAsync(userId, ct);
+
         await transaction.CommitAsync(ct);
 
         return new KindleImportSummary(touchedBooks.Count, importedCount, duplicateCount, parsedImport.InvalidEntriesSkipped);
+    }
+
+    private async Task EmbedNewNotesAsync(string userId, CancellationToken ct)
+    {
+        var embeddedNoteIds = await _db.BookNoteEmbeddings
+            .Where(e => e.UserId == userId)
+            .Select(e => e.BookNoteId)
+            .ToListAsync(ct);
+
+        var embeddedSet = embeddedNoteIds.ToHashSet();
+
+        var notesToEmbed = await _db.BookNotes
+            .AsNoTracking()
+            .Where(n => n.UserId == userId && !embeddedSet.Contains(n.Id))
+            .ToListAsync(ct);
+
+        foreach (var note in notesToEmbed)
+        {
+            try
+            {
+                var vector = await _embeddingService.EmbedAsync(note.Content, ct);
+                _db.BookNoteEmbeddings.Add(new BookNoteEmbedding
+                {
+                    UserId = userId,
+                    BookId = note.BookId,
+                    BookNoteId = note.Id,
+                    Embedding = new Pgvector.Vector(vector)
+                });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to embed note {NoteId} for user {UserId}; skipping.", note.Id, userId);
+            }
+        }
+
+        if (notesToEmbed.Count > 0)
+            await _db.SaveChangesAsync(ct);
     }
 
     private static (List<ParsedClipping> Entries, int InvalidEntriesSkipped) ParseEntries(string text)
