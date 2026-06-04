@@ -106,6 +106,7 @@ builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportS
 builder.Services.AddScoped<IOllamaService, OllamaService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
 builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IBookLookupService, BookLookupService>();
 
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>

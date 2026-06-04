@@ -39,8 +39,8 @@ public class KindleClippingsImportServiceTests
             UserId = userId,
             Title = "Dune",
             Author = "Frank Herbert",
-            NormalizedTitle = "dune",
-            NormalizedAuthor = "frank herbert"
+            NormalizedTitle = NormalizeKey("Dune"),
+            NormalizedAuthor = NormalizeKey("Frank Herbert")
         };
         db.Books.Add(book);
         await db.SaveChangesAsync();
@@ -61,6 +61,24 @@ public class KindleClippingsImportServiceTests
 
         Assert.Equal(1, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
         Assert.Equal(0, embeddingService.EmbedCallCount);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenEmbeddingFails_DoesNotPersistPartialImport()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-import-3";
+        await SeedUserAsync(db, userId);
+        var service = new KindleClippingsImportService(db, new ThrowingEmbeddingService());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None));
+
+        db.ChangeTracker.Clear();
+        Assert.Equal(0, await db.Books.CountAsync(b => b.UserId == userId));
+        Assert.Equal(0, await db.BookNotes.CountAsync(n => n.UserId == userId));
+        Assert.Equal(0, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
     }
 
     private static async Task SeedUserAsync(AppDbContext db, string userId)
@@ -98,6 +116,12 @@ public class KindleClippingsImportServiceTests
 
         """;
 
+    private static string NormalizeKey(string value) =>
+        string.Join(' ', value
+            .Trim()
+            .ToLowerInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
     private sealed class FakeEmbeddingService : IEmbeddingService
     {
         public int EmbedCallCount { get; private set; }
@@ -114,5 +138,11 @@ public class KindleClippingsImportServiceTests
             vector[0] = 1;
             return vector;
         }
+    }
+
+    private sealed class ThrowingEmbeddingService : IEmbeddingService
+    {
+        public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Embedding endpoint unavailable.");
     }
 }

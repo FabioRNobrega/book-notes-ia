@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
 using Pgvector;
 using WebApp.Models;
 using WebApp.Services;
@@ -20,7 +21,7 @@ public class BookContextAgentToolTests
         await db.SaveChangesAsync();
 
         var service = new FakeBookContextService("Arrakis literary context.");
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         Assert.Equal("GenerateBookContext", function.Name);
@@ -43,7 +44,7 @@ public class BookContextAgentToolTests
         await db.SaveChangesAsync();
 
         var service = new FakeBookContextService("context");
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
@@ -62,7 +63,7 @@ public class BookContextAgentToolTests
         await SeedUserAndBookAsync(db, "user-1", "Dune", "Frank Herbert");
 
         var service = new FakeBookContextService("context");
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
@@ -81,7 +82,7 @@ public class BookContextAgentToolTests
         await SeedUserAndBookAsync(db, "user-1", "Dick, Philip K - Gather Yourselves Together", "Philip K Dick");
 
         var service = new FakeBookContextService("Gather Yourselves Together context.");
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
@@ -102,7 +103,7 @@ public class BookContextAgentToolTests
         await db.SaveChangesAsync();
 
         var service = new FakeBookContextService("Should not be called.");
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorA()));
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
         var function = tool.Create("user-1");
 
         var result = await function.InvokeAsync(
@@ -111,6 +112,34 @@ public class BookContextAgentToolTests
 
         Assert.Equal("Existing cached context.", result?.ToString());
         Assert.False(service.GenerateAndSaveCalled);
+    }
+
+    [Fact]
+    public async Task Create_WhenEmbeddingFailsAndStringMatchSucceeds_ReturnsContext()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        await SeedUserAndBookAsync(db, "user-1", "Dune", "Frank Herbert");
+
+        var service = new FakeBookContextService("Fallback Dune context.");
+        var tool = CreateTool(db, service, new ThrowingEmbeddingService());
+        var function = tool.Create("user-1");
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Dune" },
+            CancellationToken.None);
+
+        Assert.Equal("Fallback Dune context.", result?.ToString());
+        Assert.True(service.GenerateAndSaveCalled);
+    }
+
+    private static BookContextAgentTool CreateTool(
+        AppDbContext db,
+        IBookContextService bookContextService,
+        IEmbeddingService embeddingService)
+    {
+        var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
+        return new BookContextAgentTool(bookContextService, lookup);
     }
 
     private static async Task<Book> SeedUserAndBookAsync(
@@ -168,6 +197,12 @@ public class BookContextAgentToolTests
     {
         public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
             Task.FromResult(vector);
+    }
+
+    private sealed class ThrowingEmbeddingService : IEmbeddingService
+    {
+        public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Embedding endpoint unavailable.");
     }
 
     private sealed class FakeBookContextService(string context) : IBookContextService

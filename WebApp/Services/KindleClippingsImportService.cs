@@ -72,7 +72,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             x => BuildBookLookupKey(x.NormalizedTitle, x.NormalizedAuthor),
             x => x);
 
-        var newBooks = new List<Book>();
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         foreach (var parsedBook in normalizedBooks)
         {
@@ -94,13 +94,22 @@ public class KindleClippingsImportService : IKindleClippingsImportService
 
             _db.Books.Add(book);
             bookMap[lookupKey] = book;
-            newBooks.Add(book);
         }
 
         await _db.SaveChangesAsync(ct);
 
-        foreach (var book in newBooks)
+        var importedBookIds = normalizedBooks
+            .Select(parsedBook => bookMap[BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor)].Id)
+            .ToList();
+
+        var embeddedBookIds = await _db.BookEmbeddings
+            .Where(e => e.UserId == userId && importedBookIds.Contains(e.BookId))
+            .Select(e => e.BookId)
+            .ToListAsync(ct);
+
+        foreach (var bookId in importedBookIds.Except(embeddedBookIds))
         {
+            var book = bookMap.Values.Single(b => b.Id == bookId);
             var embedding = await _embeddingService.EmbedAsync($"{book.Title} by {book.Author}", ct);
             _db.BookEmbeddings.Add(new BookEmbedding
             {
@@ -112,7 +121,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             });
         }
 
-        if (newBooks.Count > 0)
+        if (importedBookIds.Count != embeddedBookIds.Count)
             await _db.SaveChangesAsync(ct);
 
         var dedupeKeys = parsedEntries.Select(x => x.DedupeKey).Distinct().ToList();
@@ -171,6 +180,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         }
 
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return new KindleImportSummary(touchedBooks.Count, importedCount, duplicateCount, parsedImport.InvalidEntriesSkipped);
     }

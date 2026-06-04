@@ -7,6 +7,7 @@
   - [Docker Compose Services](#docker-compose-services)
   - [Architecture](#architecture)
   - [Key Design Decisions](#key-design-decisions)
+  - [SOLID Design Guide](#solid-design-guide)
   - [Version Gaps](#version-gaps)
 
 ## Technology Inventory
@@ -81,6 +82,16 @@ flowchart TD
 - Docker Compose is split into a base file plus OS-specific Ollama overrides because only the Ollama runtime needs GPU/platform differences across Linux, macOS, and Windows.
 - PostgreSQL 18 requires the volume mount at `/var/lib/postgresql`; mounting directly at `/var/lib/postgresql/data` can trigger image layout errors.
 - Generated CSS is excluded from Git by `.gitignore`; Sass source under `WebApp/Styles` is the editable styling source.
+
+## SOLID Design Guide
+
+- Single Responsibility: controllers coordinate HTTP flow, services own business behavior, and persistence-specific queries stay in focused services instead of being mixed into controllers or Microsoft Agent Framework tool adapters.
+- Open/Closed: prefer small interfaces for behavior that may vary, such as book lookup, context generation, embedding generation, and external API calls. Add a new implementation or service when adding a new strategy instead of growing large switch statements or multi-purpose classes.
+- Liskov Substitution: service interfaces must be testable with simple fakes. Avoid requiring callers to know about a concrete provider, database connection type, or external runtime unless that is the purpose of the abstraction.
+- Interface Segregation: keep interfaces narrow and role-specific. A consumer that only needs to look up a book should not depend on context generation, embedding generation, or import orchestration.
+- Dependency Inversion: high-level application flows should depend on interfaces and EF Core `AppDbContext` patterns, not raw provider objects. When provider-specific SQL is required, isolate it behind a focused service and use EF Core context APIs such as `Database.SqlQueryRaw` rather than manual connection/command management.
+- EF Core usage: prefer `DbSet` LINQ, `AsNoTracking` for read-only queries, transactions for multi-step writes that must commit together, and user-scoped predicates for all user-owned data. Raw SQL is acceptable for pgvector/provider-specific operations only when it is parameterized, isolated, logged on fallback, and covered by PostgreSQL integration tests.
+- AI tool design: Microsoft Agent Framework `AIFunction` services should adapt application behavior for the agent. They should not become repositories, routers, or multi-step orchestration hubs when a focused service can own that responsibility.
 
 ## Version Gaps
 

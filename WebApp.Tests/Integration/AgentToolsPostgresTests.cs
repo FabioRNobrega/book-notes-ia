@@ -25,7 +25,7 @@ public class AgentToolsPostgresTests
         await db.SaveChangesAsync();
 
         var service = new BookContextService(db, new FakeOllamaService("Generated Expanse context."));
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(SameVector())).Create(userId);
+        var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
         var result = await tool.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Leviathan Wakes by James S. A. Corey" },
@@ -48,7 +48,7 @@ public class AgentToolsPostgresTests
         await db.SaveChangesAsync();
 
         var service = new BookContextService(db, new FakeOllamaService("Generated PKD context."));
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(SameVector())).Create(userId);
+        var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
         var result = await tool.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
@@ -73,7 +73,7 @@ public class AgentToolsPostgresTests
         await db.SaveChangesAsync();
 
         var service = new BookContextService(db, new FakeOllamaService("Generated On the Beach context."));
-        var tool = new BookContextAgentTool(db, service, new FakeEmbeddingService(VectorWithFirstValue(-1))).Create(userId);
+        var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(VectorWithFirstValue(-1)), userId);
 
         var result = await tool.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "post nuclear australian novel" },
@@ -243,6 +243,16 @@ public class AgentToolsPostgresTests
             Author = book.Author,
             Embedding = new Vector(vector)
         };
+
+    private static AIFunction CreateBookContextTool(
+        AppDbContext db,
+        IBookContextService bookContextService,
+        IEmbeddingService embeddingService,
+        string userId)
+    {
+        var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
+        return new BookContextAgentTool(bookContextService, lookup).Create(userId);
+    }
 
     private static float[] SameVector()
     {
