@@ -1,8 +1,25 @@
 services:
+  postgres:
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    environment:
+      POSTGRES_DB: booknotes_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booknotes_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
   tests:
     image: mcr.microsoft.com/dotnet/sdk:9.0
     container_name: book-notes-tests
     working_dir: /src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TEST_POSTGRES_CONNECTION: Host=postgres;Port=5432;Database=booknotes_test;Username=postgres;Password=postgres
     volumes:
       - ./:/src
       - nuget_cache:/root/.nuget/packages

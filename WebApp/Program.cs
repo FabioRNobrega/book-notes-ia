@@ -4,16 +4,30 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
+using Npgsql;
 using OllamaSharp;
+using Pgvector.EntityFrameworkCore;
+using Pgvector.Npgsql;
 using WebApp.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
+var postgresConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+
+builder.Services.AddSingleton(_ =>
+{
+    var dataSourceBuilder = new NpgsqlDataSourceBuilder(postgresConnectionString);
+    dataSourceBuilder.UseVector();
+    return dataSourceBuilder.Build();
+});
+
 // Add Postgres connection
-builder.Services.AddDbContext<AppDbContext>(options => 
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")
+        sp.GetRequiredService<NpgsqlDataSource>(),
+        npgsql => npgsql.UseVector()
     )
 );
 
@@ -41,6 +55,12 @@ builder.Services.AddSingleton<IChatClient>(_ =>
         .Build();
 });
 
+builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
+{
+    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
+    return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(new Uri(ollamaUrl), "mxbai-embed-large");
+});
+
 builder.Services.AddSingleton<AIAgent>(sp =>
 {
     var chatClient = sp.GetRequiredService<IChatClient>();
@@ -57,7 +77,7 @@ builder.Services.AddSingleton<AIAgent>(sp =>
     );
 });
 builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
-builder.Services.AddScoped<IChatToolRouter, ChatToolRouter>();
+builder.Services.AddScoped<IBookContextAgentTool, BookContextAgentTool>();
 
 // Build Redis for cache handler
 builder.Services.AddStackExchangeRedisCache(options =>
@@ -85,6 +105,8 @@ builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
 builder.Services.AddScoped<IOllamaService, OllamaService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IBookLookupService, BookLookupService>();
 
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>
@@ -125,7 +147,9 @@ app.MapControllerRoute(
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var dataSource = scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>();
     db.Database.Migrate();
+    dataSource.ReloadTypes();
 }
 
 app.Run();

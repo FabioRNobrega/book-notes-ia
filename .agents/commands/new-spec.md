@@ -26,9 +26,10 @@ Before writing anything, read the following to ground the spec in reality:
 
 1. Read `Specs/Mission.md` to understand project goals and out-of-scope boundaries.
 2. Read `Specs/Roadmap.md` to understand current state and existing gaps.
-3. Read `Specs/TechStak.md` to understand the technology constraints.
+3. Read `Specs/TechStak.md` to understand the technology constraints, SOLID design guide, EF Core patterns, and service-boundary expectations.
 4. Read `AGENTS.md` for critical rules that affect implementation.
 5. Explore the codebase areas relevant to `$ARGUMENTS` — find the files that will actually change. Use `find` and `grep` to locate handlers, services, Dockerfiles, pipelines, or templates involved.
+6. Identify the existing service boundaries and EF Core access patterns so the spec can preserve SOLID design instead of placing unrelated responsibilities into controllers, agent tools, or broad services.
 
 If `$ARGUMENTS` is empty, ask the user: "What feature or task should this spec cover?" and wait for the answer before proceeding.
 
@@ -100,6 +101,7 @@ Each FR must be:
 
 - Performance, security, data isolation, testability constraints.
 - Only include ones that are real constraints for this feature.
+- Include SOLID constraints when the feature touches services, controllers, Microsoft Agent Framework tools, EF Core queries, external APIs, or cross-cutting orchestration.
 
 ## Out of Scope
 
@@ -129,6 +131,11 @@ One or two sentences: what the implementation does and which existing patterns i
 Describe the implementation strategy. Reference the real files and patterns already present
 in the codebase that this feature extends or modifies. If it follows an existing pattern,
 name it explicitly.
+Explain how the design follows SOLID:
+- Which class owns each responsibility.
+- Which interfaces high-level code depends on.
+- Where EF Core queries or provider-specific SQL live.
+- How the design remains testable with fakes or integration tests.
 
 ## Component Breakdown
 

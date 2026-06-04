@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using WebApp.Models;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options)
@@ -9,10 +10,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Book> Books => Set<Book>();
     public DbSet<BookNote> BookNotes => Set<BookNote>();
+    public DbSet<BookEmbedding> BookEmbeddings => Set<BookEmbedding>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.HasPostgresExtension("vector");
 
         builder.Entity<UserProfile>(e =>
         {
@@ -113,6 +116,44 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
              .IsUnique();
 
             e.HasIndex(x => new { x.BookId, x.ClippedAtUtc });
+        });
+
+        builder.Entity<BookEmbedding>(e =>
+        {
+            e.ToTable("book_embedding");
+
+            e.HasKey(x => x.Id);
+
+            e.HasOne(x => x.User)
+             .WithMany()
+             .HasForeignKey(x => x.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.Book)
+             .WithMany()
+             .HasForeignKey(x => x.BookId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.Property(x => x.Title)
+             .HasMaxLength(300)
+             .IsRequired();
+
+            e.Property(x => x.Author)
+             .HasMaxLength(200)
+             .IsRequired();
+
+            e.Property(x => x.Embedding)
+             .HasColumnType("vector(1024)")
+             .IsRequired();
+
+            e.HasIndex(x => x.UserId);
+
+            e.HasIndex(x => x.BookId)
+             .IsUnique();
+
+            e.HasIndex(x => x.Embedding)
+             .HasMethod("hnsw")
+             .HasOperators("vector_cosine_ops");
         });
     }
 }

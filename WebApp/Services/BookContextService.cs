@@ -3,7 +3,9 @@ using WebApp.Models;
 
 namespace WebApp.Services;
 
-public class BookContextService(AppDbContext db, IOllamaService ollamaService) : IBookContextService
+public class BookContextService(
+    AppDbContext db,
+    IOllamaService ollamaService) : IBookContextService
 {
     public async Task<string?> GetContextAsync(Guid bookId, string userId)
     {
@@ -15,12 +17,6 @@ public class BookContextService(AppDbContext db, IOllamaService ollamaService) :
 
     public async Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
     {
-        var generated = await GenerateToolResponseAsync(bookId, userId, context: null, ct);
-        return generated.GeneratedContext;
-    }
-
-    public async Task<GenerateBookContextToolResult> GenerateToolResponseAsync(Guid bookId, string userId, string? context, CancellationToken ct = default)
-    {
         var book = await db.Books
             .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId, ct)
             ?? throw new KeyNotFoundException($"Book {bookId} not found for user.");
@@ -31,12 +27,7 @@ public class BookContextService(AppDbContext db, IOllamaService ollamaService) :
         book.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        return new GenerateBookContextToolResult(
-            book.Id,
-            book.Title,
-            book.Author,
-            generatedContext,
-            AppendContext(context, generatedContext, book));
+        return generatedContext;
     }
 
     public async Task<string> SaveManualAsync(Guid bookId, string userId, string context)
@@ -81,22 +72,5 @@ public class BookContextService(AppDbContext db, IOllamaService ollamaService) :
             """;
 
         return await ollamaService.CompleteAsync(prompt, ct);
-    }
-
-    private static string AppendContext(string? existingContext, string generatedContext, Book book)
-    {
-        var trimmedExisting = existingContext?.Trim();
-        var trimmedGenerated = generatedContext.Trim();
-
-        var addition = $"""
-            [GenerateBookContext]
-            Book: {book.Title}
-            Author: {book.Author}
-            Summary: {trimmedGenerated}
-            """.Trim();
-
-        return string.IsNullOrWhiteSpace(trimmedExisting)
-            ? addition
-            : $"{trimmedExisting}{Environment.NewLine}{Environment.NewLine}{addition}";
     }
 }

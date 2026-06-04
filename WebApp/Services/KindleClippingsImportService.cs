@@ -30,10 +30,14 @@ public class KindleClippingsImportService : IKindleClippingsImportService
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     private readonly AppDbContext _db;
+    private readonly IEmbeddingService _embeddingService;
 
-    public KindleClippingsImportService(AppDbContext db)
+    public KindleClippingsImportService(
+        AppDbContext db,
+        IEmbeddingService embeddingService)
     {
         _db = db;
+        _embeddingService = embeddingService;
     }
 
     public async Task<KindleImportSummary> ImportAsync(string userId, Stream stream, CancellationToken ct = default)
@@ -68,6 +72,8 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             x => BuildBookLookupKey(x.NormalizedTitle, x.NormalizedAuthor),
             x => x);
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
         foreach (var parsedBook in normalizedBooks)
         {
             var lookupKey = BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor);
@@ -91,6 +97,32 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        var importedBookIds = normalizedBooks
+            .Select(parsedBook => bookMap[BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor)].Id)
+            .ToList();
+
+        var embeddedBookIds = await _db.BookEmbeddings
+            .Where(e => e.UserId == userId && importedBookIds.Contains(e.BookId))
+            .Select(e => e.BookId)
+            .ToListAsync(ct);
+
+        foreach (var bookId in importedBookIds.Except(embeddedBookIds))
+        {
+            var book = bookMap.Values.Single(b => b.Id == bookId);
+            var embedding = await _embeddingService.EmbedAsync($"{book.Title} by {book.Author}", ct);
+            _db.BookEmbeddings.Add(new BookEmbedding
+            {
+                UserId = userId,
+                BookId = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                Embedding = new Pgvector.Vector(embedding)
+            });
+        }
+
+        if (importedBookIds.Count != embeddedBookIds.Count)
+            await _db.SaveChangesAsync(ct);
 
         var dedupeKeys = parsedEntries.Select(x => x.DedupeKey).Distinct().ToList();
         var existingNotes = await _db.BookNotes
@@ -148,6 +180,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         }
 
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         return new KindleImportSummary(touchedBooks.Count, importedCount, duplicateCount, parsedImport.InvalidEntriesSkipped);
     }
