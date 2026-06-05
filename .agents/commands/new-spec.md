@@ -28,20 +28,50 @@ Before writing anything, read the following to ground the spec in reality:
 2. Read `Specs/Roadmap.md` to understand current state and existing gaps.
 3. Read `Specs/TechStak.md` to understand the technology constraints, SOLID design guide, EF Core patterns, and service-boundary expectations.
 4. Read `AGENTS.md` for critical rules that affect implementation.
-5. Explore the codebase areas relevant to `$ARGUMENTS` — find the files that will actually change. Use `find` and `grep` to locate handlers, services, Dockerfiles, pipelines, or templates involved.
+5. Explore the codebase areas relevant to `$ARGUMENTS` — find the files that will actually change. Use `find` and `grep` to locate controllers, services, Razor views, Sass files, EF Core models/migrations, Dockerfiles, or templates involved.
 6. Identify the existing service boundaries and EF Core access patterns so the spec can preserve SOLID design instead of placing unrelated responsibilities into controllers, agent tools, or broad services.
+7. If the feature touches UI, inspect nearby Razor views, partials, layout files, Sass source in `WebApp/Styles`, and any existing HTMX-style interaction patterns before proposing new frontend structure.
 
 If `$ARGUMENTS` is empty, ask the user: "What feature or task should this spec cover?" and wait for the answer before proceeding.
 
-### Step 2 — Ask clarifying questions (if needed)
+### Step 2 — Run discovery before writing spec files
 
-If the scope is ambiguous after reading the codebase, ask the user up to three targeted questions:
+Before creating `Requirements.md`, `Plan.md`, or `Validation.md`, run a discovery step. Use the user's `$ARGUMENTS` and the codebase context from Step 1 to generate a concise set of questions that would materially improve the quality of the spec and the eventual implementation.
 
-- What is the main user-visible outcome?
-- Which service(s) are affected?
-- Are there known constraints (deadline, backwards compatibility, external dependency)?
+Ask questions that clarify:
 
-Do not ask questions you can answer by reading the code.
+- The main user-visible outcome and success criteria.
+- The exact workflow, actor, or screen/API/service involved.
+- Expected data changes, persistence rules, or ownership boundaries.
+- Error handling, edge cases, and backwards compatibility expectations.
+- Security, privacy, user isolation, and external dependency constraints.
+- Testing expectations and any manual verification constraints.
+- Priority, deadline, or phased delivery needs.
+
+Rules for discovery:
+
+- Ask only questions that affect requirements, design, validation, or implementation risk.
+- Do not ask questions you can answer by reading the code.
+- Prefer one clear grouped list of questions over repeated interruptions.
+- If the idea is broad, ask enough questions to make the first implementation slice concrete.
+- Stop after asking the discovery questions and wait for the user's answers before creating the spec folder or writing any files.
+- After the user answers, incorporate those answers into `Requirements.md`, `Plan.md`, and `Validation.md`.
+- If the user's answers leave important unknowns, record them in `Requirements.md` under `Open Questions` rather than blocking forever.
+
+### Step 2.5 — Apply general implementation guidance
+
+Use these rules when shaping the requirements, plan, validation strategy, and future implementation tasks:
+
+- Treat `Specs/TechStak.md` as the source of truth for architecture, SOLID boundaries, EF Core patterns, Microsoft Agent Framework usage, Docker execution, and version constraints.
+- Prefer the existing ASP.NET Core MVC structure: controllers coordinate HTTP flow, services own business behavior, Razor views/partials render UI, and EF Core access stays in focused services or `AppDbContext` patterns.
+- Keep user-owned data scoped by `UserId` / `ClaimTypes.NameIdentifier`; book lookup, note access, embeddings, generated context, and cache/session behavior must not cross users.
+- Preserve the existing Microsoft Agent Framework vocabulary and architecture for AI work. Do not describe it as a generic bot framework or move agent-tool responsibilities into controllers.
+- For UI work, follow the existing Razor + Sass + HTMX-style partial update patterns. Edit Sass source under `WebApp/Styles`; do not rely on generated CSS under `WebApp/wwwroot/css` as the source of truth.
+- Frontend plans should specify concrete views/partials, expected empty/loading/error states, responsive behavior, accessibility concerns, and how the UI fits the current layout instead of proposing a detached redesign.
+- Prefer small, testable interfaces and services for behavior that may be shared, mocked, or changed. Avoid broad utility classes, multi-purpose controllers, and large switch-based orchestration.
+- Keep provider-specific SQL, pgvector operations, Ollama calls, Unsplash calls, Redis cache behavior, and external dependencies behind focused services so they can be validated independently.
+- Plan Docker-first execution. Any build, test, migration, restore, or scaffolding command should use Make targets or `docker compose exec webapp ...` according to `AGENTS.md`.
+- Do not introduce new runtime packages, frontend libraries, background services, or infrastructure unless the spec explains why existing patterns are insufficient and how the dependency will be verified.
 
 ### Step 3 — Determine the folder name
 
@@ -137,15 +167,22 @@ Explain how the design follows SOLID:
 - Where EF Core queries or provider-specific SQL live.
 - How the design remains testable with fakes or integration tests.
 
+Also explain how the design follows the general implementation guidance:
+- Which existing MVC, Razor partial, Sass, service, EF Core, Microsoft Agent Framework, cache, or Docker pattern it reuses.
+- For frontend changes, which existing UI conventions, partial update flow, responsive states, and accessibility expectations apply.
+- Why any new abstraction, package, external dependency, or infrastructure is necessary.
+
 ## Component Breakdown
 
 **Existing files to modify:**
 
-- `path/to/file.go` — what changes and why.
+- `path/to/file.cs` — what changes and why.
+- `path/to/view.cshtml` — what changes and why.
+- `path/to/styles.scss` — what changes and why.
 
 **New files to create:**
 
-- `path/to/new_file.go` — purpose.
+- `path/to/NewService.cs` — purpose.
 - Or: "None required."
 
 ## Dependencies
@@ -172,7 +209,7 @@ sequenceDiagram
 
 ### Step 6 — Write Validation.md
 
-Map every FR from Requirements.md to an acceptance criterion. Add test cases that match the actual test patterns used in this repo (testcontainers for Go SQL services, pytest for Python, dotnet test for demand).
+Map every FR from Requirements.md to an acceptance criterion. Add test cases that match the actual test patterns used in this repo: xUnit tests in `WebApp.Tests`, EF Core in-memory tests where appropriate, and Docker/compose-backed checks when PostgreSQL, pgvector, Redis, Ollama, or full-stack behavior must be verified.
 
 ```markdown
 # Validation: <Feature Title>
@@ -190,29 +227,30 @@ Map every FR from Requirements.md to an acceptance criterion. Add test cases tha
 ## Test Cases
 
 **Unit tests:**
-- `path/to/test_file_test.go`: what to verify.
+- `WebApp.Tests/...Tests.cs`: what to verify.
 
 **Integration tests:**
-- What testcontainer or compose-based test would cover the happy path end-to-end.
+- What Docker Compose, PostgreSQL/pgvector, Redis, Ollama, or MVC flow would cover the happy path end-to-end.
 - Use ⚠️ TODO if a test does not exist yet but should.
 
 ## Manual Verification
 
 Numbered steps a developer can follow locally to verify the feature works.
-Start from a clean state (e.g. `make docker-run` or `go run ./cmd/server`).
+Start from a clean state using the appropriate Make target, e.g. `make docker-run` on Linux/SteamOS, or the OS-specific target documented in `AGENTS.md`.
 
 ## Definition of Done
 
 - Requirements, Plan, and Validation docs are updated in this spec folder.
 - All existing tests still pass.
 - New behaviour has test coverage matching the pattern in `AGENTS.md`.
-- If UI changed: `sysprompt.go` is updated.
-- If a pipeline changed: the change is verified to reduce or not increase build time.
+- If UI changed: Razor views/partials and Sass source are updated consistently, with responsive, empty, loading, error, and accessibility states covered in the plan.
+- If AI behavior changed: Microsoft Agent Framework prompts, tools, services, and session/cache effects are documented and validated.
+- If Docker, migrations, or infrastructure changed: the Make/Docker workflow is documented and verified.
 
 ## Rollback Plan
 
 - How to revert if the feature causes a regression in production.
-- Reference the specific config flag, environment variable, or code path that disables it.
+- Reference the specific config flag, environment variable, migration, service registration, view path, or code path that disables it.
 ```
 
 ### Step 7 — Create the files
