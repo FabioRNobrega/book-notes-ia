@@ -155,14 +155,17 @@ public class AgentToolsPostgresTests
             {
                 Assert.Equal("user", userMessage.Role);
                 Assert.Equal("Tell me about Dune", userMessage.Content);
-                Assert.Null(userMessage.InputTokensUsed);
+                Assert.Null(userMessage.TotalInputTokensProcessed);
             },
             assistantMessage =>
             {
                 Assert.Equal("assistant", assistantMessage.Role);
                 Assert.Equal("Saved answer", assistantMessage.Content);
-                Assert.Equal(500, assistantMessage.InputTokensUsed);
-                Assert.Equal(200, assistantMessage.OutputTokensUsed);
+                Assert.Equal(500, assistantMessage.TotalInputTokensProcessed);
+                Assert.Equal(200, assistantMessage.TotalOutputTokensGenerated);
+                Assert.Equal(300, assistantMessage.LatestPromptTokens);
+                Assert.Equal(500, assistantMessage.MaxPromptTokens);
+                Assert.Equal(2, assistantMessage.ModelCallCount);
                 Assert.Equal(38000, assistantMessage.ResponseTimeMs);
             });
     }
@@ -657,7 +660,7 @@ public class AgentToolsPostgresTests
     private sealed class FakeChatOrchestratorAgent : IChatOrchestratorAgent
     {
         public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default) =>
-            Task.FromResult(new ChatAgentRunResult("Saved answer", AgentToolsPostgresTests.MafSessionJson, 500, 200, 38000));
+            Task.FromResult(new ChatAgentRunResult("Saved answer", AgentToolsPostgresTests.MafSessionJson, 500, 200, 300, 150, 500, 200, 2, 38000));
     }
 
     private sealed class FakeBookContextAgentTool : IBookContextAgentTool

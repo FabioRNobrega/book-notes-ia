@@ -6,16 +6,23 @@ namespace WebApp.Tests.Services;
 public class TokenCountingChatClientTests
 {
     [Fact]
-    public async Task TokenCountingChatClient_AccumulatesAcrossMultipleCalls()
+    public async Task TokenCountingChatClient_TracksTotalsLatestMaxAndCallCount()
     {
         using var client = new TokenCountingChatClient(new FakeChatClient(100, 50));
         using var scope = TokenCountingChatClient.BeginScope(out var accumulator);
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]);
-        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "again")]);
 
-        Assert.Equal(200, accumulator.InputTokens);
-        Assert.Equal(100, accumulator.OutputTokens);
+        using var client2 = new TokenCountingChatClient(new FakeChatClient(250, 30));
+        await client2.GetResponseAsync([new ChatMessage(ChatRole.User, "again")]);
+
+        Assert.Equal(350, accumulator.TotalInputTokensProcessed);
+        Assert.Equal(80, accumulator.TotalOutputTokensGenerated);
+        Assert.Equal(250, accumulator.LatestPromptTokens);
+        Assert.Equal(30, accumulator.LatestOutputTokens);
+        Assert.Equal(250, accumulator.MaxPromptTokens);
+        Assert.Equal(50, accumulator.MaxOutputTokens);
+        Assert.Equal(2, accumulator.CallCount);
     }
 
     [Fact]
@@ -26,14 +33,17 @@ public class TokenCountingChatClientTests
         using (TokenCountingChatClient.BeginScope(out var first))
         {
             await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]);
-            Assert.Equal(100, first.InputTokens);
+            Assert.Equal(100, first.TotalInputTokensProcessed);
+            Assert.Equal(1, first.CallCount);
         }
 
         using (TokenCountingChatClient.BeginScope(out var second))
         {
-            Assert.Equal(0, second.InputTokens);
+            Assert.Equal(0, second.TotalInputTokensProcessed);
+            Assert.Equal(0, second.CallCount);
             await client.GetResponseAsync([new ChatMessage(ChatRole.User, "again")]);
-            Assert.Equal(100, second.InputTokens);
+            Assert.Equal(100, second.TotalInputTokensProcessed);
+            Assert.Equal(1, second.CallCount);
         }
     }
 
@@ -45,8 +55,14 @@ public class TokenCountingChatClientTests
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]);
 
-        Assert.Equal(0, accumulator.InputTokens);
-        Assert.Equal(0, accumulator.OutputTokens);
+        Assert.Equal(0, accumulator.TotalInputTokensProcessed);
+        Assert.Equal(0, accumulator.TotalOutputTokensGenerated);
+        Assert.Equal(0, accumulator.LatestPromptTokens);
+        Assert.Equal(0, accumulator.LatestOutputTokens);
+        Assert.Equal(0, accumulator.MaxPromptTokens);
+        Assert.Equal(0, accumulator.MaxOutputTokens);
+        // Null-usage calls still increment CallCount — the model was invoked, just returned no usage metadata.
+        Assert.Equal(1, accumulator.CallCount);
     }
 
     private sealed class FakeChatClient(int? inputTokens, int? outputTokens) : IChatClient

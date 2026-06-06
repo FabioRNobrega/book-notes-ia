@@ -114,6 +114,7 @@ public class ChatController : Controller
                 .Select(x => (long?)x.DisplayOrder)
                 .MaxAsync(ct) ?? 0) + 1;
 
+            var contextUsagePct = ComputeUsagePct(runResult.MaxPromptTokens);
             _db.ChatMessages.AddRange(
                 new WebApp.Models.ChatMessage
                 {
@@ -130,36 +131,45 @@ public class ChatController : Controller
                     Role = "assistant",
                     Content = runResult.ResponseText,
                     DisplayOrder = nextDisplayOrder + 1,
-                    InputTokensUsed = runResult.InputTokensUsed,
-                    OutputTokensUsed = runResult.OutputTokensUsed,
+                    TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
+                    TotalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
+                    LatestPromptTokens = runResult.LatestPromptTokens,
+                    MaxPromptTokens = runResult.MaxPromptTokens,
+                    ContextUsagePct = contextUsagePct,
+                    ModelCallCount = runResult.ModelCallCount,
                     ResponseTimeMs = runResult.ElapsedMs
                 });
             await _db.SaveChangesAsync(ct);
 
-            var usagePct = ComputeUsagePct(runResult.InputTokensUsed);
             await _cache.SetObjectAsync(
                 contextKey,
                 new
                 {
-                    inputTokens = runResult.InputTokensUsed,
-                    outputTokens = runResult.OutputTokensUsed,
+                    totalInputTokensProcessed = runResult.TotalInputTokensProcessed,
+                    totalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
+                    latestPromptTokens = runResult.LatestPromptTokens,
+                    maxPromptTokens = runResult.MaxPromptTokens,
+                    modelCallCount = runResult.ModelCallCount,
                     numCtx = _numCtx,
-                    lastResponseMs = runResult.ElapsedMs,
-                    usagePct
+                    contextUsagePct,
+                    lastResponseMs = runResult.ElapsedMs
                 },
                 SessionTtl,
                 ct);
 
             _logger.LogInformation(
-                "Turn stats: inputTokens={InputTokens} outputTokens={OutputTokens} elapsedMs={ElapsedMs} usagePct={UsagePct:F1}% promptChars={PromptChars}",
-                runResult.InputTokensUsed,
-                runResult.OutputTokensUsed,
+                "Turn stats: totalInputTokensProcessed={TotalInput} totalOutputTokensGenerated={TotalOutput} latestPromptTokens={LatestPrompt} maxPromptTokens={MaxPrompt} modelCallCount={CallCount} contextUsagePct={UsagePct}% elapsedMs={ElapsedMs} promptChars={PromptChars}",
+                runResult.TotalInputTokensProcessed,
+                runResult.TotalOutputTokensGenerated,
+                runResult.LatestPromptTokens,
+                runResult.MaxPromptTokens,
+                runResult.ModelCallCount,
+                contextUsagePct,
                 runResult.ElapsedMs,
-                usagePct,
                 orchestratorInstructions.Length + message.Length);
 
             var html = Markdown.ToHtml(runResult.ResponseText, MarkdownPipeline);
-            return PartialView("_BotMessage", new BotMessageViewModel(html, usagePct, runResult.ElapsedMs));
+            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs));
         }
         catch (Exception ex)
         {
@@ -290,12 +300,12 @@ public class ChatController : Controller
         return sessionId;
     }
 
-    private int ComputeUsagePct(int inputTokens)
+    private int ComputeUsagePct(int maxPromptTokens)
     {
         if (_numCtx <= 0)
             return 0;
 
-        return Math.Clamp((int)Math.Round(inputTokens * 100.0 / _numCtx), 0, 100);
+        return Math.Clamp((int)Math.Round(maxPromptTokens * 100.0 / _numCtx), 0, 100);
     }
 
     private static string BuildSessionKey(string userId, Guid sessionId) => $"agentsession:{userId}:{sessionId:D}";

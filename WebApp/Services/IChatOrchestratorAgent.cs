@@ -8,8 +8,13 @@ namespace WebApp.Services;
 public sealed record ChatAgentRunResult(
     string ResponseText,
     string SerializedSessionJson,
-    int InputTokensUsed,
-    int OutputTokensUsed,
+    int TotalInputTokensProcessed,
+    int TotalOutputTokensGenerated,
+    int LatestPromptTokens,
+    int LatestOutputTokens,
+    int MaxPromptTokens,
+    int MaxOutputTokens,
+    int ModelCallCount,
     long ElapsedMs);
 
 public interface IChatOrchestratorAgent
@@ -51,8 +56,13 @@ public sealed class ChatOrchestratorAgent(AIAgent agent) : IChatOrchestratorAgen
         return new ChatAgentRunResult(
             response.Text ?? string.Empty,
             serialized.GetRawText(),
-            accumulator.InputTokens,
-            accumulator.OutputTokens,
+            accumulator.TotalInputTokensProcessed,
+            accumulator.TotalOutputTokensGenerated,
+            accumulator.LatestPromptTokens,
+            accumulator.LatestOutputTokens,
+            accumulator.MaxPromptTokens,
+            accumulator.MaxOutputTokens,
+            accumulator.CallCount,
             stopwatch.ElapsedMilliseconds);
     }
 }

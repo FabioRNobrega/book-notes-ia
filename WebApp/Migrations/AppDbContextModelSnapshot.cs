@@ -423,16 +423,22 @@ namespace WebApp.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("ContextUsagePct")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("DisplayOrder")
                         .HasColumnType("bigint");
 
-                    b.Property<int?>("InputTokensUsed")
+                    b.Property<int?>("LatestPromptTokens")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("OutputTokensUsed")
+                    b.Property<int?>("MaxPromptTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ModelCallCount")
                         .HasColumnType("integer");
 
                     b.Property<long?>("ResponseTimeMs")
@@ -445,6 +451,12 @@ namespace WebApp.Migrations
 
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("TotalInputTokensProcessed")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TotalOutputTokensGenerated")
+                        .HasColumnType("integer");
 
                     b.Property<string>("UserId")
                         .IsRequired()

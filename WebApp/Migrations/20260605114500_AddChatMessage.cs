@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -22,8 +22,12 @@ namespace WebApp.Migrations
                     Content = table.Column<string>(type: "text", nullable: false),
                     DisplayOrder = table.Column<long>(type: "bigint", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    InputTokensUsed = table.Column<int>(type: "integer", nullable: true),
-                    OutputTokensUsed = table.Column<int>(type: "integer", nullable: true),
+                    TotalInputTokensProcessed = table.Column<int>(type: "integer", nullable: true),
+                    TotalOutputTokensGenerated = table.Column<int>(type: "integer", nullable: true),
+                    LatestPromptTokens = table.Column<int>(type: "integer", nullable: true),
+                    MaxPromptTokens = table.Column<int>(type: "integer", nullable: true),
+                    ContextUsagePct = table.Column<int>(type: "integer", nullable: true),
+                    ModelCallCount = table.Column<int>(type: "integer", nullable: true),
                     ResponseTimeMs = table.Column<long>(type: "bigint", nullable: true)
                 },
                 constraints: table =>

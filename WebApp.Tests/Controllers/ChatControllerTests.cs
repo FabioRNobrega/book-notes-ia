@@ -303,7 +303,7 @@ public class ChatControllerTests
             LastMessage = message;
             LastInstructions = instructions;
             LastTools = tools;
-            return Task.FromResult(new ChatAgentRunResult("Grounded answer", """{"session":"updated"}""", 100, 50, 1200));
+            return Task.FromResult(new ChatAgentRunResult("Grounded answer", """{"session":"updated"}""", 100, 50, 100, 50, 100, 50, 1, 1200));
         }
     }
 

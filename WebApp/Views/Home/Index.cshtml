@@ -121,8 +121,9 @@
                     </sl-tooltip>
 
                     <div id="context-ring" class="flex size-10 shrink-0 items-center justify-center text-white/70">
-                        <sl-progress-ring value="0" style="--size:32px; --track-width:3px; --indicator-width:5px;">
-                            <span class="text-xs">0%</span>
+                        @{var ringPct = (int)(ViewData["ContextUsagePct"] ?? 0);}
+                        <sl-progress-ring value="@ringPct" style="--size:32px; --track-width:3px; --indicator-width:5px;">
+                            <span class="text-xs">@ringPct%</span>
                         </sl-progress-ring>
                     </div>
 
