@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Pgvector;
 using WebApp.Models;
 using WebApp.Services;
@@ -18,13 +19,13 @@ public class KindleClippingsImportServiceTests
         var userId = "user-import-1";
         await SeedUserAsync(db, userId);
         var embeddingService = new FakeEmbeddingService();
-        var service = new KindleClippingsImportService(db, embeddingService);
+        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
 
         var summary = await service.ImportAsync(userId, ToStream(TwoBookClippings()), CancellationToken.None);
 
         Assert.Equal(2, summary.BooksTouched);
         Assert.Equal(2, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
-        Assert.Equal(2, embeddingService.EmbedCallCount);
+        Assert.Equal(4, embeddingService.EmbedCallCount);
     }
 
     [Fact]
@@ -55,12 +56,12 @@ public class KindleClippingsImportServiceTests
         await db.SaveChangesAsync();
 
         var embeddingService = new FakeEmbeddingService();
-        var service = new KindleClippingsImportService(db, embeddingService);
+        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
 
         await service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None);
 
         Assert.Equal(1, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
-        Assert.Equal(0, embeddingService.EmbedCallCount);
+        Assert.Equal(1, embeddingService.EmbedCallCount);
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public class KindleClippingsImportServiceTests
         await using var db = database.CreateDbContext();
         var userId = "user-import-3";
         await SeedUserAsync(db, userId);
-        var service = new KindleClippingsImportService(db, new ThrowingEmbeddingService());
+        var service = new KindleClippingsImportService(db, new ThrowingEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None));

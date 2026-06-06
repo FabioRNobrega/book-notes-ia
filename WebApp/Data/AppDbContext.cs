@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BookNote> BookNotes => Set<BookNote>();
     public DbSet<BookEmbedding> BookEmbeddings => Set<BookEmbedding>();
     public DbSet<BookNoteEmbedding> BookNoteEmbeddings => Set<BookNoteEmbedding>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -187,6 +188,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.Embedding)
              .HasMethod("hnsw")
              .HasOperators("vector_cosine_ops");
+        });
+
+        builder.Entity<ChatMessage>(e =>
+        {
+            e.ToTable("chat_message");
+
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.UserId)
+             .IsRequired();
+
+            e.Property(x => x.Role)
+             .HasMaxLength(20)
+             .IsRequired();
+
+            e.Property(x => x.Content)
+             .IsRequired();
+
+            e.HasIndex(x => new { x.UserId, x.SessionId, x.DisplayOrder });
         });
     }
 }

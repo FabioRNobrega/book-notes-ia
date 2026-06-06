@@ -42,6 +42,12 @@
                                 halt the event
                             end
 
+                            js
+                                document
+                                    .querySelectorAll('#agent-response')
+                                    .forEach(function(el) { el.removeAttribute('id'); });
+                            end
+
                             make a <div/> called wrapper
                             make a <div/> called thinker
 
@@ -107,12 +113,18 @@
                                 hx-post="/chat/reset"
                                 hx-target="#alert"
                                 hx-swap="beforeend"
-                                _="on click set #chat.innerHTML to ''"
+                                _="on click set #chat.innerHTML to '' then set #context-ring.innerHTML to `<sl-progress-ring value='0' style='--size:32px; --track-width:3px; --indicator-width:5px;'><span class='text-xs'>0%</span></sl-progress-ring>`"
                                 class="flex size-10 shrink-0 items-center justify-center bg-transparent text-gray-400 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"
                                 style="border-radius: var(--book-radius);">
                             <sl-icon name="arrow-counterclockwise" style="font-size:1.1rem;"></sl-icon>
                         </button>
                     </sl-tooltip>
+
+                    <div id="context-ring" class="flex size-10 shrink-0 items-center justify-center text-white/70">
+                        <sl-progress-ring value="0" style="--size:32px; --track-width:3px; --indicator-width:5px;">
+                            <span class="text-xs">0%</span>
+                        </sl-progress-ring>
+                    </div>
 
                     <button type="submit" aria-label="Send message"
                             class="flex size-10 shrink-0 items-center justify-center bg-transparent text-gray-400 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"

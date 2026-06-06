@@ -25,10 +25,16 @@
             else
             {
                 <div class="flex flex-col max-w-[75%]">
-                    <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
-                        <div class="prose prose-invert max-w-none prose-sm">
+                    <div class="relative text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+                        <div class="prose prose-invert max-w-none prose-sm pb-5">
                             @Html.Raw(entry.Content)
                         </div>
+                        @if (entry.ResponseTimeMs is not null)
+                        {
+                            <div class="absolute bottom-2 right-4 text-xs text-white/45">
+                                He thought for @WebApp.Controllers.ChatController.FormatResponseTime(entry.ResponseTimeMs)
+                            </div>
+                        }
                     </div>
                 </div>
             }

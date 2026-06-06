@@ -78,7 +78,7 @@ public class NotesController : Controller
         var validationError = ValidateFile(file);
         if (validationError is not null)
         {
-            return PartialView("~/Views/Chat/_BotMessage.cshtml", $"<p>{WebUtility.HtmlEncode(validationError)}</p>");
+            return PartialView("~/Views/Chat/_BotMessage.cshtml", new BotMessageViewModel($"<p>{WebUtility.HtmlEncode(validationError)}</p>", 0));
         }
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -92,12 +92,12 @@ public class NotesController : Controller
             await using var stream = file!.OpenReadStream();
             var summary = await _importService.ImportAsync(userId, stream, ct);
             var html = BuildChatImportMessage(file.FileName, summary);
-            return PartialView("~/Views/Chat/_BotMessage.cshtml", html);
+            return PartialView("~/Views/Chat/_BotMessage.cshtml", new BotMessageViewModel(html, 0));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat Kindle import failed for user {UserId}", userId);
-            return PartialView("~/Views/Chat/_BotMessage.cshtml", "<p>We couldn't import this file right now. Please try again.</p>");
+            return PartialView("~/Views/Chat/_BotMessage.cshtml", new BotMessageViewModel("<p>We couldn't import this file right now. Please try again.</p>", 0));
         }
     }
 
@@ -163,7 +163,7 @@ public class NotesController : Controller
 
         if (book is null)
         {
-            return PartialView("~/Views/Chat/_BotMessage.cshtml", "<p>We couldn't find that book in your library.</p>");
+            return PartialView("~/Views/Chat/_BotMessage.cshtml", new BotMessageViewModel("<p>We couldn't find that book in your library.</p>", 0));
         }
 
         return PartialView("~/Views/Notes/_BookDetails.cshtml", book);

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using WebApp.Controllers;
 using WebApp.Models;
@@ -33,9 +34,10 @@ public class ChatControllerTests
         await controller.Send("Tell me about Dune", CancellationToken.None);
 
         Assert.NotNull(agent.LastTools);
-        Assert.Equal(2, agent.LastTools.Count);
+        Assert.Equal(3, agent.LastTools.Count);
         Assert.Equal("GenerateBookContext", agent.LastTools[0].Name);
         Assert.Equal("GetBookNotesWithAnalysis", agent.LastTools[1].Name);
+        Assert.Equal("GetRelevantBookNotes", agent.LastTools[2].Name);
     }
 
     [Fact]
@@ -51,12 +53,15 @@ public class ChatControllerTests
         var partial = Assert.IsType<PartialViewResult>(result);
         Assert.Equal("_BotMessage", partial.ViewName);
         Assert.Equal("Hello", agent.LastMessage);
-        Assert.Null(agent.LastTools);
-        Assert.Equal("""{"session":"updated"}""", await cache.GetAsync($"agentsession:{userId}"));
+        Assert.NotNull(agent.LastTools);
+        Assert.Equal(3, agent.LastTools.Count);
+        Assert.True(Guid.TryParse(await cache.GetAsync($"activesessionid:{userId}"), out var sessionId));
+        Assert.Equal("""{"session":"updated"}""", await cache.GetAsync($"agentsession:{userId}:{sessionId:D}"));
+        Assert.Equal(2, await controllerDbCountAsync(controller, userId));
     }
 
     [Fact]
-    public async Task Send_WhenUserHasBooks_IncludesBookListInInstructions()
+    public async Task Send_WhenUserHasBooks_DoesNotIncludeBookListInInstructions()
     {
         var userId = "user-1";
         var agent = new FakeChatOrchestratorAgent();
@@ -75,7 +80,8 @@ public class ChatControllerTests
 
         await controller.Send("Hello", CancellationToken.None);
 
-        Assert.Contains("Title: \"Foundation\" | Author: \"Isaac Asimov\"", agent.LastInstructions);
+        Assert.DoesNotContain("Title: \"Foundation\" | Author: \"Isaac Asimov\"", agent.LastInstructions);
+        Assert.DoesNotContain("User's book library", agent.LastInstructions);
         Assert.Contains("call the GenerateBookContext tool before answering", agent.LastInstructions);
         Assert.Contains("GetBookNotesWithAnalysis", agent.LastInstructions);
         Assert.Contains("personal notes, highlights, or annotations", agent.LastInstructions);
@@ -83,7 +89,7 @@ public class ChatControllerTests
     }
 
     [Fact]
-    public async Task Send_WhenUserHasMoreThanTwentyFiveBooks_IncludesOlderBooksInInstructions()
+    public async Task Send_WhenUserHasMoreThanTwentyFiveBooks_DoesNotEnumerateOlderBooksInInstructions()
     {
         var userId = "user-1";
         var agent = new FakeChatOrchestratorAgent();
@@ -118,52 +124,42 @@ public class ChatControllerTests
 
         await controller.Send("Tell me about Gather Yourselves Together", CancellationToken.None);
 
-        Assert.Contains("Dick, Philip K - Gather Yourselves Together", agent.LastInstructions);
+        Assert.DoesNotContain("Dick, Philip K - Gather Yourselves Together", agent.LastInstructions);
     }
 
     [Fact]
-    public async Task Chat_WhenSessionUsesStateBagHistory_RendersSavedMessages()
+    public async Task Chat_WhenSessionIdExists_ReadsMessagesFromDb()
     {
         var userId = "user-1";
         var cache = new FakeCacheHandler();
-        await cache.SetAsync(
-            $"agentsession:{userId}",
-            """
+        var sessionId = Guid.NewGuid();
+        await cache.SetAsync($"activesessionid:{userId}", sessionId.ToString("D"), TimeSpan.FromMinutes(5));
+        var db = CreateDbContext();
+        db.ChatMessages.AddRange(
+            new WebApp.Models.ChatMessage
             {
-              "stateBag": {
-                "InMemoryChatHistoryProvider": {
-                  "messages": [
-                    {
-                      "role": "user",
-                      "contents": [
-                        { "$type": "text", "text": "Tell me about Leviathan Wakes" }
-                      ]
-                    },
-                    {
-                      "authorName": "LocalOllamaAgent",
-                      "role": "tool",
-                      "contents": [
-                        { "$type": "functionResult", "result": "Tool output", "callId": "call-1" }
-                      ]
-                    },
-                    {
-                      "authorName": "LocalOllamaAgent",
-                      "role": "assistant",
-                      "contents": [
-                        { "$type": "text", "text": "Leviathan Wakes context." }
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-            """,
-            TimeSpan.FromMinutes(5));
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "user",
+                Content = "Tell me about Leviathan Wakes",
+                DisplayOrder = 1
+            },
+            new WebApp.Models.ChatMessage
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "assistant",
+                Content = "Leviathan Wakes context.",
+                DisplayOrder = 2,
+                ResponseTimeMs = 24000
+            });
+        await db.SaveChangesAsync();
         var controller = CreateController(
             new FakeChatOrchestratorAgent(),
             cache,
             new FakeBookContextAgentTool(),
-            userId);
+            userId,
+            db);
 
         var result = await controller.Chat(CancellationToken.None);
 
@@ -180,6 +176,7 @@ public class ChatControllerTests
             {
                 Assert.Equal("assistant", entry.Role);
                 Assert.Contains("Leviathan Wakes context.", entry.Content);
+                Assert.Equal(24000, entry.ResponseTimeMs);
             });
     }
 
@@ -188,18 +185,36 @@ public class ChatControllerTests
     {
         var userId = "user-1";
         var cache = new FakeCacheHandler();
-        await cache.SetAsync($"agentsession:{userId}", """{"session":"updated"}""", TimeSpan.FromMinutes(5));
+        var sessionId = Guid.NewGuid();
+        await cache.SetAsync($"activesessionid:{userId}", sessionId.ToString("D"), TimeSpan.FromMinutes(5));
+        await cache.SetAsync($"agentsession:{userId}:{sessionId:D}", """{"session":"updated"}""", TimeSpan.FromMinutes(5));
+        await cache.SetAsync($"agentcontext:{userId}:{sessionId:D}", """{"usagePct":50}""", TimeSpan.FromMinutes(5));
+        var db = CreateDbContext();
+        db.ChatMessages.Add(new WebApp.Models.ChatMessage
+        {
+            UserId = userId,
+            SessionId = sessionId,
+            Role = "assistant",
+            Content = "Cached answer",
+            DisplayOrder = 1,
+            ResponseTimeMs = 1000
+        });
+        await db.SaveChangesAsync();
 
         var controller = CreateController(
             new FakeChatOrchestratorAgent(),
             cache,
             new FakeBookContextAgentTool(),
-            userId);
+            userId,
+            db);
 
         var result = await controller.Reset(CancellationToken.None);
 
         Assert.IsType<PartialViewResult>(result);
-        Assert.Null(await cache.GetAsync($"agentsession:{userId}"));
+        Assert.Null(await cache.GetAsync($"activesessionid:{userId}"));
+        Assert.Null(await cache.GetAsync($"agentsession:{userId}:{sessionId:D}"));
+        Assert.Null(await cache.GetAsync($"agentcontext:{userId}:{sessionId:D}"));
+        Assert.Empty(await db.ChatMessages.Where(x => x.UserId == userId && x.SessionId == sessionId).ToListAsync());
     }
 
     [Fact]
@@ -230,7 +245,14 @@ public class ChatControllerTests
 
         var partial = Assert.IsType<PartialViewResult>(result);
         Assert.Equal("_BotMessage", partial.ViewName);
-        Assert.Contains("Error", Assert.IsType<string>(partial.Model));
+        Assert.Contains("Error", Assert.IsType<BotMessageViewModel>(partial.Model).HtmlContent);
+    }
+
+    private static async Task<int> controllerDbCountAsync(ChatController controller, string userId)
+    {
+        var dbField = typeof(ChatController).GetField("_db", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var db = Assert.IsAssignableFrom<AppDbContext>(dbField?.GetValue(controller));
+        return await db.ChatMessages.CountAsync(x => x.UserId == userId);
     }
 
     private static ChatController CreateController(
@@ -246,8 +268,10 @@ public class ChatControllerTests
             cache,
             bookContextTool,
             new FakeBookNotesAgentTool(),
+            new FakeBookNoteSearchAgentTool(),
             db,
-            NullLogger<ChatController>.Instance);
+            NullLogger<ChatController>.Instance,
+            new ConfigurationBuilder().Build());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -279,7 +303,7 @@ public class ChatControllerTests
             LastMessage = message;
             LastInstructions = instructions;
             LastTools = tools;
-            return Task.FromResult(new ChatAgentRunResult("Grounded answer", """{"session":"updated"}"""));
+            return Task.FromResult(new ChatAgentRunResult("Grounded answer", """{"session":"updated"}""", 100, 50, 1200));
         }
     }
 
@@ -297,6 +321,14 @@ public class ChatControllerTests
             AIFunctionFactory.Create(
                 (string bookTitle) => Task.FromResult<string>("notes"),
                 name: "GetBookNotesWithAnalysis");
+    }
+
+    private sealed class FakeBookNoteSearchAgentTool : IBookNoteSearchAgentTool
+    {
+        public AIFunction Create(string userId) =>
+            AIFunctionFactory.Create(
+                (string bookTitle, string searchQuery) => Task.FromResult<string>("relevant notes"),
+                name: "GetRelevantBookNotes");
     }
 
     private sealed class ThrowingChatOrchestratorAgent : IChatOrchestratorAgent
@@ -341,6 +373,7 @@ public class ChatControllerTests
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
             builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
             builder.Ignore<BookEmbedding>();
+            builder.Ignore<BookNoteEmbedding>();
         }
     }
 }

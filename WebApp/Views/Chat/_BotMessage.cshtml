@@ -1,9 +1,18 @@
-@model string
+@model BotMessageViewModel
 
 <div id="agent-response" hx-swap-oob="outerHTML" class="flex flex-col max-w-[75%]">
-    <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
-        <div class="prose prose-invert max-w-none prose-sm">
-            @Html.Raw(Model)
+    <div class="relative text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
+        <div class="prose prose-invert max-w-none prose-sm pb-5">
+            @Html.Raw(Model.HtmlContent)
+        </div>
+        <div class="absolute bottom-2 right-4 text-xs text-white/45">
+            He thought for @WebApp.Controllers.ChatController.FormatResponseTime(Model.ResponseTimeMs)
         </div>
     </div>
+</div>
+
+<div id="context-ring" hx-swap-oob="outerHTML" class="flex size-10 shrink-0 items-center justify-center text-white/70">
+    <sl-progress-ring value="@Model.UsagePct" style="--size:32px; --track-width:3px; --indicator-width:5px;">
+        <span class="text-xs">@Model.UsagePct%</span>
+    </sl-progress-ring>
 </div>

@@ -1,10 +1,16 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
 namespace WebApp.Services;
 
-public sealed record ChatAgentRunResult(string ResponseText, string SerializedSessionJson);
+public sealed record ChatAgentRunResult(
+    string ResponseText,
+    string SerializedSessionJson,
+    int InputTokensUsed,
+    int OutputTokensUsed,
+    long ElapsedMs);
 
 public interface IChatOrchestratorAgent
 {
@@ -36,8 +42,17 @@ public sealed class ChatOrchestratorAgent(AIAgent agent) : IChatOrchestratorAgen
             }
         };
 
+        var stopwatch = Stopwatch.StartNew();
+        using var tokenScope = TokenCountingChatClient.BeginScope(out var accumulator);
         var response = await agent.RunAsync(message, session, runOptions, ct);
+        stopwatch.Stop();
+
         var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
-        return new ChatAgentRunResult(response.Text ?? string.Empty, serialized.GetRawText());
+        return new ChatAgentRunResult(
+            response.Text ?? string.Empty,
+            serialized.GetRawText(),
+            accumulator.InputTokens,
+            accumulator.OutputTokens,
+            stopwatch.ElapsedMilliseconds);
     }
 }

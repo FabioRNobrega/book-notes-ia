@@ -53,7 +53,7 @@ builder.Services.AddSingleton<IChatClient>(_ =>
 
     var numCtx = builder.Configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
 
-    return ((IChatClient)new OllamaApiClient(httpClient, ollamaModel))
+    return ((IChatClient)new TokenCountingChatClient(new OllamaApiClient(httpClient, ollamaModel)))
         .AsBuilder()
         .ConfigureOptions(options =>
         {

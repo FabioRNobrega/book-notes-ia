@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using WebApp.Models;
 using WebApp.Services;
 
@@ -17,19 +18,14 @@ public class BookNotesAnalysisServiceTests
         SeedNote(db, book, "The cold reshapes politics and trust.", DateTime.UtcNow.AddMinutes(-1));
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Generated analysis.");
-        var service = new BookNotesAnalysisService(db, ollama);
+        var service = new BookNotesAnalysisService(db, new ConfigurationBuilder().Build());
 
-        var result = await service.GetNotesWithAnalysisAsync(book, userId, CancellationToken.None);
+        var result = await service.GetNotesAsync(book, userId, CancellationToken.None);
 
-        Assert.Contains("Thematic analysis for", result);
-        Assert.Contains("Generated analysis.", result);
-        Assert.DoesNotContain("<note>Estraven moves between loyalty and exile.</note>", result);
-        Assert.Contains("Book Context:", ollama.LastPrompt);
-        Assert.Contains("Gethen context.", ollama.LastPrompt);
-        Assert.Contains("<note>Estraven moves between loyalty and exile.</note>", ollama.LastPrompt);
-        Assert.Contains("<note>The cold reshapes politics and trust.</note>", ollama.LastPrompt);
-        Assert.Equal(1, ollama.CallCount);
+        Assert.Contains("Notes for \"The Left Hand of Darkness\"", result);
+        Assert.Contains("2 highlights", result);
+        Assert.Contains("<note>Estraven moves between loyalty and exile.</note>", result);
+        Assert.Contains("<note>The cold reshapes politics and trust.</note>", result);
     }
 
     [Fact]
@@ -42,12 +38,11 @@ public class BookNotesAnalysisServiceTests
         SeedNote(db, book, "Fear is the mind-killer.", DateTime.UtcNow);
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Generated analysis.");
-        var service = new BookNotesAnalysisService(db, ollama);
+        var service = new BookNotesAnalysisService(db, new ConfigurationBuilder().Build());
 
-        await service.GetNotesWithAnalysisAsync(book, userId, CancellationToken.None);
+        var result = await service.GetNotesAsync(book, userId, CancellationToken.None);
 
-        Assert.Contains("Not available.", ollama.LastPrompt);
+        Assert.Contains("<note>Fear is the mind-killer.</note>", result);
     }
 
     private static AppDbContext CreateDbContext()
@@ -108,19 +103,6 @@ public class BookNotesAnalysisServiceTests
     private static string NormalizeKey(string value) =>
         new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    private sealed class FakeOllamaService(string response) : IOllamaService
-    {
-        public int CallCount { get; private set; }
-        public string LastPrompt { get; private set; } = string.Empty;
-
-        public Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
-        {
-            CallCount++;
-            LastPrompt = prompt;
-            return Task.FromResult(response);
-        }
-    }
-
     private sealed class TestAppDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder builder)
@@ -131,6 +113,7 @@ public class BookNotesAnalysisServiceTests
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
             builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
             builder.Ignore<BookEmbedding>();
+            builder.Ignore<BookNoteEmbedding>();
         }
     }
 }

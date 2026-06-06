@@ -413,6 +413,50 @@ namespace WebApp.Migrations
                     b.ToTable("book_note_embedding", (string)null);
                 });
 
+            modelBuilder.Entity("WebApp.Models.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DisplayOrder")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("InputTokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OutputTokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ResponseTimeMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "SessionId", "DisplayOrder");
+
+                    b.ToTable("chat_message", (string)null);
+                });
+
             modelBuilder.Entity("WebApp.Models.UserProfile", b =>
                 {
                     b.Property<Guid>("Id")

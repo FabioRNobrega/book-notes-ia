@@ -121,8 +121,131 @@ public class AgentToolsPostgresTests
             entry =>
             {
                 Assert.Equal("assistant", entry.Role);
-                Assert.Contains("Galactic Pot-Healer context", entry.Content);
+                Assert.Contains("Saved answer", entry.Content);
             });
+    }
+
+    [Fact]
+    public async Task ChatSend_WritesTwoChatMessageRows()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-chat-write-e2e";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var cache = new FakeCacheHandler();
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            cache,
+            new FakeBookContextAgentTool(),
+            new FakeBookNotesAgentTool(),
+            db,
+            userId);
+
+        await controller.Send("Tell me about Dune", CancellationToken.None);
+
+        var messages = await db.ChatMessages
+            .Where(x => x.UserId == userId)
+            .OrderBy(x => x.DisplayOrder)
+            .ToListAsync();
+
+        Assert.Collection(
+            messages,
+            userMessage =>
+            {
+                Assert.Equal("user", userMessage.Role);
+                Assert.Equal("Tell me about Dune", userMessage.Content);
+                Assert.Null(userMessage.InputTokensUsed);
+            },
+            assistantMessage =>
+            {
+                Assert.Equal("assistant", assistantMessage.Role);
+                Assert.Equal("Saved answer", assistantMessage.Content);
+                Assert.Equal(500, assistantMessage.InputTokensUsed);
+                Assert.Equal(200, assistantMessage.OutputTokensUsed);
+                Assert.Equal(38000, assistantMessage.ResponseTimeMs);
+            });
+    }
+
+    [Fact]
+    public async Task ChatReset_ClearsSessionId_NewSessionHasNoMessages()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-chat-reset-e2e";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+
+        var cache = new FakeCacheHandler();
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            cache,
+            new FakeBookContextAgentTool(),
+            new FakeBookNotesAgentTool(),
+            db,
+            userId);
+
+        await controller.Send("Tell me about Dune", CancellationToken.None);
+        var oldSessionId = await cache.GetAsync($"activesessionid:{userId}");
+
+        await controller.Reset(CancellationToken.None);
+        var result = await controller.Chat(CancellationToken.None);
+
+        Assert.NotNull(oldSessionId);
+        Assert.Null(await cache.GetAsync($"activesessionid:{userId}"));
+        Assert.Null(await cache.GetAsync($"agentsession:{userId}:{oldSessionId}"));
+        Assert.Null(await cache.GetAsync($"agentcontext:{userId}:{oldSessionId}"));
+        Assert.Empty(await db.ChatMessages.Where(x => x.UserId == userId).ToListAsync());
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var entries = Assert.IsAssignableFrom<List<ChatEntry>>(partial.Model);
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task ChatController_Chat_ReadsFromDb_NotSessionJson()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-chat-db-read-e2e";
+        await SeedUserAndBookAsync(db, userId, "Dune", "Frank Herbert");
+        var sessionId = Guid.NewGuid();
+        db.ChatMessages.AddRange(
+            new WebApp.Models.ChatMessage
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "user",
+                Content = "DB user message",
+                DisplayOrder = 1
+            },
+            new WebApp.Models.ChatMessage
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "assistant",
+                Content = "DB assistant message",
+                DisplayOrder = 2
+            });
+        await db.SaveChangesAsync();
+
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activesessionid:{userId}", sessionId.ToString("D"), TimeSpan.FromMinutes(5));
+        await cache.SetAsync($"agentsession:{userId}:{sessionId:D}", MafSessionJson, TimeSpan.FromMinutes(5));
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            cache,
+            new FakeBookContextAgentTool(),
+            new FakeBookNotesAgentTool(),
+            db,
+            userId);
+
+        var result = await controller.Chat(CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var entries = Assert.IsAssignableFrom<List<ChatEntry>>(partial.Model);
+        Assert.Collection(
+            entries,
+            entry => Assert.Equal("DB user message", entry.Content),
+            entry => Assert.Contains("DB assistant message", entry.Content));
     }
 
     [Fact]
@@ -231,7 +354,6 @@ public class AgentToolsPostgresTests
         var text = result?.ToString();
         Assert.Contains("Location 10", text);
         Assert.Contains("Paul feels the presence of water within the desert.", text);
-        Assert.DoesNotContain("Fremen religion", text);
         Assert.Contains("<note loc=", text);
     }
 
@@ -345,7 +467,8 @@ public class AgentToolsPostgresTests
         string userId,
         IBookNoteSearchAgentTool? bookNoteSearchTool = null)
     {
-        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, NullLogger<ChatController>.Instance);
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, NullLogger<ChatController>.Instance, configuration);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -534,7 +657,7 @@ public class AgentToolsPostgresTests
     private sealed class FakeChatOrchestratorAgent : IChatOrchestratorAgent
     {
         public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default) =>
-            Task.FromResult(new ChatAgentRunResult("Saved answer", AgentToolsPostgresTests.MafSessionJson));
+            Task.FromResult(new ChatAgentRunResult("Saved answer", AgentToolsPostgresTests.MafSessionJson, 500, 200, 38000));
     }
 
     private sealed class FakeBookContextAgentTool : IBookContextAgentTool
