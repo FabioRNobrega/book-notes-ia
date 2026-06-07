@@ -125,6 +125,7 @@ builder.Services.AddHttpClient("Unsplash", client =>
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
 builder.Services.AddScoped<IOllamaService, OllamaService>();
+builder.Services.AddHttpClient<IOpenLibraryService, OpenLibraryService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
 builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IBookLookupService, BookLookupService>();
