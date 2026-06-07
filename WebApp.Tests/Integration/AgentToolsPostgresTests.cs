@@ -24,7 +24,10 @@ public class AgentToolsPostgresTests
         db.BookEmbeddings.Add(CreateBookEmbedding(book, SameVector()));
         await db.SaveChangesAsync();
 
-        var service = new BookContextService(db, new FakeOllamaService("Generated Expanse context."));
+        var service = new BookContextService(
+            db,
+            new FakeOllamaService("Generated Expanse context."),
+            new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
         var result = await tool.InvokeAsync(
@@ -47,7 +50,10 @@ public class AgentToolsPostgresTests
         db.BookEmbeddings.Add(CreateBookEmbedding(book, SameVector()));
         await db.SaveChangesAsync();
 
-        var service = new BookContextService(db, new FakeOllamaService("Generated PKD context."));
+        var service = new BookContextService(
+            db,
+            new FakeOllamaService("Generated PKD context."),
+            new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
         var result = await tool.InvokeAsync(
@@ -72,7 +78,10 @@ public class AgentToolsPostgresTests
         db.BookEmbeddings.Add(CreateBookEmbedding(beach, VectorWithFirstValue(-1)));
         await db.SaveChangesAsync();
 
-        var service = new BookContextService(db, new FakeOllamaService("Generated On the Beach context."));
+        var service = new BookContextService(
+            db,
+            new FakeOllamaService("Generated On the Beach context."),
+            new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(VectorWithFirstValue(-1)), userId);
 
         var result = await tool.InvokeAsync(
@@ -655,6 +664,12 @@ public class AgentToolsPostgresTests
     {
         public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
             Task.FromResult(vector);
+    }
+
+    private sealed class FakeOpenLibraryService : IOpenLibraryService
+    {
+        public Task<string?> GetSynopsisAsync(string title, string author, CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
     }
 
     private sealed class FakeChatOrchestratorAgent : IChatOrchestratorAgent

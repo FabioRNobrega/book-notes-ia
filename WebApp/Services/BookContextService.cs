@@ -5,7 +5,8 @@ namespace WebApp.Services;
 
 public class BookContextService(
     AppDbContext db,
-    IOllamaService ollamaService) : IBookContextService
+    IOllamaService ollamaService,
+    IOpenLibraryService openLibraryService) : IBookContextService
 {
     public async Task<string?> GetContextAsync(Guid bookId, string userId)
     {
@@ -20,6 +21,13 @@ public class BookContextService(
         var book = await db.Books
             .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId, ct)
             ?? throw new KeyNotFoundException($"Book {bookId} not found for user.");
+
+        if (string.IsNullOrWhiteSpace(book.Synopsis))
+        {
+            var synopsis = await openLibraryService.GetSynopsisAsync(book.Title, book.Author, ct);
+            if (!string.IsNullOrWhiteSpace(synopsis))
+                book.Synopsis = synopsis;
+        }
 
         var generatedContext = await GenerateContextAsync(book, userId, ct);
 
@@ -60,11 +68,19 @@ public class BookContextService(
             .FirstOrDefaultAsync(p => p.UserId == userId, ct);
 
         var language = profile?.PreferredLanguage ?? "English";
+        var synopsisSection = string.IsNullOrWhiteSpace(book.Synopsis)
+            ? string.Empty
+            : $"""
+
+            Synopsis from Open Library for factual grounding:
+            {book.Synopsis}
+            """;
 
         var prompt = $"""
             You are a literary assistant. Write a concise contextual paragraph for the following book.
             Author: {book.Author}
             Book: {book.Title}
+            {synopsisSection}
 
             Include: the author's life period and nationality, the historical/political context when written,
             the literary movement, the main themes, and any other relevant cultural context.
