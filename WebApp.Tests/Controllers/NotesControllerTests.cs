@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Pgvector;
 using WebApp.Controllers;
 using WebApp.Models;
 using WebApp.Services;
@@ -212,7 +213,10 @@ public class NotesControllerTests
             db,
             new FakeImportService(),
             new FakeBookContextService(),
-            bookTitleService ?? new BookTitleService(db),
+            bookTitleService ?? new BookTitleService(
+                db,
+                new FakeEmbeddingService(),
+                NullLogger<BookTitleService>.Instance),
             librarySearch ?? new FakeLibrarySearchService(new LibrarySearchResult([], NoExactSqlMatch: false)),
             librarianSearch ?? new FakeLibrarianSearchService([]),
             NullLogger<NotesController>.Instance,
@@ -284,6 +288,12 @@ public class NotesControllerTests
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);
     }
 
+    private sealed class FakeEmbeddingService : IEmbeddingService
+    {
+        public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
+            Task.FromResult(new[] { 0.1f, 0.2f, 0.3f });
+    }
+
     private sealed class TestDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder builder)
@@ -293,8 +303,16 @@ public class NotesControllerTests
             builder.Entity<UserProfile>().Ignore(x => x.LearningStyle);
             builder.Entity<UserProfile>().Ignore(x => x.LovedGenres);
             builder.Entity<UserProfile>().Ignore(x => x.DislikedGenres);
-            builder.Ignore<BookEmbedding>();
+            builder.Entity<BookEmbedding>()
+                .Property(x => x.Embedding)
+                .HasConversion(x => SerializeVector(x), x => DeserializeVector(x));
             builder.Ignore<BookNoteEmbedding>();
         }
+
+        private static string SerializeVector(Vector vector) =>
+            string.Join(",", vector.ToArray());
+
+        private static Vector DeserializeVector(string value) =>
+            new(value.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(float.Parse).ToArray());
     }
 }
