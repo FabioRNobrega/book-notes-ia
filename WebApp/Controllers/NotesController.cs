@@ -15,14 +15,25 @@ public class NotesController : Controller
     private readonly AppDbContext _db;
     private readonly IKindleClippingsImportService _importService;
     private readonly IBookContextService _bookContextService;
+    private readonly IBookLibrarySearchService _librarySearchService;
+    private readonly ILibrarianBookSearchService _librarianSearchService;
     private readonly ILogger<NotesController> _logger;
     private readonly long _maxFileSizeBytes;
 
-    public NotesController(AppDbContext db, IKindleClippingsImportService importService, IBookContextService bookContextService, ILogger<NotesController> logger, IConfiguration configuration)
+    public NotesController(
+        AppDbContext db,
+        IKindleClippingsImportService importService,
+        IBookContextService bookContextService,
+        IBookLibrarySearchService librarySearchService,
+        ILibrarianBookSearchService librarianSearchService,
+        ILogger<NotesController> logger,
+        IConfiguration configuration)
     {
         _db = db;
         _importService = importService;
         _bookContextService = bookContextService;
+        _librarySearchService = librarySearchService;
+        _librarianSearchService = librarianSearchService;
         _logger = logger;
         _maxFileSizeBytes = configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
     }
@@ -190,6 +201,66 @@ public class NotesController : Controller
             _logger.LogError(ex, "Context generation failed for book {BookId}", id);
             return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = null });
         }
+    }
+
+    [HttpGet("/notes/library-search")]
+    public async Task<IActionResult> LibrarySearch([FromQuery] string? query, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        _logger.LogInformation("LibrarySearch: userId={UserId} query={Query}", userId, query ?? "(blank)");
+
+        var result = await _librarySearchService.SearchSqlAsync(query, userId, ct);
+
+        _logger.LogInformation("LibrarySearch: found {Count} SQL match(es), NoExactSqlMatch={NoExact}", result.Books.Count, result.NoExactSqlMatch);
+
+        if (result.NoExactSqlMatch)
+        {
+            _logger.LogInformation("LibrarySearch: no SQL match — returning librarian-searching partial for query={Query}", query);
+            return PartialView("~/Views/Home/_BookLibraryLibrarianSearch.cshtml", query);
+        }
+
+        return PartialView("~/Views/Home/_BookLibraryResults.cshtml", new BookLibraryResultsViewModel
+        {
+            Books = result.Books
+        });
+    }
+
+    [HttpGet("/notes/librarian-search")]
+    public async Task<IActionResult> LibrarianSearch([FromQuery] string? query, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        _logger.LogInformation("LibrarianSearch: userId={UserId} query={Query}", userId, query ?? "(null)");
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _logger.LogWarning("LibrarianSearch: received empty query — returning 400");
+            return BadRequest();
+        }
+
+        var books = await _librarianSearchService.FindPossibleBooksAsync(query, userId, ct);
+
+        _logger.LogInformation("LibrarianSearch: found {Count} possible book(s) for query={Query}", books.Count, query);
+
+        if (books.Count == 0)
+        {
+            return PartialView("~/Views/Home/_BookLibraryResults.cshtml", new BookLibraryResultsViewModel
+            {
+                Books = [],
+                IsLibrarianNotFound = true
+            });
+        }
+
+        return PartialView("~/Views/Home/_BookLibraryResults.cshtml", new BookLibraryResultsViewModel
+        {
+            Books = books,
+            HeaderMessage = "Here's what our librarian found for you!"
+        });
     }
 
     private string? ValidateFile(IFormFile? file)

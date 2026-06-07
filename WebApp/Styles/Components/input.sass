@@ -15,6 +15,21 @@ sl-input, sl-select, sl-textarea
 sl-input::part(base):focus-within
   box-shadow: 0 0 0 3px var(--sl-color-primary-300)
 
+#library-search-input:hover::part(prefix),
+#library-search-input:hover::part(clear-button)
+  background-color: rgba(#fff, 0.08)
+
+#library-search-input:focus-within::part(prefix),
+#library-search-input:focus-within::part(clear-button)
+  background-color: rgba(#fff, 0.10)
+
+#library-search-input::part(prefix),
+#library-search-input::part(clear-button)
+  background-color: rgba(#fff, 0.05)
+
+#library-search-input::part(prefix)
+  padding-left: var(--sl-spacing-small)
+
 sl-textarea::part(base):focus-within
   box-shadow: 0 0 0 3px var(--sl-color-primary-300)
 
