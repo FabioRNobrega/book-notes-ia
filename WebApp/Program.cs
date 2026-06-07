@@ -128,6 +128,8 @@ builder.Services.AddScoped<IOllamaService, OllamaService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
 builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
 builder.Services.AddScoped<IBookLookupService, BookLookupService>();
+builder.Services.AddScoped<IBookLibrarySearchService, BookLibrarySearchService>();
+builder.Services.AddScoped<ILibrarianBookSearchService, LibrarianBookSearchService>();
 
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>

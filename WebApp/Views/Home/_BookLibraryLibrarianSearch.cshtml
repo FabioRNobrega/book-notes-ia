@@ -1,0 +1,13 @@
+@model string
+
+<div class="p-6"
+     hx-get="/notes/librarian-search"
+     hx-vals='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new { query = Model }))'
+     hx-trigger="load"
+     hx-target="#library-results"
+     hx-swap="innerHTML">
+    <div class="border border-dashed border-white/15 px-5 py-8 text-center text-white/50"
+         style="border-radius: var(--book-radius); background-color: rgba(255,255,255,0.04);">
+        No exact match - let our librarian dig through the shelves for you... 📚
+    </div>
+</div>
