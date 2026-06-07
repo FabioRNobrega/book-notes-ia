@@ -23,6 +23,7 @@ public class ChatControllerTests
         {
             UserId = userId,
             Title = "Dune",
+            SourceBookTitle = "Dune",
             Author = "Frank Herbert",
             NormalizedTitle = "dune",
             NormalizedAuthor = "frankherbert"
@@ -70,6 +71,7 @@ public class ChatControllerTests
         {
             UserId = userId,
             Title = "Foundation",
+            SourceBookTitle = "Foundation",
             Author = "Isaac Asimov",
             NormalizedTitle = "foundation",
             NormalizedAuthor = "isaacasimov"
@@ -99,6 +101,7 @@ public class ChatControllerTests
         {
             UserId = userId,
             Title = "Dick, Philip K - Gather Yourselves Together",
+            SourceBookTitle = "Dick, Philip K - Gather Yourselves Together",
             Author = "Philip K Dick",
             NormalizedTitle = "dickphilipkgatheryourselvestogether",
             NormalizedAuthor = "philipkdick",
@@ -111,6 +114,7 @@ public class ChatControllerTests
             {
                 UserId = userId,
                 Title = $"Recent Book {i}",
+                SourceBookTitle = $"Recent Book {i}",
                 Author = "Test Author",
                 NormalizedTitle = $"recentbook{i}",
                 NormalizedAuthor = "testauthor",

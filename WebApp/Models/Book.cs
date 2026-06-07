@@ -10,6 +10,7 @@ public class Book
     public IdentityUser User { get; set; } = default!;
 
     public string Title { get; set; } = default!;
+    public string SourceBookTitle { get; set; } = default!;
     public string Author { get; set; } = default!;
     public string NormalizedTitle { get; set; } = default!;
     public string NormalizedAuthor { get; set; } = default!;

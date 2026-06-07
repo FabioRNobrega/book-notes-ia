@@ -39,6 +39,7 @@ public class KindleClippingsImportServiceTests
         {
             UserId = userId,
             Title = "Dune",
+            SourceBookTitle = "Dune",
             Author = "Frank Herbert",
             NormalizedTitle = NormalizeKey("Dune"),
             NormalizedAuthor = NormalizeKey("Frank Herbert")
@@ -82,6 +83,77 @@ public class KindleClippingsImportServiceTests
         Assert.Equal(0, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
     }
 
+    [Fact]
+    public async Task ImportAsync_WithAuthorPrefixedTitle_PersistsSourceTitleCleanTitleAndEmbeddingTitle()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-import-4";
+        await SeedUserAsync(db, userId);
+        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
+
+        await service.ImportAsync(userId, ToStream(PrefixedGalacticPotHealerClipping()), CancellationToken.None);
+
+        var book = await db.Books.SingleAsync(b => b.UserId == userId);
+        Assert.Equal("Dick, Philip K - Galactic Pot-Healer", book.SourceBookTitle);
+        Assert.Equal("Galactic Pot-Healer", book.Title);
+        Assert.Equal(NormalizeKey("Galactic Pot-Healer"), book.NormalizedTitle);
+
+        var embedding = await db.BookEmbeddings.SingleAsync(e => e.UserId == userId);
+        Assert.Equal("Galactic Pot-Healer", embedding.Title);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenDisplayTitleWasEdited_ReuploadMatchesSourceTitleAndDoesNotInsertDuplicateBook()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-import-5";
+        await SeedUserAsync(db, userId);
+        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
+
+        await service.ImportAsync(userId, ToStream(CleanGalacticPotHealerClipping()), CancellationToken.None);
+        var book = await db.Books.SingleAsync(b => b.UserId == userId);
+        book.Title = "User Edited Title";
+        book.NormalizedTitle = NormalizeKey("User Edited Title");
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var summary = await service.ImportAsync(userId, ToStream(CleanGalacticPotHealerClipping()), CancellationToken.None);
+
+        var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
+        Assert.Equal(book.Id, savedBook.Id);
+        Assert.Equal("Galactic Pot-Healer", savedBook.SourceBookTitle);
+        Assert.Equal("User Edited Title", savedBook.Title);
+        Assert.Equal(1, await db.BookNotes.CountAsync(n => n.UserId == userId));
+        Assert.Equal(0, summary.NotesImported);
+        Assert.Equal(1, summary.DuplicatesSkipped);
+    }
+
+    [Fact]
+    public async Task ImportAsync_WhenExistingCleanTitleReuploadedWithAuthorPrefix_DoesNotInsertDuplicateBook()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-import-6";
+        await SeedUserAsync(db, userId);
+        var embeddingService = new FakeEmbeddingService();
+        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
+
+        await service.ImportAsync(userId, ToStream(CleanGalacticPotHealerClipping()), CancellationToken.None);
+        db.ChangeTracker.Clear();
+
+        var summary = await service.ImportAsync(userId, ToStream(PrefixedGalacticPotHealerClipping()), CancellationToken.None);
+
+        Assert.Equal(1, await db.Books.CountAsync(b => b.UserId == userId));
+        var book = await db.Books.SingleAsync(b => b.UserId == userId);
+        Assert.Equal("Galactic Pot-Healer", book.SourceBookTitle);
+        Assert.Equal("Galactic Pot-Healer", book.Title);
+        Assert.Equal(1, await db.BookNotes.CountAsync(n => n.UserId == userId));
+        Assert.Equal(0, summary.NotesImported);
+        Assert.Equal(1, summary.DuplicatesSkipped);
+    }
+
     private static async Task SeedUserAsync(AppDbContext db, string userId)
     {
         db.Users.Add(new IdentityUser
@@ -114,6 +186,24 @@ public class KindleClippingsImportServiceTests
         - Seu destaque na página 1 | posição 10-11 | Adicionado: 01/01/2023 12:00:00
 
         Fear is the mind-killer.
+
+        """;
+
+    private static string CleanGalacticPotHealerClipping() =>
+        """
+        Galactic Pot-Healer (Philip K. Dick)
+        - Seu destaque na página 1 | posição 10-11 | Adicionado: 01/01/2023 12:00:00
+
+        A pot is healed.
+
+        """;
+
+    private static string PrefixedGalacticPotHealerClipping() =>
+        """
+        Dick, Philip K - Galactic Pot-Healer (Philip K. Dick)
+        - Seu destaque na página 1 | posição 10-11 | Adicionado: 01/01/2023 12:00:00
+
+        A pot is healed.
 
         """;
 

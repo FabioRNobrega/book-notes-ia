@@ -186,6 +186,7 @@ public class BookLibrarySearchPostgresTests
         {
             UserId = userId,
             Title = title,
+            SourceBookTitle = title,
             Author = author,
             NormalizedTitle = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
             NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray())

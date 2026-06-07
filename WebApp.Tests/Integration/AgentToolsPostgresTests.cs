@@ -536,6 +536,7 @@ public class AgentToolsPostgresTests
         {
             UserId = userId,
             Title = title,
+            SourceBookTitle = title,
             Author = author,
             NormalizedTitle = NormalizeKey(title),
             NormalizedAuthor = NormalizeKey(author),

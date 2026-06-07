@@ -69,6 +69,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
              .HasMaxLength(300)
              .IsRequired();
 
+            e.Property(x => x.SourceBookTitle)
+             .HasMaxLength(300)
+             .IsRequired();
+
             e.Property(x => x.Author)
              .HasMaxLength(200)
              .IsRequired();
@@ -86,6 +90,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
             e.HasIndex(x => new { x.UserId, x.NormalizedTitle, x.NormalizedAuthor })
              .IsUnique();
+
+            e.HasIndex(x => new { x.UserId, x.SourceBookTitle, x.NormalizedAuthor });
         });
 
         builder.Entity<BookNote>(e =>

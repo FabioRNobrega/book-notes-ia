@@ -15,6 +15,7 @@ public class BookContextServiceTests
         {
             UserId = userId,
             Title = "The Left Hand of Darkness",
+            SourceBookTitle = "The Left Hand of Darkness",
             Author = "Ursula K. Le Guin",
             NormalizedTitle = "thelefthandofdarkness",
             NormalizedAuthor = "ursulakleguin"
@@ -127,6 +128,7 @@ public class BookContextServiceTests
         {
             UserId = userId,
             Title = title,
+            SourceBookTitle = title,
             Author = author,
             NormalizedTitle = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
             NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),

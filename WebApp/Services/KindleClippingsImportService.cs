@@ -17,6 +17,7 @@ public interface IKindleClippingsImportService
 
 internal sealed record ParsedClipping(
     string Title,
+    string SourceBookTitle,
     string Author,
     string EntryType,
     string LocationText,
@@ -27,6 +28,7 @@ internal sealed record ParsedClipping(
 public class KindleClippingsImportService : IKindleClippingsImportService
 {
     private static readonly Regex HeaderRegex = new(@"^(?<title>.+)\s\((?<author>.+)\)$", RegexOptions.Compiled);
+    private static readonly Regex AuthorPrefixedTitleRegex = new(@"^\s*(?<authorPrefix>.+?)\s+-\s+(?<title>.+?)\s*$", RegexOptions.Compiled);
     private static readonly Regex AddedRegex = new(@"Adicionado:\s*(?<date>.+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
@@ -61,8 +63,10 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             .Select(x => new
             {
                 x.Title,
+                x.SourceBookTitle,
                 x.Author,
                 NormalizedTitle = NormalizeKey(x.Title),
+                NormalizedSourceBookTitle = NormalizeSourceTitle(x.SourceBookTitle),
                 NormalizedAuthor = NormalizeKey(x.Author)
             })
             .Distinct()
@@ -73,14 +77,14 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             .ToListAsync(ct);
 
         var bookMap = existingBooks.ToDictionary(
-            x => BuildBookLookupKey(x.NormalizedTitle, x.NormalizedAuthor),
+            x => BuildBookLookupKey(NormalizeSourceTitle(x.SourceBookTitle), x.NormalizedAuthor),
             x => x);
 
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         foreach (var parsedBook in normalizedBooks)
         {
-            var lookupKey = BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor);
+            var lookupKey = BuildBookLookupKey(parsedBook.NormalizedSourceBookTitle, parsedBook.NormalizedAuthor);
             if (bookMap.ContainsKey(lookupKey))
             {
                 continue;
@@ -90,6 +94,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             {
                 UserId = userId,
                 Title = parsedBook.Title,
+                SourceBookTitle = parsedBook.SourceBookTitle,
                 Author = parsedBook.Author,
                 NormalizedTitle = parsedBook.NormalizedTitle,
                 NormalizedAuthor = parsedBook.NormalizedAuthor,
@@ -103,7 +108,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         await _db.SaveChangesAsync(ct);
 
         var importedBookIds = normalizedBooks
-            .Select(parsedBook => bookMap[BuildBookLookupKey(parsedBook.NormalizedTitle, parsedBook.NormalizedAuthor)].Id)
+            .Select(parsedBook => bookMap[BuildBookLookupKey(parsedBook.NormalizedSourceBookTitle, parsedBook.NormalizedAuthor)].Id)
             .ToList();
 
         var embeddedBookIds = await _db.BookEmbeddings
@@ -140,7 +145,7 @@ public class KindleClippingsImportService : IKindleClippingsImportService
 
         foreach (var entry in parsedEntries)
         {
-            var bookKey = BuildBookLookupKey(NormalizeKey(entry.Title), NormalizeKey(entry.Author));
+            var bookKey = BuildBookLookupKey(NormalizeSourceTitle(entry.SourceBookTitle), NormalizeKey(entry.Author));
             var book = bookMap[bookKey];
             touchedBooks.Add(book.Id);
 
@@ -302,16 +307,31 @@ public class KindleClippingsImportService : IKindleClippingsImportService
         }
 
         var locationText = metadata.Split('|')[0].Trim().TrimStart('-').Trim();
-        var title = headerMatch.Groups["title"].Value.Trim();
+        var sourceBookTitle = headerMatch.Groups["title"].Value.Trim();
+        var title = CleanAuthorPrefixedTitle(sourceBookTitle);
         var author = headerMatch.Groups["author"].Value.Trim();
         var clippedAtUtc = parsedDate.ToUniversalTime();
         var normalizedTitle = NormalizeKey(title);
+        var normalizedSourceTitle = NormalizeSourceTitle(sourceBookTitle);
         var normalizedAuthor = NormalizeKey(author);
-        var dedupeKey = ComputeDedupeKey(normalizedTitle, normalizedAuthor, entryType, locationText, content, clippedAtUtc);
+        var dedupeKey = ComputeDedupeKey(normalizedSourceTitle, normalizedAuthor, entryType, locationText, content, clippedAtUtc);
 
-        clipping = new ParsedClipping(title, author, entryType, locationText, content, clippedAtUtc, dedupeKey);
+        clipping = new ParsedClipping(title, sourceBookTitle, author, entryType, locationText, content, clippedAtUtc, dedupeKey);
         return true;
     }
+
+    private static string CleanAuthorPrefixedTitle(string title)
+    {
+        var match = AuthorPrefixedTitleRegex.Match(title);
+        if (!match.Success)
+            return title;
+
+        var cleanedTitle = match.Groups["title"].Value.Trim();
+        return string.IsNullOrWhiteSpace(cleanedTitle) ? title : cleanedTitle;
+    }
+
+    private static string NormalizeSourceTitle(string sourceTitle) =>
+        NormalizeKey(CleanAuthorPrefixedTitle(sourceTitle));
 
     private static string? ParseEntryType(string metadata)
     {

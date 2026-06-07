@@ -162,6 +162,7 @@ public class BookContextAgentToolTests
         {
             UserId = userId,
             Title = title,
+            SourceBookTitle = title,
             Author = author,
             NormalizedTitle = NormalizeKey(title),
             NormalizedAuthor = NormalizeKey(author),
