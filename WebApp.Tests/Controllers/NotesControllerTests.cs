@@ -96,21 +96,123 @@ public class NotesControllerTests
         Assert.Null(model.HeaderMessage);
     }
 
+    [Fact]
+    public async Task EditTitle_WithAuthenticatedOwner_ReturnsBookTitlePartialInEditMode()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "test-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var result = await controller.EditTitle(book.Id, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Notes/_BookTitle.cshtml", partial.ViewName);
+        var model = Assert.IsType<BookTitleEditViewModel>(partial.Model);
+        Assert.Equal(book.Id, model.Id);
+        Assert.Equal("Dune", model.Title);
+        Assert.True(model.IsEditing);
+    }
+
+    [Fact]
+    public async Task EditTitle_WithoutUser_ReturnsUnauthorized()
+    {
+        var controller = CreateController(authenticated: false);
+
+        var result = await controller.EditTitle(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task EditTitle_WithMissingOrOtherUserBook_ReturnsNotFound()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "other-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var otherUserResult = await controller.EditTitle(book.Id, CancellationToken.None);
+        var missingResult = await controller.EditTitle(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(otherUserResult);
+        Assert.IsType<NotFoundResult>(missingResult);
+    }
+
+    [Fact]
+    public async Task UpdateTitle_WithValidTitle_ReturnsBookTitlePartialInViewMode()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "test-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var result = await controller.UpdateTitle(book.Id, "  Dune Messiah  ", CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Notes/_BookTitle.cshtml", partial.ViewName);
+        var model = Assert.IsType<BookTitleEditViewModel>(partial.Model);
+        Assert.Equal("Dune Messiah", model.Title);
+        Assert.False(model.IsEditing);
+    }
+
+    [Fact]
+    public async Task UpdateTitle_WithWhitespaceTitle_ReturnsBookTitlePartialInEditModeWithError()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "test-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var result = await controller.UpdateTitle(book.Id, "   ", CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Notes/_BookTitle.cshtml", partial.ViewName);
+        var model = Assert.IsType<BookTitleEditViewModel>(partial.Model);
+        Assert.Equal("Dune", model.Title);
+        Assert.True(model.IsEditing);
+        Assert.NotNull(model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task UpdateTitle_WithoutUser_ReturnsUnauthorized()
+    {
+        var controller = CreateController(authenticated: false);
+
+        var result = await controller.UpdateTitle(Guid.NewGuid(), "New Title", CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateTitle_WithMissingOrOtherUserBook_ReturnsNotFound()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "other-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var otherUserResult = await controller.UpdateTitle(book.Id, "New Title", CancellationToken.None);
+        var missingResult = await controller.UpdateTitle(Guid.NewGuid(), "New Title", CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(otherUserResult);
+        Assert.IsType<NotFoundResult>(missingResult);
+    }
+
     private static NotesController CreateController(
         bool authenticated = true,
+        AppDbContext? db = null,
+        IBookTitleService? bookTitleService = null,
         IBookLibrarySearchService? librarySearch = null,
         ILibrarianBookSearchService? librarianSearch = null)
     {
-        var dbOptions = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-            .Options;
-        var db = new TestDbContext(dbOptions);
+        db ??= CreateDbContext();
 
         var controller = new NotesController(
             db,
             new FakeImportService(),
             new FakeBookContextService(),
+            bookTitleService ?? new BookTitleService(db),
             librarySearch ?? new FakeLibrarySearchService(new LibrarySearchResult([], NoExactSqlMatch: false)),
             librarianSearch ?? new FakeLibrarianSearchService([]),
             NullLogger<NotesController>.Instance,
@@ -129,6 +231,30 @@ public class NotesControllerTests
         };
 
         return controller;
+    }
+
+    private static AppDbContext CreateDbContext()
+    {
+        var dbOptions = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+            .Options;
+        return new TestDbContext(dbOptions);
+    }
+
+    private static Book AddBook(AppDbContext db, string userId, string title, string author)
+    {
+        var book = new Book
+        {
+            UserId = userId,
+            Title = title,
+            Author = author,
+            NormalizedTitle = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
+            NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Books.Add(book);
+        return book;
     }
 
     private sealed class FakeLibrarySearchService(LibrarySearchResult result) : IBookLibrarySearchService

@@ -1,0 +1,48 @@
+@model BookTitleEditViewModel
+
+<div id="book-title-@Model.Id" class="flex min-w-0 items-start gap-2">
+    @if (Model.IsEditing)
+    {
+        <form class="flex min-w-0 flex-1 items-start gap-2"
+              hx-post="/notes/book/@Model.Id/title"
+              hx-target="#book-title-@Model.Id"
+              hx-swap="outerHTML">
+            <div class="min-w-0 flex-1">
+                <sl-input id="book-title-input-@Model.Id"
+                          name="title"
+                          value="@Model.Title"
+                          aria-label="Book title"
+                          maxlength="300"
+                          required
+                          autofocus
+                          style="width: min(34rem, 100%);">
+                </sl-input>
+                @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+                {
+                    <p class="mt-1 text-sm text-rose-300">@Model.ErrorMessage</p>
+                }
+            </div>
+            <sl-tooltip content="Save title">
+                <sl-button type="submit"
+                           variant="default"
+                           outline
+                           aria-label="Save title">
+                    <sl-icon slot="prefix" name="floppy"></sl-icon>
+                </sl-button>
+            </sl-tooltip>
+        </form>
+    }
+    else
+    {
+        <p class="min-w-0 break-words font-title text-3xl leading-tight">@Model.Title</p>
+        <sl-tooltip content="Edit title">
+            <sl-icon-button name="pencil-square"
+                            label="Edit title"
+                            hx-get="/notes/book/@Model.Id/title/edit"
+                            hx-target="#book-title-@Model.Id"
+                            hx-swap="outerHTML"
+                            hx-disabled-elt="this"
+                            style="font-size: 1.15rem; color: rgba(255,255,255,0.45);"></sl-icon-button>
+        </sl-tooltip>
+    }
+</div>

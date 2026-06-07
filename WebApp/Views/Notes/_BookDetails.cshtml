@@ -18,7 +18,7 @@
                 }
             </div>
             <div class="space-y-2">
-                <p class="font-title text-3xl leading-tight">@Model.Title</p>
+                @await Html.PartialAsync("~/Views/Notes/_BookTitle.cshtml", new BookTitleEditViewModel { Id = Model.Id, Title = Model.Title })
                 <p class="text-lg text-white/70">@Model.Author</p>
                 <p class="text-base text-white/60">@Model.Notes.Count imported entries</p>
             </div>

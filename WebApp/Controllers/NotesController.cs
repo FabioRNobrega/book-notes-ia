@@ -15,6 +15,7 @@ public class NotesController : Controller
     private readonly AppDbContext _db;
     private readonly IKindleClippingsImportService _importService;
     private readonly IBookContextService _bookContextService;
+    private readonly IBookTitleService _bookTitleService;
     private readonly IBookLibrarySearchService _librarySearchService;
     private readonly ILibrarianBookSearchService _librarianSearchService;
     private readonly ILogger<NotesController> _logger;
@@ -24,6 +25,7 @@ public class NotesController : Controller
         AppDbContext db,
         IKindleClippingsImportService importService,
         IBookContextService bookContextService,
+        IBookTitleService bookTitleService,
         IBookLibrarySearchService librarySearchService,
         ILibrarianBookSearchService librarianSearchService,
         ILogger<NotesController> logger,
@@ -32,6 +34,7 @@ public class NotesController : Controller
         _db = db;
         _importService = importService;
         _bookContextService = bookContextService;
+        _bookTitleService = bookTitleService;
         _librarySearchService = librarySearchService;
         _librarianSearchService = librarianSearchService;
         _logger = logger;
@@ -178,6 +181,58 @@ public class NotesController : Controller
         }
 
         return PartialView("~/Views/Notes/_BookDetails.cshtml", book);
+    }
+
+    [HttpGet("/notes/book/{id:guid}/title/edit")]
+    public async Task<IActionResult> EditTitle(Guid id, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var book = await _db.Books
+            .AsNoTracking()
+            .Where(x => x.Id == id && x.UserId == userId)
+            .Select(x => new BookTitleEditViewModel
+            {
+                Id = x.Id,
+                Title = x.Title,
+                IsEditing = true
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (book is null)
+            return NotFound();
+
+        return PartialView("~/Views/Notes/_BookTitle.cshtml", book);
+    }
+
+    [HttpPost("/notes/book/{id:guid}/title")]
+    public async Task<IActionResult> UpdateTitle(Guid id, [FromForm] string? title, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var result = await _bookTitleService.UpdateTitleAsync(id, userId, title, ct);
+
+        return result.Status switch
+        {
+            BookTitleUpdateStatus.Success => PartialView("~/Views/Notes/_BookTitle.cshtml", new BookTitleEditViewModel
+            {
+                Id = result.BookId,
+                Title = result.Title
+            }),
+            BookTitleUpdateStatus.ValidationError => PartialView("~/Views/Notes/_BookTitle.cshtml", new BookTitleEditViewModel
+            {
+                Id = result.BookId,
+                Title = result.Title,
+                IsEditing = true,
+                ErrorMessage = result.ErrorMessage
+            }),
+            BookTitleUpdateStatus.NotFound => NotFound(),
+            _ => NotFound()
+        };
     }
 
     [HttpPost("/notes/book/{id:guid}/context/generate")]
