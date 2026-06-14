@@ -37,7 +37,7 @@ services:
       - ./services/TtsService.Api/assets/supertonic-3:/models/supertonic-3:ro
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - Tts__UsePlaceholder=true
+      - Tts__UsePlaceholder=false
       - Supertonic__AssetsPath=/models/supertonic-3
 
   redis:

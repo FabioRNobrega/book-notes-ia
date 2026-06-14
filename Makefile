@@ -16,7 +16,7 @@ MAC_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.mac.yml
 WINDOWS_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.windows.yml
 TEST_COMPOSE_FILES := -f docker-compose.test.yml
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -74,3 +74,10 @@ ollama-logs-mac:
 
 ollama-logs-windows:
 	$(COMPOSE) $(WINDOWS_COMPOSE_FILES) logs -f ollama
+
+# Send a direct HTTP request to the TTS service and save the response as a WAV file.
+# The TTS container must be running (make docker-run).
+# Override defaults via environment variables (commas in make args break $(or)):
+#   TTS_TEXT="Olá, mundo" TTS_LANGUAGE=pt TTS_VOICE=male make debug-tts
+debug-tts:
+	@TTS_URL=http://localhost:5080 bash Scripts/debug-tts.sh

@@ -61,4 +61,6 @@ WebApp/wwwroot/css/
 services/TtsService.Api/assets/supertonic-3/
 # Local audio storage data (managed via Docker volume)
 audio-storage/
+# TTS debug output
+debug-output/
 

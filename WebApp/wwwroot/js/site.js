@@ -187,11 +187,15 @@
         if (!icon) return;
 
         button.disabled = state === "loading";
-        icon.setAttribute("name", state === "loading" ? "hourglass-split"
+        icon.setAttribute("name",
+            state === "loading" ? "hourglass-split"
             : state === "error" ? "exclamation-circle"
+            : state === "playing" ? "pause-circle"
             : "play-circle");
-        button.title = state === "loading" ? "Loading audio…"
+        button.title =
+            state === "loading" ? "Loading audio…"
             : state === "error" ? "Audio unavailable"
+            : state === "playing" ? "Playing…"
             : "Listen to this response";
     }
 
@@ -217,17 +221,22 @@
             const audio = new Audio(url);
             currentAudio = audio;
 
+            // Guard against stale closures: only act if this audio is still the active one.
             audio.addEventListener("ended", () => {
-                setPlayButtonState(button, "play");
-                cleanupCurrentAudio();
+                if (currentAudio === audio) {
+                    setPlayButtonState(button, "play");
+                    cleanupCurrentAudio();
+                }
             });
 
             audio.addEventListener("error", () => {
-                setPlayButtonState(button, "error");
-                cleanupCurrentAudio();
+                if (currentAudio === audio) {
+                    setPlayButtonState(button, "error");
+                    cleanupCurrentAudio();
+                }
             });
 
-            setPlayButtonState(button, "play");
+            setPlayButtonState(button, "playing");
             await audio.play();
         } catch {
             setPlayButtonState(button, "error");
