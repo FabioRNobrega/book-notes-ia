@@ -184,28 +184,31 @@
     }
 
     function setAudioState(widget, state) {
+        const tooltip = widget.querySelector(".tts-tooltip");
         const btn = widget.querySelector(".tts-play-btn");
         const loading = widget.querySelector(".tts-loading");
         const error = widget.querySelector(".tts-error");
 
         // Reset to idle defaults first.
-        if (btn) btn.style.display = "";
+        if (tooltip) tooltip.style.display = "";
+        if (tooltip) tooltip.setAttribute("content", "Listen to this response");
         if (btn) btn.setAttribute("name", "play-circle");
         if (btn) btn.setAttribute("label", "Listen to this response");
         if (loading) loading.style.display = "none";
         if (error) error.style.display = "none";
 
         if (state === "loading") {
-            if (btn) btn.style.display = "none";
+            if (tooltip) tooltip.style.display = "none";
             if (loading) loading.style.display = "inline-flex";
         } else if (state === "playing") {
             if (btn) btn.setAttribute("name", "pause-circle");
             if (btn) btn.setAttribute("label", "Pause");
+            if (tooltip) tooltip.setAttribute("content", "Pause");
         } else if (state === "paused") {
-            // name stays play-circle; label signals resume
             if (btn) btn.setAttribute("label", "Resume");
+            if (tooltip) tooltip.setAttribute("content", "Resume");
         } else if (state === "error") {
-            if (btn) btn.style.display = "none";
+            if (tooltip) tooltip.style.display = "none";
             if (error) error.style.display = "inline-flex";
         }
         // "idle" is fully handled by the reset above.

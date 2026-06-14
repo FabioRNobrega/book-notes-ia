@@ -9,11 +9,13 @@
             @if (Model.MessageId.HasValue)
             {
                 <div class="tts-widget flex items-center gap-1.5" data-audio-message-id="@Model.MessageId">
-                    <sl-icon-button class="tts-play-btn text-white/40"
-                                    name="play-circle"
-                                    label="Listen to this response"
-                                    style="font-size:18px; --sl-color-primary-600:rgba(255,255,255,0.85); --sl-color-primary-700:rgba(255,255,255,1);">
-                    </sl-icon-button>
+                    <sl-tooltip class="tts-tooltip" content="Listen to this response">
+                        <sl-icon-button class="tts-play-btn text-white/40"
+                                        name="play-circle"
+                                        label="Listen to this response"
+                                        style="font-size:18px; --sl-color-primary-600:rgba(255,255,255,0.85); --sl-color-primary-700:rgba(255,255,255,1);">
+                        </sl-icon-button>
+                    </sl-tooltip>
                     <span class="tts-loading" style="display:none; align-items:center; gap:5px; color:rgba(255,255,255,0.45); font-size:11px; white-space:nowrap;">
                         <sl-spinner style="font-size:12px; --track-width:1.5px;"></sl-spinner>
                         Generating audio...
