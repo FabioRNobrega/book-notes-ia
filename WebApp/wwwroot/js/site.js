@@ -167,9 +167,10 @@
         window.setTimeout(() => document.getElementById("message")?.focus(), 0);
     });
 
-    // Shared audio instance — only one message plays at a time
+    // Shared audio instance — only one message plays at a time.
     let currentAudio = null;
     let currentObjectUrl = null;
+    let currentWidget = null;
 
     function cleanupCurrentAudio() {
         if (currentAudio) {
@@ -182,35 +183,71 @@
         }
     }
 
-    function setPlayButtonState(button, state) {
-        const icon = button.querySelector("sl-icon");
-        if (!icon) return;
+    function setAudioState(widget, state) {
+        const btn = widget.querySelector(".tts-play-btn");
+        const loading = widget.querySelector(".tts-loading");
+        const error = widget.querySelector(".tts-error");
 
-        button.disabled = state === "loading";
-        icon.setAttribute("name",
-            state === "loading" ? "hourglass-split"
-            : state === "error" ? "exclamation-circle"
-            : state === "playing" ? "pause-circle"
-            : "play-circle");
-        button.title =
-            state === "loading" ? "Loading audio…"
-            : state === "error" ? "Audio unavailable"
-            : state === "playing" ? "Playing…"
-            : "Listen to this response";
+        // Reset to idle defaults first.
+        if (btn) btn.style.display = "";
+        if (btn) btn.setAttribute("name", "play-circle");
+        if (btn) btn.setAttribute("label", "Listen to this response");
+        if (loading) loading.style.display = "none";
+        if (error) error.style.display = "none";
+
+        if (state === "loading") {
+            if (btn) btn.style.display = "none";
+            if (loading) loading.style.display = "inline-flex";
+        } else if (state === "playing") {
+            if (btn) btn.setAttribute("name", "pause-circle");
+            if (btn) btn.setAttribute("label", "Pause");
+        } else if (state === "paused") {
+            // name stays play-circle; label signals resume
+            if (btn) btn.setAttribute("label", "Resume");
+        } else if (state === "error") {
+            if (btn) btn.style.display = "none";
+            if (error) error.style.display = "inline-flex";
+        }
+        // "idle" is fully handled by the reset above.
     }
 
-    async function handlePlayClick(button) {
-        const messageId = button.getAttribute("data-audio-message-id");
+    async function handlePlayClick(widget) {
+        const messageId = widget.getAttribute("data-audio-message-id");
         if (!messageId) return;
 
+        // Toggle play/pause if audio is already loaded for this widget.
+        if (currentWidget === widget && currentAudio) {
+            if (currentAudio.paused) {
+                try {
+                    await currentAudio.play();
+                    setAudioState(widget, "playing");
+                } catch {
+                    setAudioState(widget, "error");
+                    cleanupCurrentAudio();
+                    currentWidget = null;
+                }
+            } else {
+                currentAudio.pause();
+                setAudioState(widget, "paused");
+            }
+            return;
+        }
+
+        // Reset any previously active widget before starting a new one.
+        if (currentWidget && currentWidget !== widget) {
+            setAudioState(currentWidget, "idle");
+        }
+
         cleanupCurrentAudio();
-        setPlayButtonState(button, "loading");
+        currentWidget = widget;
+        setAudioState(widget, "loading");
 
         try {
             const response = await fetch(`/chat/messages/${messageId}/audio`);
 
             if (!response.ok) {
-                setPlayButtonState(button, "error");
+                setAudioState(widget, "error");
+                currentWidget = null;
                 return;
             }
 
@@ -224,31 +261,34 @@
             // Guard against stale closures: only act if this audio is still the active one.
             audio.addEventListener("ended", () => {
                 if (currentAudio === audio) {
-                    setPlayButtonState(button, "play");
+                    setAudioState(widget, "idle");
                     cleanupCurrentAudio();
+                    currentWidget = null;
                 }
             });
 
             audio.addEventListener("error", () => {
                 if (currentAudio === audio) {
-                    setPlayButtonState(button, "error");
+                    setAudioState(widget, "error");
                     cleanupCurrentAudio();
+                    currentWidget = null;
                 }
             });
 
-            setPlayButtonState(button, "playing");
             await audio.play();
+            setAudioState(widget, "playing");
         } catch {
-            setPlayButtonState(button, "error");
+            setAudioState(widget, "error");
             cleanupCurrentAudio();
+            currentWidget = null;
         }
     }
 
     document.body.addEventListener("click", (event) => {
-        const button = event.target.closest(".tts-play-btn");
-        if (button instanceof HTMLButtonElement) {
-            void handlePlayClick(button);
-        }
+        const btn = event.target.closest(".tts-play-btn");
+        if (!btn) return;
+        const widget = btn.closest(".tts-widget");
+        if (widget) void handlePlayClick(widget);
     });
 
     window.BookNotesChat = {
