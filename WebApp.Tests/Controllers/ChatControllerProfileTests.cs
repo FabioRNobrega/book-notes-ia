@@ -65,6 +65,15 @@ public class ChatControllerProfileTests
         Assert.Contains("any specific book or title", result);
     }
 
+    [Fact]
+    public void BuildOrchestratorInstructions_RequiresPreferredLanguageInResponse()
+    {
+        var result = InvokeBuildOrchestratorInstructions(null);
+
+        Assert.Contains("preferred_language", result);
+        Assert.Contains("even when source material is in another language", result);
+    }
+
     private static string? InvokeBuildProfileInstructions(string json)
     {
         var method = typeof(ChatController).GetMethod("BuildProfileInstructions", BindingFlags.Static | BindingFlags.NonPublic);

@@ -167,6 +167,81 @@
         window.setTimeout(() => document.getElementById("message")?.focus(), 0);
     });
 
+    // Shared audio instance — only one message plays at a time
+    let currentAudio = null;
+    let currentObjectUrl = null;
+
+    function cleanupCurrentAudio() {
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+        }
+        if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = null;
+        }
+    }
+
+    function setPlayButtonState(button, state) {
+        const icon = button.querySelector("sl-icon");
+        if (!icon) return;
+
+        button.disabled = state === "loading";
+        icon.setAttribute("name", state === "loading" ? "hourglass-split"
+            : state === "error" ? "exclamation-circle"
+            : "play-circle");
+        button.title = state === "loading" ? "Loading audio…"
+            : state === "error" ? "Audio unavailable"
+            : "Listen to this response";
+    }
+
+    async function handlePlayClick(button) {
+        const messageId = button.getAttribute("data-audio-message-id");
+        if (!messageId) return;
+
+        cleanupCurrentAudio();
+        setPlayButtonState(button, "loading");
+
+        try {
+            const response = await fetch(`/chat/messages/${messageId}/audio`);
+
+            if (!response.ok) {
+                setPlayButtonState(button, "error");
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            currentObjectUrl = url;
+
+            const audio = new Audio(url);
+            currentAudio = audio;
+
+            audio.addEventListener("ended", () => {
+                setPlayButtonState(button, "play");
+                cleanupCurrentAudio();
+            });
+
+            audio.addEventListener("error", () => {
+                setPlayButtonState(button, "error");
+                cleanupCurrentAudio();
+            });
+
+            setPlayButtonState(button, "play");
+            await audio.play();
+        } catch {
+            setPlayButtonState(button, "error");
+            cleanupCurrentAudio();
+        }
+    }
+
+    document.body.addEventListener("click", (event) => {
+        const button = event.target.closest(".tts-play-btn");
+        if (button instanceof HTMLButtonElement) {
+            void handlePlayClick(button);
+        }
+    });
+
     window.BookNotesChat = {
         setMode
     };

@@ -480,7 +480,7 @@ public class AgentToolsPostgresTests
         IBookNoteSearchAgentTool? bookNoteSearchTool = null)
     {
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, NullLogger<ChatController>.Instance, configuration);
+        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, new FakeChatMessageAudioService(), NullLogger<ChatController>.Instance, configuration);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -732,5 +732,11 @@ public class AgentToolsPostgresTests
             _store[key] = System.Text.Json.JsonSerializer.Serialize(value);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FakeChatMessageAudioService : WebApp.Services.IChatMessageAudioService
+    {
+        public Task<(byte[] WavBytes, string ContentType)?> GetOrCreateAudioAsync(string userId, Guid messageId, CancellationToken ct = default)
+            => Task.FromResult<(byte[], string)?>(null);
     }
 }

@@ -252,6 +252,54 @@ public class ChatControllerTests
         Assert.Contains("Error", Assert.IsType<BotMessageViewModel>(partial.Model).HtmlContent);
     }
 
+    [Fact]
+    public async Task GetMessageAudio_WhenAudioExists_ReturnsFileResult()
+    {
+        var messageId = Guid.NewGuid();
+        var audioService = new FakeChatMessageAudioService { ReturnValue = (new byte[] { 0x52, 0x49 }, "audio/wav") };
+        var controller = CreateController(new FakeChatOrchestratorAgent(), new FakeCacheHandler(), new FakeBookContextAgentTool(), "user-1", audioService: audioService);
+
+        var result = await controller.GetMessageAudio(messageId, CancellationToken.None);
+
+        var fileResult = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("audio/wav", fileResult.ContentType);
+        Assert.Equal(new byte[] { 0x52, 0x49 }, fileResult.FileContents);
+    }
+
+    [Fact]
+    public async Task GetMessageAudio_WhenAudioNotFound_ReturnsNotFound()
+    {
+        var audioService = new FakeChatMessageAudioService { ReturnValue = null };
+        var controller = CreateController(new FakeChatOrchestratorAgent(), new FakeCacheHandler(), new FakeBookContextAgentTool(), "user-1", audioService: audioService);
+
+        var result = await controller.GetMessageAudio(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetMessageAudio_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        var controller = new ChatController(
+            new FakeChatOrchestratorAgent(),
+            new FakeCacheHandler(),
+            new FakeBookContextAgentTool(),
+            new FakeBookNotesAgentTool(),
+            new FakeBookNoteSearchAgentTool(),
+            CreateDbContext(),
+            new FakeChatMessageAudioService(),
+            NullLogger<ChatController>.Instance,
+            new ConfigurationBuilder().Build());
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal() }
+        };
+
+        var result = await controller.GetMessageAudio(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.IsType<UnauthorizedResult>(result);
+    }
+
     private static async Task<int> controllerDbCountAsync(ChatController controller, string userId)
     {
         var dbField = typeof(ChatController).GetField("_db", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
@@ -264,7 +312,8 @@ public class ChatControllerTests
         ICacheHandler cache,
         IBookContextAgentTool bookContextTool,
         string userId,
-        AppDbContext? db = null)
+        AppDbContext? db = null,
+        IChatMessageAudioService? audioService = null)
     {
         db ??= CreateDbContext();
         var controller = new ChatController(
@@ -274,6 +323,7 @@ public class ChatControllerTests
             new FakeBookNotesAgentTool(),
             new FakeBookNoteSearchAgentTool(),
             db,
+            audioService ?? new FakeChatMessageAudioService(),
             NullLogger<ChatController>.Instance,
             new ConfigurationBuilder().Build());
         controller.ControllerContext = new ControllerContext
@@ -339,6 +389,15 @@ public class ChatControllerTests
     {
         public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
             => throw new InvalidOperationException("agent failure");
+    }
+
+    private sealed class FakeChatMessageAudioService : WebApp.Services.IChatMessageAudioService
+    {
+        public (byte[] WavBytes, string ContentType)? ReturnValue { get; set; } = (new byte[] { 1, 2, 3 }, "audio/wav");
+
+        public Task<(byte[] WavBytes, string ContentType)?> GetOrCreateAudioAsync(
+            string userId, Guid messageId, CancellationToken ct = default)
+            => Task.FromResult(ReturnValue);
     }
 
     private sealed class FakeCacheHandler : ICacheHandler

@@ -5,6 +5,17 @@
         <div class="prose prose-invert max-w-none prose-sm pb-5">
             @Html.Raw(Model.HtmlContent)
         </div>
+        <div class="absolute bottom-2 left-4 right-auto flex items-center gap-2">
+            @if (Model.MessageId.HasValue)
+            {
+                <button class="tts-play-btn text-white/40 hover:text-white/80 transition-colors"
+                        data-audio-message-id="@Model.MessageId"
+                        aria-label="Play audio"
+                        title="Listen to this response">
+                    <sl-icon name="play-circle" style="font-size:18px;"></sl-icon>
+                </button>
+            }
+        </div>
         <div class="absolute bottom-2 right-4 text-xs text-white/45">
             He thought for @WebApp.Controllers.ChatController.FormatResponseTime(Model.ResponseTimeMs)
         </div>

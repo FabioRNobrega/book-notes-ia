@@ -10,6 +10,7 @@ services:
       - ./WebApp:/app
       - /app/bin
       - /app/obj
+      - audio_storage:/audio-storage
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - OLLAMA_URL=http://ollama:11434
@@ -17,10 +18,27 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Unsplash__AccessKey=${UNSPLASH_ACCESS_KEY}
       - Unsplash__SecretKey=${UNSPLASH_SECRET_KEY}
+      - Tts__BaseUrl=http://tts:5080
+      - AudioStorage__BasePath=/audio-storage
     depends_on:
       - ollama
       - postgres
       - redis
+      - tts
+
+  tts:
+    build:
+      context: ./services/TtsService.Api
+      dockerfile: Dockerfile
+    container_name: tts
+    ports:
+      - "5080:5080"
+    volumes:
+      - ./services/TtsService.Api/assets/supertonic-3:/models/supertonic-3:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Tts__UsePlaceholder=true
+      - Supertonic__AssetsPath=/models/supertonic-3
 
   redis:
     image: redis:7-alpine
@@ -62,3 +80,4 @@ volumes:
   ollama_models:
   pg18_data:
   redis_data:
+  audio_storage:

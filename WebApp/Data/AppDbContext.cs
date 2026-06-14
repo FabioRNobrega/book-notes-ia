@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BookEmbedding> BookEmbeddings => Set<BookEmbedding>();
     public DbSet<BookNoteEmbedding> BookNoteEmbeddings => Set<BookNoteEmbedding>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ChatMessageAudio> ChatMessageAudios => Set<ChatMessageAudio>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -50,8 +51,49 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.AboutMe)
              .HasMaxLength(400);
 
+            e.Property(x => x.VoicePreference)
+             .HasMaxLength(10)
+             .IsRequired()
+             .HasDefaultValue("female");
+
             e.Property(x => x.AgentProfileCompact)
              .IsRequired();
+        });
+
+        builder.Entity<ChatMessageAudio>(e =>
+        {
+            e.ToTable("chat_message_audio");
+
+            e.HasKey(x => x.Id);
+
+            e.HasOne(x => x.ChatMessage)
+             .WithMany()
+             .HasForeignKey(x => x.ChatMessageId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.Property(x => x.Language)
+             .HasMaxLength(10)
+             .IsRequired();
+
+            e.Property(x => x.Voice)
+             .HasMaxLength(20)
+             .IsRequired();
+
+            e.Property(x => x.StorageKey)
+             .HasMaxLength(500)
+             .IsRequired();
+
+            e.Property(x => x.ContentType)
+             .HasMaxLength(100)
+             .IsRequired();
+
+            e.Property(x => x.ContentHash)
+             .HasMaxLength(64);
+
+            e.HasIndex(x => new { x.ChatMessageId, x.Language, x.Voice })
+             .IsUnique();
+
+            e.HasIndex(x => x.ChatMessageId);
         });
 
         builder.Entity<Book>(e =>

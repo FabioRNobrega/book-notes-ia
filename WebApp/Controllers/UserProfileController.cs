@@ -57,7 +57,7 @@ namespace WebApp.Controllers
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Upsert(
-            [Bind("Nickname,PreferredLanguage,TonePreference,LearningGoals,FavoriteAuthors,AboutMe")] UserProfile input,
+            [Bind("Nickname,PreferredLanguage,VoicePreference,TonePreference,LearningGoals,FavoriteAuthors,AboutMe")] UserProfile input,
             [FromForm(Name = "LearningStyle")] string? learningStyle,
             [FromForm(Name = "ReadingLanguages[]")] string[]? readingLanguages,
             [FromForm(Name = "LovedGenres[]")] string[]? lovedGenres,
@@ -90,6 +90,7 @@ namespace WebApp.Controllers
 
                     Nickname = input.Nickname,
                     PreferredLanguage = input.PreferredLanguage,
+                    VoicePreference = NormalizeVoicePreference(input.VoicePreference),
                     TonePreference = input.TonePreference,
                     LearningGoals = input.LearningGoals,
                     FavoriteAuthors = input.FavoriteAuthors,
@@ -117,6 +118,7 @@ namespace WebApp.Controllers
             // Update path
             existing.Nickname = input.Nickname;
             existing.PreferredLanguage = input.PreferredLanguage;
+            existing.VoicePreference = NormalizeVoicePreference(input.VoicePreference);
             existing.TonePreference = input.TonePreference;
             existing.LearningGoals = input.LearningGoals;
             existing.FavoriteAuthors = input.FavoriteAuthors;
@@ -150,6 +152,13 @@ namespace WebApp.Controllers
             return System.Text.Json.JsonDocument.Parse(json);
         }
 
+        private static string NormalizeVoicePreference(string? value) =>
+            value?.Trim().ToLowerInvariant() switch
+            {
+                "male" => "male",
+                _ => "female"
+            };
+
         private static string BuildAgentProfileCompactJson(int profileVersion, UserProfile p)
         {
             var payload = new
@@ -157,6 +166,7 @@ namespace WebApp.Controllers
                 profile_v = profileVersion,
                 nickname = p.Nickname,
                 preferred_language = p.PreferredLanguage,
+                voice_preference = p.VoicePreference,
                 tone = p.TonePreference,
                 learning_goals = p.LearningGoals,
                 favorite_authors = p.FavoriteAuthors,

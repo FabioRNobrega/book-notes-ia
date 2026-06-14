@@ -11,7 +11,7 @@ using WebApp.Services;
 
 namespace WebApp.Controllers;
 
-public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null);
+public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null, Guid? MessageId = null);
 
 [Authorize]
 public class ChatController : Controller
@@ -22,6 +22,7 @@ public class ChatController : Controller
     private readonly IBookNotesAgentTool _bookNotesTool;
     private readonly IBookNoteSearchAgentTool _bookNoteSearchTool;
     private readonly AppDbContext _db;
+    private readonly IChatMessageAudioService _audioService;
     private readonly ILogger<ChatController> _logger;
     private readonly int _numCtx;
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -35,6 +36,7 @@ public class ChatController : Controller
         IBookNotesAgentTool bookNotesTool,
         IBookNoteSearchAgentTool bookNoteSearchTool,
         AppDbContext db,
+        IChatMessageAudioService audioService,
         ILogger<ChatController> logger,
         IConfiguration configuration)
     {
@@ -44,6 +46,7 @@ public class ChatController : Controller
         _bookNotesTool = bookNotesTool;
         _bookNoteSearchTool = bookNoteSearchTool;
         _db = db;
+        _audioService = audioService;
         _logger = logger;
         _numCtx = configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
     }
@@ -68,7 +71,8 @@ public class ChatController : Controller
             .Select(x => new ChatEntry(
                 x.Role,
                 x.Role == "assistant" ? Markdown.ToHtml(x.Content, MarkdownPipeline) : x.Content,
-                x.ResponseTimeMs))
+                x.ResponseTimeMs,
+                x.Role == "assistant" ? x.Id : null))
             .ToList();
 
         return PartialView("Chat", history);
@@ -115,6 +119,21 @@ public class ChatController : Controller
                 .MaxAsync(ct) ?? 0) + 1;
 
             var contextUsagePct = ComputeUsagePct(runResult.MaxPromptTokens);
+            var assistantMessage = new WebApp.Models.ChatMessage
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "assistant",
+                Content = runResult.ResponseText,
+                DisplayOrder = nextDisplayOrder + 1,
+                TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
+                TotalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
+                LatestPromptTokens = runResult.LatestPromptTokens,
+                MaxPromptTokens = runResult.MaxPromptTokens,
+                ContextUsagePct = contextUsagePct,
+                ModelCallCount = runResult.ModelCallCount,
+                ResponseTimeMs = runResult.ElapsedMs
+            };
             _db.ChatMessages.AddRange(
                 new WebApp.Models.ChatMessage
                 {
@@ -124,21 +143,7 @@ public class ChatController : Controller
                     Content = message,
                     DisplayOrder = nextDisplayOrder
                 },
-                new WebApp.Models.ChatMessage
-                {
-                    UserId = userId,
-                    SessionId = sessionId,
-                    Role = "assistant",
-                    Content = runResult.ResponseText,
-                    DisplayOrder = nextDisplayOrder + 1,
-                    TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
-                    TotalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
-                    LatestPromptTokens = runResult.LatestPromptTokens,
-                    MaxPromptTokens = runResult.MaxPromptTokens,
-                    ContextUsagePct = contextUsagePct,
-                    ModelCallCount = runResult.ModelCallCount,
-                    ResponseTimeMs = runResult.ElapsedMs
-                });
+                assistantMessage);
             await _db.SaveChangesAsync(ct);
 
             await _cache.SetObjectAsync(
@@ -169,12 +174,34 @@ public class ChatController : Controller
                 orchestratorInstructions.Length + message.Length);
 
             var html = Markdown.ToHtml(runResult.ResponseText, MarkdownPipeline);
-            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs));
+            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs, assistantMessage.Id));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat send failed for user {UserId}", userId);
             return PartialView("_BotMessage", new BotMessageViewModel($"<p>Error: {ex.Message}</p>", 0));
+        }
+    }
+
+    [HttpGet("/chat/messages/{messageId:guid}/audio")]
+    public async Task<IActionResult> GetMessageAudio(Guid messageId, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        try
+        {
+            var result = await _audioService.GetOrCreateAudioAsync(userId, messageId, ct);
+            if (result is null)
+                return NotFound();
+
+            return File(result.Value.WavBytes, result.Value.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Audio generation failed for message {MessageId}", messageId);
+            return StatusCode(500);
         }
     }
 
@@ -223,6 +250,7 @@ public class ChatController : Controller
             The GetRelevantBookNotes tool performs semantic search over the user's highlights for a specific book and returns only the most relevant notes as <note loc="...">...</note> blocks. Use the loc attribute to cite the location when relevant.
             If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
+            Always answer in the reader's preferred_language, even when source material is in another language.
             """
         };
 
