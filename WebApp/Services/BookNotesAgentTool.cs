@@ -26,6 +26,7 @@ public sealed class BookNotesAgentTool(
             name: "GetBookNotesWithAnalysis",
             description: "Retrieves the user's personal notes, highlights, or annotations for a specific book in their library " +
                          "and returns a concise thematic analysis grounded in those notes. Call this when the user asks what they noted, " +
-                         "highlighted, annotated, or personally observed in a specific book. Do not list raw notes unless the user explicitly asks for the exact notes.");
+                         "highlighted, annotated, or personally observed in a specific book. Do not list raw notes unless the user explicitly asks for the exact notes. " +
+                         "Notes may be in any language — translate them into the reader's preferred language before using them in your response.");
     }
 }

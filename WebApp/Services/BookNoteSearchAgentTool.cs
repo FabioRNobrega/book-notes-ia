@@ -35,6 +35,7 @@ public sealed class BookNoteSearchAgentTool(
                          "Call this when the user asks a focused question about a particular topic, theme, or idea within a book's notes — " +
                          "pass the user's question or topic as searchQuery. " +
                          "Returns the most relevant highlights as <note loc=\"...\">...</note> blocks. " +
+                         "Note content may be in any language — translate highlights into the reader's preferred language when quoting or explaining them in your response. " +
                          "Use GetBookNotesWithAnalysis instead when the user wants a general thematic overview of all their notes.");
     }
 }
