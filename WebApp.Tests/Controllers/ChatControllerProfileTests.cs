@@ -68,10 +68,11 @@ public class ChatControllerProfileTests
     [Fact]
     public void BuildOrchestratorInstructions_RequiresPreferredLanguageInResponse()
     {
-        var result = InvokeBuildOrchestratorInstructions(null);
+        var result = InvokeBuildOrchestratorInstructions(null, "English");
 
-        Assert.Contains("preferred_language", result);
-        Assert.Contains("even when source material is in another language", result);
+        Assert.Contains("English", result);
+        Assert.Contains("mandatory", result);
+        Assert.Contains("translate", result, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? InvokeBuildProfileInstructions(string json)
@@ -80,9 +81,9 @@ public class ChatControllerProfileTests
         return (string?)method!.Invoke(null, [json]);
     }
 
-    private static string InvokeBuildOrchestratorInstructions(string? profileInstructions)
+    private static string InvokeBuildOrchestratorInstructions(string? profileInstructions, string? preferredLanguage = null)
     {
         var method = typeof(ChatController).GetMethod("BuildOrchestratorInstructions", BindingFlags.Static | BindingFlags.NonPublic);
-        return Assert.IsType<string>(method!.Invoke(null, [profileInstructions]));
+        return Assert.IsType<string>(method!.Invoke(null, [profileInstructions, preferredLanguage]));
     }
 }

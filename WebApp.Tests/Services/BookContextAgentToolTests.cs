@@ -30,7 +30,7 @@ public class BookContextAgentToolTests
             new AIFunctionArguments { ["bookTitle"] = "desert planet messiah novel" },
             CancellationToken.None);
 
-        Assert.Equal("Arrakis literary context.", result?.ToString());
+        Assert.Equal("<book-context>\nArrakis literary context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
     }
 
@@ -89,7 +89,7 @@ public class BookContextAgentToolTests
             new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
             CancellationToken.None);
 
-        Assert.Equal("Gather Yourselves Together context.", result?.ToString());
+        Assert.Equal("<book-context>\nGather Yourselves Together context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
     }
 
@@ -110,7 +110,7 @@ public class BookContextAgentToolTests
             new AIFunctionArguments { ["bookTitle"] = "Foundation" },
             CancellationToken.None);
 
-        Assert.Equal("Existing cached context.", result?.ToString());
+        Assert.Equal("<book-context>\nExisting cached context.\n</book-context>", result?.ToString());
         Assert.False(service.GenerateAndSaveCalled);
     }
 
@@ -129,7 +129,7 @@ public class BookContextAgentToolTests
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
             CancellationToken.None);
 
-        Assert.Equal("Fallback Dune context.", result?.ToString());
+        Assert.Equal("<book-context>\nFallback Dune context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
     }
 

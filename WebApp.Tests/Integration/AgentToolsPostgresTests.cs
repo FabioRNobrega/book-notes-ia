@@ -34,7 +34,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "Leviathan Wakes by James S. A. Corey" },
             CancellationToken.None);
 
-        Assert.Equal("Generated Expanse context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated Expanse context.\n</book-context>", result?.ToString());
 
         var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
         Assert.Equal("Generated Expanse context.", savedBook.Context);
@@ -60,7 +60,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
             CancellationToken.None);
 
-        Assert.Equal("Generated PKD context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated PKD context.\n</book-context>", result?.ToString());
 
         var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
         Assert.Equal("Generated PKD context.", savedBook.Context);
@@ -88,7 +88,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "post nuclear australian novel" },
             CancellationToken.None);
 
-        Assert.Equal("Generated On the Beach context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated On the Beach context.\n</book-context>", result?.ToString());
 
         var duneAfterLookup = await db.Books.SingleAsync(b => b.Id == dune.Id);
         var beachAfterLookup = await db.Books.SingleAsync(b => b.Id == beach.Id);
