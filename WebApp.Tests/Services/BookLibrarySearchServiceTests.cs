@@ -8,36 +8,59 @@ namespace WebApp.Tests.Services;
 public class BookLibrarySearchServiceTests
 {
     [Fact]
-    public async Task BlankQuery_ReturnsAllUserBooksOrderedByUpdatedAtDescending()
+    public async Task BlankQuery_ReturnsAllUserBooksOrderedByTitleAscending()
     {
         await using var db = CreateDbContext();
         var userId = "user-sql-1";
-        var older = AddBook(db, userId, "Dune", "Frank Herbert", updatedAt: DateTime.UtcNow.AddDays(-2));
-        var newer = AddBook(db, userId, "Foundation", "Isaac Asimov", updatedAt: DateTime.UtcNow.AddDays(-1));
+        AddBook(db, userId, "Zen and the Art of Motorcycle Maintenance", "Robert M. Pirsig", updatedAt: DateTime.UtcNow.AddDays(-1));
+        AddBook(db, userId, "Anna Karenina", "Leo Tolstoy", updatedAt: DateTime.UtcNow.AddDays(-3));
+        AddBook(db, userId, "Brave New World", "Aldous Huxley", updatedAt: DateTime.UtcNow);
         await db.SaveChangesAsync();
 
         var service = new BookLibrarySearchService(db);
         var result = await service.SearchSqlAsync(null, userId);
 
         Assert.False(result.NoExactSqlMatch);
-        Assert.Equal(2, result.Books.Count);
-        Assert.Equal(newer.Id, result.Books[0].Id);
-        Assert.Equal(older.Id, result.Books[1].Id);
+        Assert.Equal(
+            ["Anna Karenina", "Brave New World", "Zen and the Art of Motorcycle Maintenance"],
+            result.Books.Select(b => b.Title));
     }
 
     [Fact]
-    public async Task EmptyStringQuery_ReturnsAllUserBooks()
+    public async Task EmptyStringQuery_ReturnsAllUserBooksOrderedByTitleAscending()
     {
         await using var db = CreateDbContext();
         var userId = "user-sql-2";
-        AddBook(db, userId, "Dune", "Frank Herbert");
+        AddBook(db, userId, "Zen and the Art of Motorcycle Maintenance", "Robert M. Pirsig", updatedAt: DateTime.UtcNow.AddDays(-1));
+        AddBook(db, userId, "Anna Karenina", "Leo Tolstoy", updatedAt: DateTime.UtcNow.AddDays(-3));
+        AddBook(db, userId, "Brave New World", "Aldous Huxley", updatedAt: DateTime.UtcNow);
         await db.SaveChangesAsync();
 
         var service = new BookLibrarySearchService(db);
         var result = await service.SearchSqlAsync("   ", userId);
 
         Assert.False(result.NoExactSqlMatch);
-        Assert.Single(result.Books);
+        Assert.Equal(
+            ["Anna Karenina", "Brave New World", "Zen and the Art of Motorcycle Maintenance"],
+            result.Books.Select(b => b.Title));
+    }
+
+    [Fact]
+    public async Task NonEmptyQuery_ReturnsExactMatchesOrderedByUpdatedAtDescending()
+    {
+        await using var db = CreateDbContext();
+        var userId = "user-sql-2b";
+        AddBook(db, userId, "Anna Karenina", "Leo Tolstoy", updatedAt: DateTime.UtcNow.AddDays(-3));
+        AddBook(db, userId, "Anna of the Five Towns", "Arnold Bennett", updatedAt: DateTime.UtcNow);
+        await db.SaveChangesAsync();
+
+        var service = new BookLibrarySearchService(db);
+        var result = await service.SearchSqlAsync("Anna", userId);
+
+        Assert.False(result.NoExactSqlMatch);
+        Assert.Equal(
+            ["Anna of the Five Towns", "Anna Karenina"],
+            result.Books.Select(b => b.Title));
     }
 
     [Fact]

@@ -119,6 +119,26 @@ public class BookLibrarySearchPostgresTests
     }
 
     [Fact]
+    public async Task BlankQuery_ReturnsBooksOrderedByTitleAscending()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-library-sort-1";
+        await SeedBookAsync(db, userId, "Zen and the Art of Motorcycle Maintenance", "Robert M. Pirsig", updatedAt: DateTime.UtcNow.AddDays(-1));
+        await SeedBookAsync(db, userId, "Anna Karenina", "Leo Tolstoy", updatedAt: DateTime.UtcNow.AddDays(-3));
+        await SeedBookAsync(db, userId, "Brave New World", "Aldous Huxley", updatedAt: DateTime.UtcNow);
+
+        var service = new BookLibrarySearchService(db);
+
+        var result = await service.SearchSqlAsync(null, userId);
+
+        Assert.False(result.NoExactSqlMatch);
+        Assert.Equal(
+            ["Anna Karenina", "Brave New World", "Zen and the Art of Motorcycle Maintenance"],
+            result.Books.Select(b => b.Title));
+    }
+
+    [Fact]
     public async Task FuzzySearch_TypoInAuthor_ReturnsBook()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -168,7 +188,7 @@ public class BookLibrarySearchPostgresTests
         Assert.Empty(result.Books);
     }
 
-    private static async Task<Book> SeedBookAsync(AppDbContext db, string userId, string title, string author)
+    private static async Task<Book> SeedBookAsync(AppDbContext db, string userId, string title, string author, DateTime? updatedAt = null)
     {
         if (!await db.Users.AnyAsync(u => u.Id == userId))
         {
@@ -189,7 +209,8 @@ public class BookLibrarySearchPostgresTests
             SourceBookTitle = title,
             Author = author,
             NormalizedTitle = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
-            NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray())
+            NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
+            UpdatedAt = updatedAt ?? DateTime.UtcNow
         };
         db.Books.Add(book);
         await db.SaveChangesAsync();

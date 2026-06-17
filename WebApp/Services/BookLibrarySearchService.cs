@@ -36,7 +36,7 @@ public sealed class BookLibrarySearchService(AppDbContext db) : IBookLibrarySear
                     NotesCount = b.Notes.Count,
                     UpdatedAt = b.UpdatedAt
                 })
-                .OrderByDescending(b => b.UpdatedAt)
+                .OrderBy(b => b.Title)
                 .ToListAsync(ct);
 
             return new LibrarySearchResult(all, NoExactSqlMatch: false);

@@ -15,6 +15,26 @@ namespace WebApp.Tests.Controllers;
 public class NotesControllerTests
 {
     [Fact]
+    public async Task Library_ReturnsBooksOrderedByTitleAscending()
+    {
+        await using var db = CreateDbContext();
+        AddBook(db, "test-user", "O Estrangeiro", "Albert Camus", updatedAt: DateTime.UtcNow);
+        AddBook(db, "test-user", "14 Hábitos de Desenvolvedores Altamente Produtivos", "Zeno Rocha", updatedAt: DateTime.UtcNow.AddDays(-2));
+        AddBook(db, "test-user", "A Lei", "Frédéric Bastiat", updatedAt: DateTime.UtcNow.AddDays(-1));
+        await db.SaveChangesAsync();
+        var controller = CreateController(db: db);
+
+        var result = await controller.Library(CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Home/_SeeYourNotes.cshtml", partial.ViewName);
+        var model = Assert.IsType<NotesLibraryViewModel>(partial.Model);
+        Assert.Equal(
+            ["14 Hábitos de Desenvolvedores Altamente Produtivos", "A Lei", "O Estrangeiro"],
+            model.Books.Select(b => b.Title));
+    }
+
+    [Fact]
     public async Task LibrarySearch_Unauthenticated_ReturnsUnauthorized()
     {
         var controller = CreateController(authenticated: false);
@@ -246,7 +266,7 @@ public class NotesControllerTests
         return new TestDbContext(dbOptions);
     }
 
-    private static Book AddBook(AppDbContext db, string userId, string title, string author)
+    private static Book AddBook(AppDbContext db, string userId, string title, string author, DateTime? updatedAt = null)
     {
         var book = new Book
         {
@@ -256,7 +276,7 @@ public class NotesControllerTests
             Author = author,
             NormalizedTitle = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
             NormalizedAuthor = new string(author.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()),
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = updatedAt ?? DateTime.UtcNow
         };
         db.Books.Add(book);
         return book;

@@ -135,7 +135,7 @@ public class NotesController : Controller
                 NotesCount = x.Notes.Count,
                 UpdatedAt = x.UpdatedAt
             })
-            .OrderByDescending(x => x.UpdatedAt)
+            .OrderBy(x => x.Title)
             .ToListAsync(ct);
 
         return PartialView("~/Views/Home/_SeeYourNotes.cshtml", new NotesLibraryViewModel
