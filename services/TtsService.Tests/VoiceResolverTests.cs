@@ -12,7 +12,9 @@ public class VoiceResolverTests
             Languages = new Dictionary<string, VoiceDefaults>
             {
                 ["en"] = new VoiceDefaults { Female = "F3", Male = "M3" },
-                ["pt"] = new VoiceDefaults { Female = "F3", Male = "M3" }
+                ["pt"] = new VoiceDefaults { Female = "F3", Male = "M3" },
+                ["sv"] = new VoiceDefaults { Female = "F3", Male = "M3" },
+                ["es"] = new VoiceDefaults { Female = "F3", Male = "M3" }
             }
         }));
 
@@ -25,6 +27,14 @@ public class VoiceResolverTests
     [InlineData("pt-br", "F3")]
     [InlineData("pt_br", "F3")]
     [InlineData("portuguese", "F3")]
+    [InlineData("sv", "F3")]
+    [InlineData("sv-se", "F3")]
+    [InlineData("sv_se", "F3")]
+    [InlineData("swedish", "F3")]
+    [InlineData("es", "F3")]
+    [InlineData("es-es", "F3")]
+    [InlineData("es-419", "F3")]
+    [InlineData("spanish", "F3")]
     public void Resolve_Female_ReturnsFemaleVoice(string language, string expected)
     {
         var result = CreateResolver().Resolve(language, "female", null);
@@ -37,6 +47,12 @@ public class VoiceResolverTests
     [InlineData("pt", "M3")]
     [InlineData("pt-br", "M3")]
     [InlineData("portuguese", "M3")]
+    [InlineData("sv", "M3")]
+    [InlineData("sv-se", "M3")]
+    [InlineData("swedish", "M3")]
+    [InlineData("es", "M3")]
+    [InlineData("es-es", "M3")]
+    [InlineData("spanish", "M3")]
     public void Resolve_Male_ReturnsMaleVoice(string language, string expected)
     {
         var result = CreateResolver().Resolve(language, "male", null);
@@ -71,6 +87,13 @@ public class VoiceResolverTests
     [InlineData("en-us", "en")]
     [InlineData("en-gb", "en")]
     [InlineData("english", "en")]
+    [InlineData("sv-se", "sv")]
+    [InlineData("sv_se", "sv")]
+    [InlineData("swedish", "sv")]
+    [InlineData("es-es", "es")]
+    [InlineData("es-419", "es")]
+    [InlineData("es_419", "es")]
+    [InlineData("spanish", "es")]
     [InlineData("fr", "fr")]
     public void NormalizeLanguage_ReturnsExpected(string input, string expected)
     {

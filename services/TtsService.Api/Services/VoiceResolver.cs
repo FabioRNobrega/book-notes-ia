@@ -30,6 +30,8 @@ public sealed class VoiceResolver(IOptions<TtsDefaultsOptions> defaults)
         {
             "pt-br" or "pt_br" or "portuguese" => "pt",
             "en-us" or "en-gb" or "english" => "en",
+            "sv-se" or "sv_se" or "swedish" => "sv",
+            "es-es" or "es-419" or "es_419" or "spanish" => "es",
             var v => v
         };
 }
