@@ -47,12 +47,17 @@ jobs:
       - name: Restore
         run: dotnet restore book-notes-ia.sln
 
-      - name: Test
+      - name: Test WebApp
         run: dotnet test WebApp.Tests/WebApp.Tests.csproj --no-restore --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=minimal"
+
+      - name: Test TtsService
+        run: dotnet test services/TtsService.Tests/TtsService.Tests.csproj --no-restore --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=minimal"
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results
-          path: WebApp.Tests/TestResults/test-results.trx
+          path: |
+            WebApp.Tests/TestResults/test-results.trx
+            services/TtsService.Tests/TestResults/test-results.trx

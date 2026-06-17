@@ -1,8 +1,8 @@
 # Book Notes IA
 
-Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 9. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, and answers book questions through a local Ollama model.
+Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 9. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, answers book questions through a local Ollama model, and reads assistant responses aloud using a local Supertonic 3 TTS sidecar.
 
-The project is also a study project for modern .NET AI application patterns: Microsoft Agent Framework orchestration, native agent tools, `Microsoft.Extensions.AI`, local embeddings, PostgreSQL pgvector search, EF Core migrations, Docker-first development, and regression tests that run against a real Postgres container.
+The project is also a study project for modern .NET AI application patterns: Microsoft Agent Framework orchestration, native agent tools, `Microsoft.Extensions.AI`, local embeddings, PostgreSQL pgvector search, EF Core migrations, ONNX Runtime inference, Docker-first development, and regression tests that run against a real Postgres container.
 
 ## Stack
 
@@ -17,6 +17,7 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - ASP.NET Core Identity
 - HTMX + Hyperscript + Shoelace
 - Sass compilation with `AspNetCore.SassCompiler`
+- Supertonic 3 TTS via ONNX Runtime (local voice synthesis sidecar)
 - Docker Compose
 
 ## Current Services
@@ -24,11 +25,12 @@ The project is also a study project for modern .NET AI application patterns: Mic
 `docker compose` starts these services:
 
 - `webapp` on `http://localhost:8080`
+- `tts` on `http://localhost:5080` — Supertonic 3 voice synthesis sidecar
 - `ollama` on `http://localhost:11434`
 - `postgres` on port `5432`
 - `redis` on port `6379`
 
-The Ollama container pulls both `qwen3.5:4b` and `mxbai-embed-large`.
+The Ollama container pulls both `qwen3.5:4b` and `mxbai-embed-large`. The TTS sidecar mounts Supertonic 3 ONNX model assets from `services/TtsService.Api/assets/supertonic-3/` (not included in the repository — see Setup).
 
 ## Features
 
@@ -36,11 +38,14 @@ The Ollama container pulls both `qwen3.5:4b` and `mxbai-embed-large`.
 - Microsoft Agent Framework session orchestration
 - Native `GenerateBookContext` agent tool for book questions
 - User login and registration with ASP.NET Core Identity
-- Profile-driven assistant behavior
+- Profile-driven assistant behavior (preferred language, tone, goals)
 - Kindle clipping import into books and notes
 - Per-user semantic book lookup with PostgreSQL pgvector
 - Generated literary context saved on `Book.Context`
 - Redis-backed chat/session caching
+- Text-to-speech playback for every assistant response using a local Supertonic 3 voice model
+- Audio play/pause controls inline in each chat message; audio cached per message so page refresh keeps it
+- Assistant always responds in the user's preferred language regardless of the book's source language
 - Optional Unsplash home background image
 - Sass-based styling with generated CSS kept out of git
 
@@ -71,6 +76,13 @@ flowchart TD
     Import --> Books
     Import --> Notes[(BookNote)]
     Import --> BookEmbeddings[(BookEmbedding vector table)]
+
+    ChatController --> AudioService[ChatMessageAudioService]
+    AudioService --> TtsClient[TtsClient]
+    TtsClient --> TtsSidecar[TTS sidecar :5080]
+    TtsSidecar --> ONNXModels[Supertonic 3 ONNX models]
+    AudioService --> AudioStorage[(Audio files on disk)]
+    AudioService --> AudioDb[(ChatMessageAudio in Postgres)]
 
     ChatController --> Redis[(Redis session cache)]
     MVC --> Views[Razor views + HTMX partials]
@@ -153,11 +165,14 @@ book-notes-ia/
 │   ├── Data/                 # EF Core DbContext
 │   ├── Migrations/           # EF Core migrations
 │   ├── Models/               # Domain models
-│   ├── Services/             # AI, cache, import, context, embedding services
+│   ├── Services/             # AI, cache, import, context, embedding, TTS audio services
 │   ├── Styles/               # Sass source files
 │   ├── Views/                # MVC views and partials
 │   └── wwwroot/              # Static assets
 ├── WebApp.Tests/             # xUnit tests, including Docker-backed Postgres tests
+├── services/
+│   ├── TtsService.Api/       # Supertonic 3 TTS sidecar (ASP.NET Core, ONNX Runtime)
+│   └── TtsService.Tests/     # xUnit unit tests for the TTS service
 ├── docker-compose.yml
 ├── docker-compose.test.yml
 ├── Makefile
@@ -238,9 +253,11 @@ Run the full Docker-backed suite:
 make test
 ```
 
-The test compose file starts an isolated PostgreSQL pgvector service, restores the solution in an SDK container, and runs `WebApp.Tests`.
+The test compose file starts an isolated PostgreSQL pgvector service, restores the solution in an SDK container, and runs both `WebApp.Tests` and `TtsService.Tests`.
 
-The pgvector e2e tests create isolated test databases, apply EF migrations, reload Npgsql types, seed `Book` and `BookEmbedding` rows, and verify that vector lookup resolves the expected book and persists generated context.
+The `WebApp.Tests` pgvector e2e tests create isolated test databases, apply EF migrations, reload Npgsql types, seed `Book` and `BookEmbedding` rows, and verify that vector lookup resolves the expected book and persists generated context.
+
+The `TtsService.Tests` unit tests cover voice and language resolution logic in the TTS sidecar; they have no external dependencies and run in milliseconds.
 
 ## Configuration
 
@@ -261,6 +278,18 @@ Configured through connection strings:
 - `ConnectionStrings:Redis`
 
 At startup the app applies EF Core migrations automatically.
+
+### Text-to-Speech
+
+The TTS sidecar is configured in `docker-compose.yml` and `WebApp/appsettings.json`:
+
+- `Tts:BaseUrl` — URL of the TTS sidecar (default `http://tts:5080`)
+- `Tts:UsePlaceholder` — set to `true` to skip the ONNX models and return a placeholder tone (useful for testing without model assets)
+- `Supertonic:AssetsPath` — path inside the TTS container where Supertonic 3 ONNX model files are mounted
+
+The Supertonic 3 model assets must be placed at `services/TtsService.Api/assets/supertonic-3/` before running the stack. The assets directory is mounted read-only into the `tts` container.
+
+- `AudioStorage:BasePath` — filesystem path inside the `webapp` container where generated WAV files are stored (default `/audio-storage`)
 
 ### Unsplash
 
@@ -300,6 +329,37 @@ Verify the connection string matches `docker-compose.yml`.
 docker logs redis
 ```
 
+### TTS sidecar not generating audio
+
+Check that the Supertonic 3 ONNX model assets are present at `services/TtsService.Api/assets/supertonic-3/`:
+
+```bash
+ls services/TtsService.Api/assets/supertonic-3/
+```
+
+If the directory is empty or missing, the sidecar will log a startup warning and fall back to placeholder audio (a tone). Download or copy the model files into that directory and rebuild:
+
+```bash
+make docker-build
+make docker-run
+```
+
+Check TTS sidecar logs:
+
+```bash
+docker logs tts
+```
+
+### Audio unavailable in chat
+
+If the play button shows "Audio unavailable", the webapp failed to reach the TTS sidecar or the sidecar returned an error. Verify both containers are running:
+
+```bash
+docker ps
+docker logs tts
+docker logs webapp
+```
+
 ### Rebuild everything clean
 
 ```bash
@@ -319,6 +379,9 @@ This project is useful for studying a few connected implementation ideas:
 - Why user-owned data must always be filtered by `UserId`.
 - Why Npgsql needs pgvector type registration and type reload after migrations create the extension.
 - How Docker-backed tests catch integration bugs that in-memory EF tests cannot.
+- How to run ONNX Runtime inference pipelines in .NET for multi-stage TTS synthesis.
+- How to enforce LLM response language across tool results in multiple languages using system prompt structure.
+- How to cache generated audio per message so TTS does not run on every page load.
 
 ## Git Guidelines
 
