@@ -9,6 +9,7 @@
         ("en", "English"),
         ("pt-BR", "Português (Brasil)"),
         ("es", "Español"),
+        ("sv", "Svenska"),
     };
 
     var readingLanguages = new[] {
@@ -130,6 +131,18 @@
             </div>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="border border-white/10 px-4 py-3"
+                     style="border-radius: var(--book-radius); background-color: rgba(255,255,255,0.05);">
+                    <label class="mb-2 block font-title text-white/70">Voice preference</label>
+                    <sl-radio-group name="VoicePreference" value="@(Model?.VoicePreference ?? "female")">
+                        <div class="flex flex-wrap gap-3">
+                            <sl-radio value="female">Female</sl-radio>
+                            <sl-radio value="male">Male</sl-radio>
+                        </div>
+                    </sl-radio-group>
+                    <div class="mt-2 text-sm text-white/40">Voice used when listening to assistant responses.</div>
+                </div>
+
                 <div>
                     <sl-select name="TonePreference"
                                label="Tone"

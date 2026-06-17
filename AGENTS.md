@@ -33,16 +33,18 @@ BOOK-NOTES-IA is a local-first AI reading assistant built as an ASP.NET Core MVC
 - `Specs/` - mission, tech stack, roadmap, and feature spec folders.
 - `WebApp/` - ASP.NET Core MVC application.
 - `WebApp.Tests/` - xUnit test project for controllers and services.
-- `book-notes-ia.sln` - Visual Studio solution containing `WebApp` and `WebApp.Tests`.
-- `docker-compose.yml` - base local stack for web app, Ollama, PostgreSQL, and Redis.
+- `services/TtsService.Api/` - Supertonic 3 TTS microservice (ASP.NET Core, ONNX Runtime inference).
+- `services/TtsService.Tests/` - xUnit unit tests for the TTS service.
+- `book-notes-ia.sln` - Visual Studio solution containing `WebApp`, `WebApp.Tests`, `TtsService.Api`, and `TtsService.Tests`.
+- `docker-compose.yml` - base local stack for web app, Ollama, PostgreSQL, Redis, and TTS service.
 - `docker-compose.linux.yml` - Linux Ollama override with Vulkan/device mappings.
 - `docker-compose.mac.yml` - macOS Ollama override using `linux/arm64`.
 - `docker-compose.windows.yml` - Windows/NVIDIA Ollama override.
-- `docker-compose.test.yml` - containerized test runner.
+- `docker-compose.test.yml` - containerized test runner (runs `WebApp.Tests` then `TtsService.Tests`).
 
 ## Architecture Summary
 
-`WebApp` registers MVC, Identity, EF Core/Npgsql, pgvector support, Redis distributed cache, `IChatClient`, `IEmbeddingGenerator`, `AIAgent`, chat orchestration services, Kindle import, Unsplash, Ollama, embedding, and book context services in `Program.cs`. Authenticated controllers coordinate user flows: `NotesController` imports Kindle clippings and renders the notes library, `ChatController` runs the Microsoft Agent Framework session and registers the `GenerateBookContext` native tool, `BookContextController` exposes context API operations, and `UserProfileController` manages profile data. `AppDbContext` stores Identity records, user profiles, books, notes, and `BookEmbedding` vectors in PostgreSQL. Redis stores per-user Microsoft Agent Framework session/profile cache keys. Ollama serves `qwen3.5:4b` for chat and `mxbai-embed-large` for embeddings.
+`WebApp` registers MVC, Identity, EF Core/Npgsql, pgvector support, Redis distributed cache, `IChatClient`, `IEmbeddingGenerator`, `AIAgent`, chat orchestration services, Kindle import, Unsplash, Ollama, embedding, book context, and TTS audio services in `Program.cs`. Authenticated controllers coordinate user flows: `NotesController` imports Kindle clippings and renders the notes library, `ChatController` runs the Microsoft Agent Framework session and registers the `GenerateBookContext` native tool, `BookContextController` exposes context API operations, and `UserProfileController` manages profile data. `AppDbContext` stores Identity records, user profiles, books, notes, `BookEmbedding` vectors, and `ChatMessageAudio` records in PostgreSQL. Redis stores per-user Microsoft Agent Framework session/profile cache keys. Ollama serves `qwen3.5:4b` for chat and `mxbai-embed-large` for embeddings. The `tts` sidecar service (`services/TtsService.Api/`) synthesizes speech from assistant responses using Supertonic 3 ONNX models and is called by `ChatMessageAudioService` via `TtsClient`.
 
 ### Book Question Flow
 
@@ -193,7 +195,7 @@ Infrastructure:
 Testing:
 
 - `test` - alias for `docker-test`.
-- `docker-test` - run `dotnet restore` and `dotnet test` in the test container.
+- `docker-test` - run `dotnet restore` and `dotnet test` for both `WebApp.Tests` and `TtsService.Tests` in the test container.
 - `docker-test-build` - pull the test image.
 - `docker-test-shell` - open a shell in the test container.
 

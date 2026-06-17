@@ -423,6 +423,61 @@ namespace WebApp.Migrations
                     b.ToTable("book_note_embedding", (string)null);
                 });
 
+            modelBuilder.Entity("WebApp.Models.ChatMessageAudio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ByteLength")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("ChatMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double?>("DurationSeconds")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Voice")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChatMessageId");
+
+                    b.HasIndex("ChatMessageId", "Language", "Voice")
+                        .IsUnique();
+
+                    b.ToTable("chat_message_audio", (string)null);
+                });
+
             modelBuilder.Entity("WebApp.Models.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -540,6 +595,12 @@ namespace WebApp.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("VoicePreference")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasDefaultValue("female")
+                        .HasColumnType("character varying(10)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("UserId");
@@ -607,6 +668,17 @@ namespace WebApp.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WebApp.Models.ChatMessageAudio", b =>
+                {
+                    b.HasOne("WebApp.Models.ChatMessage", "ChatMessage")
+                        .WithMany()
+                        .HasForeignKey("ChatMessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ChatMessage");
                 });
 
             modelBuilder.Entity("WebApp.Models.BookEmbedding", b =>

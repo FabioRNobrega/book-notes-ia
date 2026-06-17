@@ -20,6 +20,8 @@ public class UserProfile
     public JsonDocument? LovedGenres { get; set; }
     public JsonDocument? DislikedGenres { get; set; }
 
+    public string VoicePreference { get; set; } = "female";
+
     public string? TonePreference { get; set; }
     public string? LearningGoals { get; set; }
     public string? FavoriteAuthors { get; set; }

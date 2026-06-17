@@ -21,14 +21,16 @@ public sealed class BookContextAgentTool(
                 if (match is null)
                     return $"Book '{bookTitle}' was not found in your library.";
 
-                if (!string.IsNullOrWhiteSpace(match.Context))
-                    return match.Context;
+                var context = !string.IsNullOrWhiteSpace(match.Context)
+                    ? match.Context
+                    : await bookContextService.GenerateAndSaveAsync(match.Id, userId, ct);
 
-                return await bookContextService.GenerateAndSaveAsync(match.Id, userId, ct);
+                return $"<book-context>\n{context}\n</book-context>";
             },
             name: "GenerateBookContext",
             description: "Retrieves or generates literary context for a book in the user's reading library. " +
                          "Call this when the user asks about a specific book that appears in their library list. " +
-                         "Returns a concise paragraph covering the author's background, historical setting, literary movement, and main themes.");
+                         "Returns a <book-context> block covering the author's background, historical setting, literary movement, and main themes. " +
+                         "The content may be in any language — translate it into the reader's preferred language before using it in your response.");
     }
 }

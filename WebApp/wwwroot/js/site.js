@@ -167,6 +167,133 @@
         window.setTimeout(() => document.getElementById("message")?.focus(), 0);
     });
 
+    // Shared audio instance — only one message plays at a time.
+    let currentAudio = null;
+    let currentObjectUrl = null;
+    let currentWidget = null;
+
+    function cleanupCurrentAudio() {
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio = null;
+        }
+        if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = null;
+        }
+    }
+
+    function setAudioState(widget, state) {
+        const tooltip = widget.querySelector(".tts-tooltip");
+        const btn = widget.querySelector(".tts-play-btn");
+        const loading = widget.querySelector(".tts-loading");
+        const error = widget.querySelector(".tts-error");
+
+        // Reset to idle defaults first.
+        if (tooltip) tooltip.style.display = "";
+        if (tooltip) tooltip.setAttribute("content", "Listen to this response");
+        if (btn) btn.setAttribute("name", "play-circle");
+        if (btn) btn.setAttribute("label", "Listen to this response");
+        if (loading) loading.style.display = "none";
+        if (error) error.style.display = "none";
+
+        if (state === "loading") {
+            if (tooltip) tooltip.style.display = "none";
+            if (loading) loading.style.display = "inline-flex";
+        } else if (state === "playing") {
+            if (btn) btn.setAttribute("name", "pause-circle");
+            if (btn) btn.setAttribute("label", "Pause");
+            if (tooltip) tooltip.setAttribute("content", "Pause");
+        } else if (state === "paused") {
+            if (btn) btn.setAttribute("label", "Resume");
+            if (tooltip) tooltip.setAttribute("content", "Resume");
+        } else if (state === "error") {
+            if (tooltip) tooltip.style.display = "none";
+            if (error) error.style.display = "inline-flex";
+        }
+        // "idle" is fully handled by the reset above.
+    }
+
+    async function handlePlayClick(widget) {
+        const messageId = widget.getAttribute("data-audio-message-id");
+        if (!messageId) return;
+
+        // Toggle play/pause if audio is already loaded for this widget.
+        if (currentWidget === widget && currentAudio) {
+            if (currentAudio.paused) {
+                try {
+                    await currentAudio.play();
+                    setAudioState(widget, "playing");
+                } catch {
+                    setAudioState(widget, "error");
+                    cleanupCurrentAudio();
+                    currentWidget = null;
+                }
+            } else {
+                currentAudio.pause();
+                setAudioState(widget, "paused");
+            }
+            return;
+        }
+
+        // Reset any previously active widget before starting a new one.
+        if (currentWidget && currentWidget !== widget) {
+            setAudioState(currentWidget, "idle");
+        }
+
+        cleanupCurrentAudio();
+        currentWidget = widget;
+        setAudioState(widget, "loading");
+
+        try {
+            const response = await fetch(`/chat/messages/${messageId}/audio`);
+
+            if (!response.ok) {
+                setAudioState(widget, "error");
+                currentWidget = null;
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            currentObjectUrl = url;
+
+            const audio = new Audio(url);
+            currentAudio = audio;
+
+            // Guard against stale closures: only act if this audio is still the active one.
+            audio.addEventListener("ended", () => {
+                if (currentAudio === audio) {
+                    setAudioState(widget, "idle");
+                    cleanupCurrentAudio();
+                    currentWidget = null;
+                }
+            });
+
+            audio.addEventListener("error", () => {
+                if (currentAudio === audio) {
+                    setAudioState(widget, "error");
+                    cleanupCurrentAudio();
+                    currentWidget = null;
+                }
+            });
+
+            await audio.play();
+            setAudioState(widget, "playing");
+        } catch {
+            setAudioState(widget, "error");
+            cleanupCurrentAudio();
+            currentWidget = null;
+        }
+    }
+
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest(".tts-play-btn");
+        if (!btn) return;
+        const widget = btn.closest(".tts-widget");
+        if (widget) void handlePlayClick(widget);
+    });
+
     window.BookNotesChat = {
         setMode
     };

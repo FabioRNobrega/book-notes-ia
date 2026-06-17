@@ -11,7 +11,7 @@ using WebApp.Services;
 
 namespace WebApp.Controllers;
 
-public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null);
+public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null, Guid? MessageId = null);
 
 [Authorize]
 public class ChatController : Controller
@@ -22,6 +22,7 @@ public class ChatController : Controller
     private readonly IBookNotesAgentTool _bookNotesTool;
     private readonly IBookNoteSearchAgentTool _bookNoteSearchTool;
     private readonly AppDbContext _db;
+    private readonly IChatMessageAudioService _audioService;
     private readonly ILogger<ChatController> _logger;
     private readonly int _numCtx;
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -35,6 +36,7 @@ public class ChatController : Controller
         IBookNotesAgentTool bookNotesTool,
         IBookNoteSearchAgentTool bookNoteSearchTool,
         AppDbContext db,
+        IChatMessageAudioService audioService,
         ILogger<ChatController> logger,
         IConfiguration configuration)
     {
@@ -44,6 +46,7 @@ public class ChatController : Controller
         _bookNotesTool = bookNotesTool;
         _bookNoteSearchTool = bookNoteSearchTool;
         _db = db;
+        _audioService = audioService;
         _logger = logger;
         _numCtx = configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
     }
@@ -68,7 +71,8 @@ public class ChatController : Controller
             .Select(x => new ChatEntry(
                 x.Role,
                 x.Role == "assistant" ? Markdown.ToHtml(x.Content, MarkdownPipeline) : x.Content,
-                x.ResponseTimeMs))
+                x.ResponseTimeMs,
+                x.Role == "assistant" ? x.Id : null))
             .ToList();
 
         return PartialView("Chat", history);
@@ -96,7 +100,8 @@ public class ChatController : Controller
             var userProfileJson = await _cache.GetAsync(userProfileKey, ct);
 
             var profileInstructions = BuildProfileInstructions(userProfileJson);
-            var orchestratorInstructions = BuildOrchestratorInstructions(profileInstructions);
+            var preferredLanguage = ExtractPreferredLanguage(userProfileJson);
+            var orchestratorInstructions = BuildOrchestratorInstructions(profileInstructions, preferredLanguage);
 
             IReadOnlyList<AITool> tools = [_bookContextTool.Create(userId), _bookNotesTool.Create(userId), _bookNoteSearchTool.Create(userId)];
 
@@ -115,6 +120,21 @@ public class ChatController : Controller
                 .MaxAsync(ct) ?? 0) + 1;
 
             var contextUsagePct = ComputeUsagePct(runResult.MaxPromptTokens);
+            var assistantMessage = new WebApp.Models.ChatMessage
+            {
+                UserId = userId,
+                SessionId = sessionId,
+                Role = "assistant",
+                Content = runResult.ResponseText,
+                DisplayOrder = nextDisplayOrder + 1,
+                TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
+                TotalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
+                LatestPromptTokens = runResult.LatestPromptTokens,
+                MaxPromptTokens = runResult.MaxPromptTokens,
+                ContextUsagePct = contextUsagePct,
+                ModelCallCount = runResult.ModelCallCount,
+                ResponseTimeMs = runResult.ElapsedMs
+            };
             _db.ChatMessages.AddRange(
                 new WebApp.Models.ChatMessage
                 {
@@ -124,21 +144,7 @@ public class ChatController : Controller
                     Content = message,
                     DisplayOrder = nextDisplayOrder
                 },
-                new WebApp.Models.ChatMessage
-                {
-                    UserId = userId,
-                    SessionId = sessionId,
-                    Role = "assistant",
-                    Content = runResult.ResponseText,
-                    DisplayOrder = nextDisplayOrder + 1,
-                    TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
-                    TotalOutputTokensGenerated = runResult.TotalOutputTokensGenerated,
-                    LatestPromptTokens = runResult.LatestPromptTokens,
-                    MaxPromptTokens = runResult.MaxPromptTokens,
-                    ContextUsagePct = contextUsagePct,
-                    ModelCallCount = runResult.ModelCallCount,
-                    ResponseTimeMs = runResult.ElapsedMs
-                });
+                assistantMessage);
             await _db.SaveChangesAsync(ct);
 
             await _cache.SetObjectAsync(
@@ -169,12 +175,34 @@ public class ChatController : Controller
                 orchestratorInstructions.Length + message.Length);
 
             var html = Markdown.ToHtml(runResult.ResponseText, MarkdownPipeline);
-            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs));
+            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs, assistantMessage.Id));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Chat send failed for user {UserId}", userId);
             return PartialView("_BotMessage", new BotMessageViewModel($"<p>Error: {ex.Message}</p>", 0));
+        }
+    }
+
+    [HttpGet("/chat/messages/{messageId:guid}/audio")]
+    public async Task<IActionResult> GetMessageAudio(Guid messageId, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        try
+        {
+            var result = await _audioService.GetOrCreateAudioAsync(userId, messageId, ct);
+            if (result is null)
+                return NotFound();
+
+            return File(result.Value.WavBytes, result.Value.ContentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Audio generation failed for message {MessageId}", messageId);
+            return StatusCode(500);
         }
     }
 
@@ -207,10 +235,22 @@ public class ChatController : Controller
             (true, "Chat session history has been deleted"));
     }
 
-    private static string BuildOrchestratorInstructions(string? profileInstructions)
+    private static string BuildOrchestratorInstructions(string? profileInstructions, string? preferredLanguage)
     {
-        var sections = new List<string>
-        {
+        var sections = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(preferredLanguage))
+            sections.Add($"""
+                LANGUAGE REQUIREMENT (mandatory, highest priority):
+                You must write your entire response in {preferredLanguage}. This rule overrides the language of any book title, stored context, highlights, or tool results.
+                - Write exclusively in {preferredLanguage}. Never mix languages in a single response.
+                - Tool results are source material — translate everything into {preferredLanguage} before incorporating it into your response.
+                - <book-context> blocks may be in any language: summarize and translate their content into {preferredLanguage}.
+                - <note> blocks may be in any language: translate them into {preferredLanguage} when quoting or explaining them.
+                - Do not reproduce source material in a different language unless the user explicitly asks for the original text.
+                """);
+
+        sections.Add(
             """
             You are the orchestrator for the Book Notes IA chat experience.
             When the user asks about any specific book or title, call the GenerateBookContext tool before answering.
@@ -218,16 +258,18 @@ public class ChatController : Controller
             When the user asks a focused question about a specific topic, theme, or idea within a book's notes (e.g. "what did I highlight about power in Dune?"), call GetRelevantBookNotes instead, passing the user's question as searchQuery.
             When the user asks for both literary context and personal notes for the same book, you may call both GenerateBookContext and GetBookNotesWithAnalysis and combine their results.
             Do not say a book is missing from the library unless GenerateBookContext returns a not found result.
-            The GenerateBookContext tool searches the authenticated user's full library, retrieves existing Book.Context when available, and generates and saves context when it is missing.
+            The GenerateBookContext tool returns a <book-context> block containing source material that may be in any language — translate it into the reader's preferred language before using it in your response.
             The GetBookNotesWithAnalysis tool retrieves the user's highlights for a book as <note>...</note> blocks. Reason over these notes yourself to produce a thematic answer — do not list the raw notes back unless the user explicitly asks to see them.
             The GetRelevantBookNotes tool performs semantic search over the user's highlights for a specific book and returns only the most relevant notes as <note loc="...">...</note> blocks. Use the loc attribute to cite the location when relevant.
             If context is missing relevant facts, be honest about that instead of inventing details.
             Prefer grounded answers that explicitly use the user's saved books and notes context when available.
-            """
-        };
+            """);
 
         if (!string.IsNullOrWhiteSpace(profileInstructions))
             sections.Add(profileInstructions);
+
+        if (!string.IsNullOrWhiteSpace(preferredLanguage))
+            sections.Add($"Reminder: Your response must be written entirely in {preferredLanguage}. Do not use any other language.");
 
         return string.Join($"{Environment.NewLine}{Environment.NewLine}", sections);
     }
@@ -281,6 +323,20 @@ public class ChatController : Controller
         {
             return null;
         }
+    }
+
+    private static string? ExtractPreferredLanguage(string? userProfileJson)
+    {
+        if (string.IsNullOrWhiteSpace(userProfileJson))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(userProfileJson);
+            return doc.RootElement.TryGetProperty("preferred_language", out var p) && p.ValueKind == JsonValueKind.String
+                ? p.GetString()
+                : null;
+        }
+        catch { return null; }
     }
 
     private async Task<Guid?> GetCurrentSessionIdAsync(string userId, CancellationToken ct)

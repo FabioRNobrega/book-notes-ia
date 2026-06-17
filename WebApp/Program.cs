@@ -133,6 +133,17 @@ builder.Services.AddScoped<IBookLookupService, BookLookupService>();
 builder.Services.AddScoped<IBookLibrarySearchService, BookLibrarySearchService>();
 builder.Services.AddScoped<ILibrarianBookSearchService, LibrarianBookSearchService>();
 
+// Register TTS client and audio storage
+builder.Services.Configure<WebApp.Services.AudioStorageOptions>(
+    builder.Configuration.GetSection("AudioStorage"));
+builder.Services.AddSingleton<WebApp.Services.IAudioStorage, WebApp.Services.FileSystemAudioStorage>();
+builder.Services.AddHttpClient<WebApp.Services.ITtsClient, WebApp.Services.TtsClient>(client =>
+{
+    var ttsBaseUrl = builder.Configuration["Tts:BaseUrl"] ?? "http://tts:5080";
+    client.BaseAddress = new Uri(ttsBaseUrl);
+});
+builder.Services.AddScoped<WebApp.Services.IChatMessageAudioService, WebApp.Services.ChatMessageAudioService>();
+
 var notesImportFileSizeLimit = builder.Configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
 builder.Services.Configure<FormOptions>(options =>
 {

@@ -34,7 +34,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "Leviathan Wakes by James S. A. Corey" },
             CancellationToken.None);
 
-        Assert.Equal("Generated Expanse context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated Expanse context.\n</book-context>", result?.ToString());
 
         var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
         Assert.Equal("Generated Expanse context.", savedBook.Context);
@@ -60,7 +60,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
             CancellationToken.None);
 
-        Assert.Equal("Generated PKD context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated PKD context.\n</book-context>", result?.ToString());
 
         var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
         Assert.Equal("Generated PKD context.", savedBook.Context);
@@ -88,7 +88,7 @@ public class AgentToolsPostgresTests
             new AIFunctionArguments { ["bookTitle"] = "post nuclear australian novel" },
             CancellationToken.None);
 
-        Assert.Equal("Generated On the Beach context.", result?.ToString());
+        Assert.Equal("<book-context>\nGenerated On the Beach context.\n</book-context>", result?.ToString());
 
         var duneAfterLookup = await db.Books.SingleAsync(b => b.Id == dune.Id);
         var beachAfterLookup = await db.Books.SingleAsync(b => b.Id == beach.Id);
@@ -480,7 +480,7 @@ public class AgentToolsPostgresTests
         IBookNoteSearchAgentTool? bookNoteSearchTool = null)
     {
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, NullLogger<ChatController>.Instance, configuration);
+        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, new FakeChatMessageAudioService(), NullLogger<ChatController>.Instance, configuration);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -732,5 +732,11 @@ public class AgentToolsPostgresTests
             _store[key] = System.Text.Json.JsonSerializer.Serialize(value);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FakeChatMessageAudioService : WebApp.Services.IChatMessageAudioService
+    {
+        public Task<(byte[] WavBytes, string ContentType)?> GetOrCreateAudioAsync(string userId, Guid messageId, CancellationToken ct = default)
+            => Task.FromResult<(byte[], string)?>(null);
     }
 }

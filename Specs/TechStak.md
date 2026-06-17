@@ -30,7 +30,10 @@
 | Markdown rendering | Markdig | `0.43.0` | Chat assistant responses are rendered to HTML with Markdig advanced extensions. | https://github.com/xoofx/markdig |
 | Sass compilation | AspNetCore.SassCompiler | `1.93.2` | `WebApp/appsettings.json` maps `Styles` to generated CSS under `wwwroot/css`. | https://github.com/koenvzeijl/AspNetCore.SassCompiler |
 | MVC scaffolding | Microsoft.VisualStudio.Web.CodeGeneration.Design | `9.0.0` | `GENERATE.md` documents controller/view scaffolding inside the Docker container. | https://learn.microsoft.com/aspnet/core/fundamentals/tools/dotnet-aspnet-codegenerator |
-| Unit testing | xUnit | `2.9.2` | `WebApp.Tests` uses `[Fact]` tests for controllers and services. | https://xunit.net/ |
+| TTS microservice | ASP.NET Core (minimal API) | `net9.0` | `services/TtsService.Api/` exposes `POST /tts` and synthesizes audio from assistant text using Supertonic 3 ONNX models. | https://learn.microsoft.com/aspnet/core/ |
+| ONNX inference | Microsoft.ML.OnnxRuntime | `1.22.0` | `SupertonicTtsService` runs duration predictor, text encoder, vector estimator, and vocoder ONNX sessions to produce WAV audio. | https://onnxruntime.ai/ |
+| Audio storage | `FileSystemAudioStorage` / `IAudioStorage` | — | Generated WAV bytes are stored on disk and served by `ChatController.GetMessageAudio`. `ChatMessageAudio` EF entity tracks per-message audio metadata. | — |
+| Unit testing | xUnit | `2.9.2` | `WebApp.Tests` and `TtsService.Tests` both use `[Fact]`/`[Theory]` tests; both projects run in CI. | https://xunit.net/ |
 | Test runner | xUnit runner for Visual Studio | `2.8.2` | Test project references the Visual Studio xUnit runner. | https://xunit.net/docs/getting-started/netcore/cmdline |
 | Test SDK | Microsoft.NET.Test.Sdk | `17.12.0` | Enables `dotnet test` in `docker-compose.test.yml`. | https://learn.microsoft.com/dotnet/core/testing/ |
 | Coverage collector | coverlet.collector | `6.0.2` | Present in the test project for coverage collection support. | https://github.com/coverlet-coverage/coverlet |
