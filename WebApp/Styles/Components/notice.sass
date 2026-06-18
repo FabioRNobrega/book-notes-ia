@@ -1,0 +1,21 @@
+@use '../variables'
+
+sl-alert::part(base)
+  background: var(--notice-bg)
+  border: 1px solid var(--notice-border)
+  border-left-width: 3px
+  border-radius: 4px
+  font-family: var(--font-family-base)
+  color: var(--notice-text)
+
+sl-alert[variant="success"]::part(base)
+  border-left-color: var(--sl-color-success-600)
+
+sl-alert[variant="danger"]::part(base)
+  border-left-color: var(--sl-color-danger-600)
+
+sl-alert::part(message)
+  color: var(--notice-muted)
+
+sl-alert::part(close-button__base)
+  color: var(--notice-muted)
