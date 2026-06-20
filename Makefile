@@ -16,7 +16,7 @@ MAC_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.mac.yml
 WINDOWS_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.windows.yml
 TEST_COMPOSE_FILES := -f docker-compose.test.yml
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -74,6 +74,15 @@ ollama-logs-mac:
 
 ollama-logs-windows:
 	$(COMPOSE) $(WINDOWS_COMPOSE_FILES) logs -f ollama
+
+# Bundle Presentation/index.html + styles.css + charts.js + presentation.js + assets/*.png
+# into one self-contained Presentation/dist/presentation.html (CDN libs stay external).
+# Runs entirely in a throwaway Node container — no local Node/npm required — and
+# everything build-related (build.js, package.json) lives under Presentation/ itself.
+# Source files under Presentation/ are left untouched.
+presentation-bundle:
+	docker run --rm -v "$(CURDIR)/Presentation:/work" -w /work node:22-alpine \
+		sh -c "npm install --no-fund --no-audit && node build.js"
 
 # Send a direct HTTP request to the TTS service and save the response as a WAV file.
 # The TTS container must be running (make docker-run).

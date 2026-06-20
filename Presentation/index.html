@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Local AI Agents Are Powerful, But Not Reliable by Default</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Shoelace (dark theme, pinned to match the WebApp) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19.1/cdn/themes/dark.css" />
+<script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.0/cdn/shoelace-autoloader.js"></script>
+
+<!-- Tailwind (utility classes only; visual tokens come from styles.css) -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<!-- Diagrams & charts -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body class="sl-theme-dark">
+
+<div id="topbar">
+  <span class="brand">Book Notes IA &middot; Local Agents</span>
+  <span class="counter" id="slide-counter">00 / 14</span>
+</div>
+<div id="progress-track"><div id="progress-bar"></div></div>
+
+<div id="deck-viewport">
+  <div id="deck">
+
+    <!-- 0. Cover -->
+    <section class="slide" style="justify-content:space-between">
+      <div class="slide-inner text-center" style="flex:1; display:flex; flex-direction:column; justify-content:center">
+        <h1 class="slide-title" style="font-size:clamp(2.2rem, 4.4vw, 3.8rem)">Local AI Agents Are Powerful,<br/>But Not Reliable by Default</h1>
+      </div>
+      <p class="byline mx-auto">Fabio R. Nobrega</p>
+    </section>
+
+    <!-- 1. Opening / Problem -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">01 &middot; The problem</div>
+        <h1 class="slide-title">Local AI Agents Are Powerful,<br/>But Not Reliable by Default</h1>
+        <p class="slide-subtitle">Qwen, Llama, Gemma, Mistral, Phi &mdash; run any of these locally and the gap to a hosted
+          frontier model is obvious within a few prompts. It's tempting to blame the model. Usually that's not the real problem.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
+          <div class="card card-bad">
+            <div class="tag">Weak answer</div>
+            <p class="mt-2 text-[0.95rem]" style="color:var(--text-muted)">A small local model asked a specific question about
+              your data answers in generalities, or confidently makes something up.</p>
+          </div>
+          <div class="card card-accent">
+            <div class="tag">Real cause</div>
+            <p class="mt-2 text-[0.95rem]" style="color:var(--text-muted)">The model was never wrong about what it knows &mdash;
+              it simply never had your private, contextual data in front of it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Personal Project Motivation -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">02 &middot; Why this project exists</div>
+        <h1 class="slide-title">From Passive Highlights<br/>to Active Knowledge</h1>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
+          <div class="card"><div class="tag">Step 1</div><p class="mt-2">I read a lot of books.</p></div>
+          <div class="card"><div class="tag">Step 2</div><p class="mt-2">I highlight constantly on Kindle.</p></div>
+          <div class="card card-bad"><div class="tag">Step 3</div><p class="mt-2">I almost never go back and re-read those highlights.</p></div>
+          <div class="card card-good"><div class="tag">Goal</div><p class="mt-2">Turn passive clippings into something I can actually <em>ask</em>.</p></div>
+        </div>
+        <p class="mt-8 text-[1.05rem]" style="color:var(--text-muted); max-width:42rem">Book Notes IA started from one
+          annoyance: a Kindle <code class="code-panel" style="display:inline;padding:0.05rem 0.4rem">.txt</code> clippings file
+          full of highlights I'd never open again.</p>
+      </div>
+    </section>
+
+    <!-- 3. Project Goal -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">03 &middot; Project goal</div>
+        <h1 class="slide-title">A Local Agent That Answers<br/>From My Own Library</h1>
+        <p class="slide-subtitle">Four non-negotiable constraints shaped every decision in the stack.</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div class="card card-accent"><div class="tag">No cloud API</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Everything runs against a local Ollama instance.</p></div>
+          <div class="card card-accent"><div class="tag">No paid service</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Chat, embeddings, and TTS are all self-hosted.</p></div>
+          <div class="card card-accent"><div class="tag">Local-first</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Postgres + Redis + Ollama, all in Docker Compose.</p></div>
+          <div class="card card-accent"><div class="tag">Privacy by design</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Every row &mdash; books, notes, vectors &mdash; is scoped to <code>UserId</code>.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Project Stack -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">04 &middot; The stack</div>
+        <h1 class="slide-title">The Stack, Layer by Layer</h1>
+        <p class="slide-subtitle">Five layers, all self-hosted. No managed AI API, no external session
+          store, no cloud database.</p>
+
+        <div class="stack">
+          <div class="stack-layer" style="animation-delay:.05s">
+            <span class="layer-label">Client</span>
+            <div class="stack-chips">
+              <span class="stack-chip">Browser</span>
+              <span class="stack-chip">HTMX</span>
+              <span class="stack-chip">Hyperscript</span>
+              <span class="stack-chip">Shoelace UI</span>
+            </div>
+          </div>
+          <div class="stack-connector">&#9662;</div>
+
+          <div class="stack-layer" style="animation-delay:.1s">
+            <span class="layer-label">Web app &middot; .NET 9</span>
+            <div class="stack-chips">
+              <span class="stack-chip">ASP.NET Core MVC</span>
+              <span class="stack-chip">ASP.NET Core Identity (auth &amp; authz)</span>
+              <span class="stack-chip">Razor views</span>
+            </div>
+          </div>
+          <div class="stack-connector">&#9662;</div>
+
+          <div class="stack-layer" style="animation-delay:.15s">
+            <span class="layer-label">AI orchestration</span>
+            <div class="stack-chips">
+              <span class="stack-chip">Microsoft Agent Framework</span>
+              <span class="stack-chip">Microsoft.Extensions.AI</span>
+              <span class="stack-chip">Native AIFunction tools</span>
+            </div>
+          </div>
+          <div class="stack-connector">&#9662;</div>
+
+          <div class="stack-layer" style="animation-delay:.2s">
+            <span class="layer-label">Local inference</span>
+            <div class="stack-chips">
+              <span class="stack-chip">Ollama &middot; qwen3.5:4b (chat)</span>
+              <span class="stack-chip">Ollama &middot; mxbai-embed-large (embeddings)</span>
+              <span class="stack-chip muted">Supertonic 3 TTS &middot; ONNX Runtime</span>
+            </div>
+          </div>
+          <div class="stack-connector">&#9662;</div>
+
+          <div class="stack-layer" style="animation-delay:.25s">
+            <span class="layer-label">Data &amp; cache</span>
+            <div class="stack-chips">
+              <span class="stack-chip">PostgreSQL + pgvector</span>
+              <span class="stack-chip">Redis (sessions, profile, context cache)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Embedding and Vector Explanation -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">05 &middot; The core idea</div>
+        <h1 class="slide-title">Embeddings: Coordinates of Meaning</h1>
+        <p class="slide-subtitle">Every highlight becomes a point in a high-dimensional space. This is the actual
+          shape of a row the app stores &mdash; then what it looks like to ask pgvector "which point is closest?"</p>
+
+        <div class="code-panel" style="overflow-x:auto">
+          <div class="muted mb-2">book_embedding &middot; one row</div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.74rem; white-space:nowrap">
+            <thead>
+              <tr style="text-align:left">
+                <th class="accent" style="padding:0.25rem 0.7rem 0.25rem 0">Id</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">UserId</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">BookId</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">Title</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">Author</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">Embedding &middot; vector(1024)</th>
+                <th class="accent" style="padding:0.25rem 0.7rem">CreatedAt</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="muted">
+                <td style="padding:0.25rem 0.7rem 0.25rem 0">eae8f695-efc9&hellip;</td>
+                <td style="padding:0.25rem 0.7rem">9cda080c-aeb3&hellip;</td>
+                <td style="padding:0.25rem 0.7rem">20ef38ba-124d&hellip;</td>
+                <td style="padding:0.25rem 0.7rem; color:var(--text-body)">Jennifer Government</td>
+                <td style="padding:0.25rem 0.7rem; color:var(--text-body)">Max Barry</td>
+                <td class="accent" style="padding:0.25rem 0.7rem">[0.012362, -0.019409, 0.014316, -0.006252, -0.006622, &hellip;]</td>
+                <td style="padding:0.25rem 0.7rem">2026-06-07 00:33:35</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="chart-box" style="height:330px; margin-top:1.1rem" id="chart-vectorspace" data-echarts></div>
+        <p class="mt-3 text-xs" style="color:var(--text-muted)">A simplified 2D projection of real 1024-dimension vectors.
+          The red arrow is the literal meaning of "vector" &mdash; direction and magnitude from the origin. The dashed
+          lines are what <code style="font-family:var(--font-mono)">BookNoteSearchService</code> actually
+          does: embed the question, then ask pgvector's <code style="font-family:var(--font-mono)">&lt;=&gt;</code>
+          cosine operator for the closest highlights.</p>
+      </div>
+    </section>
+
+    <!-- 6. RAG Flow -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">06 &middot; Retrieval-augmented generation</div>
+        <h1 class="slide-title">The Full RAG Flow</h1>
+        <p class="slide-subtitle">Every chat turn that needs a highlight repeats these seven steps &mdash; two
+          different local models do two very different jobs, and this exact path never leaves the machine.</p>
+        <div class="diagram-box">
+          <pre class="mermaid">
+flowchart LR
+    A["User question"] --> B["Generate question<br/>embedding<br/>(mxbai-embed-large)"]
+    B --> C["Search pgvector"]
+    C --> D["Retrieve relevant<br/>highlights"]
+    D --> E["Build prompt<br/>context"]
+    E --> F["Count tokens"]
+    F --> G["Send to local LLM<br/>via Ollama<br/>(qwen3.5:4b)"]
+    G --> H["Return grounded<br/>answer"]
+          </pre>
+        </div>
+        <div class="card card-accent mt-4">
+          <div class="tag">Important nuance</div>
+          <p class="mt-2 text-sm" style="color:var(--text-muted)"><code style="font-family:var(--font-mono)">mxbai-embed-large</code>
+            is a <strong>general-purpose embedding model</strong> &mdash; trained on broad web text, not fine-tuned on
+            books, highlights, or this app's data. It's a word/meaning-similarity finder: good at "these two sentences
+            are about the same thing," not at literary understanding. Step B only narrows down <em>which</em> highlights
+            are worth reading; step G's chat model (<code style="font-family:var(--font-mono)">qwen3.5:4b</code>) still
+            does all of the actual reasoning over them.</p>
+        </div>
+        <p class="mt-3 text-sm" style="color:var(--text-muted)">This specific flow never calls out to the internet
+          &mdash; embedding, search, prompt assembly, and generation all happen on the local stack.</p>
+
+        <div class="card card-bad mt-4">
+          <div class="tag">One real exception, elsewhere</div>
+          <p class="mt-2 text-sm" style="color:var(--text-muted)">A separate tool, <code style="font-family:var(--font-mono)">GenerateBookContext</code>,
+            does leave the machine: <code style="font-family:var(--font-mono)">BookContextService</code> calls
+            <code style="font-family:var(--font-mono)">OpenLibraryService</code>, which makes two real HTTPS requests
+            to <code style="font-family:var(--font-mono)">openlibrary.org</code> for a book's synopsis. It's not a
+            cloud AI API &mdash; just a free, unauthenticated metadata lookup &mdash; and it's cached on
+            <code style="font-family:var(--font-mono)">Book.Synopsis</code>, so it runs once per book, ever, not on
+            every turn. Everything downstream of it (prompt building, generation) is still local.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Response Comparison -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">07 &middot; What actually happened, no retrieval</div>
+        <h1 class="slide-title">Four Real Attempts, Zero Retrieval</h1>
+        <p class="slide-subtitle">Same local model, asked directly &mdash; no embeddings, no pgvector. The outcome
+          depended entirely on whether the title happened to be in the model's training memory.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="card card-bad">
+            <span class="prompt-line">&gt;&gt;&gt; Talk about the book Jennifer Government</span>
+            <div class="tag mt-2">Failed &middot; safety paranoia</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Never answered. Treated "Government" as a political
+              red flag, suspected a jailbreak attempt, and spiraled into checking Chinese political sensitivity &mdash;
+              for a Western satirical novel.</p>
+            <div class="quote">"This is a common technique to bypass content filters or to explore a topic under a different guise."</div>
+          </div>
+
+          <div class="card card-bad">
+            <span class="prompt-line">&gt;&gt;&gt; ...written by Max Berry</span>
+            <div class="tag mt-2">Failed &middot; infinite loop</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Adding the author didn't help. It cross-checked
+              invented near-misses in a repeating self-correction loop, then was cut off mid-thought without ever answering.</p>
+            <div class="quote">"Wait, is it possible the user is referring to 'The Government of Jennifer'?"</div>
+          </div>
+
+          <div class="card card-bad">
+            <span class="prompt-line">&gt;&gt;&gt; The World Jones Made, by Philip K. Dick</span>
+            <div class="tag mt-2">Failed &middot; same loop pattern</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">A different, less-famous PKD novel hits the
+              identical failure mode. This isn't about one title &mdash; it's about anything outside the model's
+              confident training memory.</p>
+          </div>
+        </div>
+
+        <div class="card card-good mt-4">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <span class="prompt-line">&gt;&gt;&gt; Do Androids Dream of Electric Sheep?, by PKD</span>
+            <div class="tag">Succeeded &middot; after ~5 minutes</div>
+          </div>
+          <p class="mt-3 text-sm" style="color:var(--text-muted)"><em>Do Androids Dream of Electric Sheep?</em> by
+            Philip K. Dick was published in 1968. The novel follows a bounty hunter named Rick Deckard whose job is to
+            dispose of rogue androids. Unlike humans, androids are often called replicants.</p>
+          <p class="mt-2 text-sm" style="color:var(--text-muted)">The book centers on the concept of empathy and what
+            it means to be human. Deckard uses a "mirror" to measure this feeling. As he investigates a murder, he
+            realizes he begins to lose his humanity. He struggles to distinguish between a machine and a human being.
+            The story is set in a near-future, desolate world where animals are scarce.</p>
+          <p class="mt-2 text-sm" style="color:var(--text-muted)">Dick wrote it as a philosophical exploration rather
+            than a simple action story. It questions whether machines can feel more than their creators. The ending
+            leaves the nature of the protagonist and the reality of the events open for the reader to decide. The book
+            remains a standalone work that focuses on the psychological depth of its themes.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Same Question, After Grounding -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">08 &middot; Grounded with retrieval</div>
+        <h1 class="slide-title">Same Book, Now It Just Answers</h1>
+        <p class="slide-subtitle">Wire in embedding-based title lookup, the <code style="font-family:var(--font-mono)">GenerateBookContext</code>
+          tool, and a real Open Library synopsis &mdash; and the same question that previously broke down resolves
+          immediately, no author hint needed.</p>
+
+        <div class="card card-good">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <span class="prompt-line">&gt;&gt;&gt; Talk about the book Jennifer Government</span>
+            <div class="tag">Succeeded &middot; ~30 seconds</div>
+          </div>
+          <p class="mt-3 text-sm" style="color:var(--text-muted)">In <em>Jennifer Government</em>, Max Barry paints a
+            dystopian vision of a future where the United States has been entirely privatized, reflecting the
+            anxieties of the post-9/11 era. The novel explores themes of surveillance, the erosion of civil liberties,
+            and the rise of corporate power over essential services. Set in a world where the line between public and
+            private spheres has blurred, the story follows a man caught in a murder case within this oppressive
+            landscape, offering a cautionary tale about the consequences of unchecked corporate expansion.</p>
+          <p class="mt-2 text-sm" style="color:var(--text-muted)">The book is deeply rooted in the speculative fiction
+            and cyberpunk movements, capturing the cultural zeitgeist of the early 21st century. It serves as a
+            critique of deregulation and the privatization of essential services, highlighting the fragility of
+            democracy in the face of unchecked corporate power.</p>
+        </div>
+
+        <p class="title-quote mt-3 mx-auto text-center">No political-risk spiral this time &mdash; with a real synopsis already in the
+          prompt, the model never treated "Government" as a red flag to investigate. ~30 seconds, start to finish,
+          versus the open-ended loop (and the unprompted detour into Chinese political sensitivity) seen without retrieval.</p>
+
+        <p class="mt-5 text-sm" style="color:var(--text-muted)">The actual decision logic behind that answer
+          &mdash; straight out of <code style="font-family:var(--font-mono)">BookContextAgentTool</code> and
+          <code style="font-family:var(--font-mono)">BookContextService</code>:</p>
+        <div class="tag mt-2">GenerateBookContext &middot; "tell me about this book"</div>
+        <div class="diagram-box mt-2">
+          <pre class="mermaid">
+flowchart LR
+    Q["1. User asks<br/>about a book"] --> F["2. Find the book<br/>BookLookupService"]
+    F --> C{"3. Has cached<br/>Book.Context?"}
+    C -->|"3.1 yes"| USE["Use cached<br/>context"]
+    C -->|"3.2 no"| S{"Has cached<br/>Book.Synopsis?"}
+    S -->|no| O["Fetch synopsis<br/>OpenLibraryService"]
+    O --> CACHE1["Cache on<br/>Book.Synopsis"]
+    S -->|yes| BUILD["Build prompt<br/>title + author + synopsis"]
+    CACHE1 --> BUILD
+    BUILD --> GEN["Generate context<br/>local LLM &middot; qwen3.5:4b"]
+    GEN --> CACHE2["Cache on<br/>Book.Context"]
+    CACHE2 --> USE
+    USE --> ANS["4. Final<br/>grounded answer"]
+          </pre>
+        </div>
+
+        <p class="mt-5 text-sm" style="color:var(--text-muted)">A different question gets a different tool &mdash;
+          asking about a specific highlight or theme goes through
+          <code style="font-family:var(--font-mono)">BookNoteSearchAgentTool</code> and
+          <code style="font-family:var(--font-mono)">BookNoteSearchService</code> instead:</p>
+        <div class="tag mt-2">GetRelevantBookNotes &middot; "what does it say about X"</div>
+        <div class="diagram-box mt-2">
+          <pre class="mermaid">
+flowchart LR
+    Q2["1. User asks about<br/>a topic in their highlights"] --> F2["2. Find the book<br/>BookLookupService"]
+    F2 --> E2["3. Embed the question<br/>mxbai-embed-large"]
+    E2 --> SIM2["4. Cosine search<br/>book_note_embedding"]
+    SIM2 --> TOPK["5. Top-K highlights<br/>BookNotes:TopKRelevantNotes"]
+    TOPK --> NOTES["6. Return as<br/>&lt;note&gt; blocks"]
+    NOTES --> ANS2["7. Final<br/>grounded answer"]
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Context Window Problem -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">09 &middot; The constraint</div>
+        <h1 class="slide-title">The Context Window Problem</h1>
+        <p class="slide-subtitle">This stack runs <code style="font-family:var(--font-mono)">qwen3.5:4b</code> with
+          <code style="font-family:var(--font-mono)">Ollama:NumCtx = 8192</code> tokens. That budget has to hold the system
+          prompt, the conversation, the question, and any retrieved context &mdash; for every single turn.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
+          <div class="card card-bad"><div class="tag">Can't do</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Dump every book and every highlight into the prompt and hope the model finds the right one.</p></div>
+          <div class="card card-accent"><div class="tag">Must do</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Rank candidates by relevance first, then send only what fits the remaining budget.</p></div>
+          <div class="card"><div class="tag">Already configurable</div><p class="mt-2 text-sm" style="color:var(--text-muted)"><code style="font-family:var(--font-mono)">BookNotes:TopKRelevantNotes</code> (default 20) and <code style="font-family:var(--font-mono)">BookNotes:MaxAnalysisNotes</code> (default 50) exist precisely to cap this.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. Token Counting & Tradeoff -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">10 &middot; Measuring &amp; spending the budget</div>
+        <h1 class="slide-title">Token Counting Keeps the Window Honest</h1>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="code-panel">
+            <span class="muted">// TokenAccumulator, observed per turn</span><br/>
+            TotalInputTokensProcessed<br/>
+            TotalOutputTokensGenerated<br/>
+            <span class="accent">MaxPromptTokens</span> &larr; the one that matters<br/>
+            ModelCallCount<br/>
+            <br/>
+            <span class="muted">// the number shown in the UI ring</span><br/>
+            ContextUsagePct = <span class="accent">MaxPromptTokens</span> * 100 / NumCtx
+          </div>
+          <div>
+            <p class="text-sm mb-3" style="color:var(--text-muted)">A single turn can trigger several internal model calls
+              (reasoning, tool call, final answer). Summing them overstates pressure &mdash; so the app tracks the
+              <strong>largest single prompt</strong>, not the sum, and renders it as a Shoelace progress ring next to the
+              chat input.</p>
+            <p class="text-sm" style="color:var(--text-muted)">The same signal generalizes into a budgeting pattern: reserve
+              tokens for the system prompt and the question, reserve tokens for the answer, and spend whatever is left on
+              retrieved context.</p>
+          </div>
+        </div>
+
+        <p class="slide-subtitle mt-5">More retrieved context generally improves grounding. It also costs latency.
+          Summarizing retrieved context can shrink it back down, at the price of an extra processing step.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="chart-box" id="chart-reliability" data-echarts></div>
+          <div class="chart-box" id="chart-latency" data-echarts></div>
+        </div>
+        <p class="mt-3 text-xs" style="color:var(--text-muted)">Illustrative figures. Summarization is a deliberate next
+          step in this project &mdash; it is named and explicitly deferred in the context-token-awareness and
+          context-pressure-metrics specs, not yet wired into the running app.</p>
+      </div>
+    </section>
+
+    <!-- 11. Takeaways -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">11 &middot; Takeaways</div>
+        <h1 class="slide-title">Reliability Is Architecture, Not a Model Setting</h1>
+        <p class="slide-subtitle">A local model is not unreliable because it's local. It's unreliable when nothing around
+          it does the work of finding, sizing, and budgeting the right context.</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div class="card">
+            <div class="tag">Embeddings</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Turn meaning into coordinates pgvector can search.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Retrieval</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Find the highlights that actually matter to this question.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Vector database</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">pgvector keeps the search inside Postgres, not a separate service.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Context selection</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Cap what gets sent &mdash; TopK and MaxAnalysisNotes exist for this.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Token counting</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Know how full the context window is before Ollama does.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Summarization</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Shrink retrieved context further when the token budget gets tight (next step).</p>
+          </div>
+          <div class="card">
+            <div class="tag">Prompt construction</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Assemble system, profile, and retrieved context into one grounded prompt.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Real-world grounding</div>
+            <p class="mt-2 text-xs" style="color:var(--text-muted)">Open Library's free API supplies a real synopsis the model can't hallucinate.</p>
+          </div>
+        </div>
+
+        <p class="title-quote mt-5 mx-auto text-center">All of the above, together &mdash; no single piece makes a
+          local agent reliable. The grounded answer shown earlier is what that combination looks like in practice.</p>
+      </div>
+    </section>
+
+    <!-- 12. Hardware Bottleneck -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">12 &middot; What's left</div>
+        <h1 class="slide-title">The Next Bottleneck Is Hardware</h1>
+        <p class="slide-subtitle">Once the architecture is sound, the ceiling moves to the machine running it.</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
+          <div class="card card-accent">
+            <div class="tag">Today</div>
+            <p class="mt-2 text-sm" style="color:var(--text-muted)">A 4B chat model and an 8K context window are
+              deliberate choices &mdash; they fit on consumer GPUs (this stack passes through
+              <code style="font-family:var(--font-mono)">/dev/dri</code> and
+              <code style="font-family:var(--font-mono)">/dev/kfd</code> with
+              <code style="font-family:var(--font-mono)">OLLAMA_VULKAN=1</code>).</p>
+            <div class="code-panel mt-2" style="font-size:0.7rem">
+              <span class="accent">This machine</span> &middot; Radeon 680M-class iGPU &middot; ~30 GiB unified RAM
+              (512 MiB VRAM + ~15.3 GiB GTT)
+            </div>
+          </div>
+          <div class="card card-bad"><div class="tag">The limit</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Bigger models and longer context windows need more VRAM and memory bandwidth than most local machines have.</p></div>
+          <div class="card"><div class="tag">Watching</div><p class="mt-2 text-sm" style="color:var(--text-muted)">Local-AI-focused hardware &mdash; AMD's Ryzen AI platforms, NVIDIA's DGX Spark-class boxes &mdash; points at where this ceiling moves next. Early days; worth watching, not betting on yet.</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div class="card">
+            <div class="tag">AMD Ryzen AI Max+ 395</div>
+            <div class="chip-photo-frame mt-3">
+              <img src="assets/amd.png" alt="AMD Ryzen AI chip" />
+            </div>
+            <ul class="spec-list mt-3">
+              <li><span class="spec-k">Unified memory</span><span class="spec-v">128 GB LPDDR5x</span></li>
+              <li><span class="spec-k">GPU-addressable</span><span class="spec-v">~96 GB (Win) / ~120 GB (Linux)</span></li>
+              <li><span class="spec-k">Compute</span><span class="spec-v">RDNA 3.5 iGPU + 50 TOPS NPU</span></li>
+              <li><span class="spec-k">Fits comfortably</span><span class="spec-v">~70B, quantized</span></li>
+              <li><span class="spec-k">Platform</span><span class="spec-v">Mini-PCs &amp; laptops</span></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="tag">NVIDIA DGX Spark</div>
+            <div class="chip-photo-frame mt-3">
+              <img src="assets/nvidea.png" alt="NVIDIA GB10 chip" />
+            </div>
+            <ul class="spec-list green mt-3">
+              <li><span class="spec-k">Unified memory</span><span class="spec-v">128 GB LPDDR5x</span></li>
+              <li><span class="spec-k">GPU-addressable</span><span class="spec-v">full 128 GB, no carve-out</span></li>
+              <li><span class="spec-k">Compute</span><span class="spec-v">Blackwell &middot; 1 PFLOP (FP4)</span></li>
+              <li><span class="spec-k">Fits comfortably</span><span class="spec-v">up to 200B, inference</span></li>
+              <li><span class="spec-k">Platform</span><span class="spec-v">Dedicated desktop appliance</span></li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <div class="tag">What to watch</div>
+            <div class="watch-icon mt-3">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <p class="mt-3 text-xs" style="color:var(--text-muted)">AMD's Max+ chips bring a large shared memory pool to ordinary mini-PCs and laptops.</p>
+            <div class="watch-divider"></div>
+            <p class="text-xs" style="color:var(--text-muted)">NVIDIA's DGX Spark commits an entire dedicated box to the same idea, at a larger scale.</p>
+            <div class="watch-divider"></div>
+            <p class="text-xs" style="color:var(--text-muted)">Both point toward more private, on-device AI workflows.</p>
+            <div class="watch-divider"></div>
+            <div class="cta-callout">
+              <p class="cta-callout-text">Curious what VRAM a given model size actually needs on your own hardware?</p>
+              <a href="https://llmhardware.io/vram-calculator" target="_blank" rel="noopener noreferrer" class="card-link-btn glow-pulse mt-3" style="width:100%">
+                Try the VRAM calculator
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <p class="title-quote mt-4 mx-auto text-center">An LLM's weights and its growing KV cache (the per-token
+          memory cost of context) both have to fit in GPU-addressable memory at once. Run out, and the model either
+          won't load, or spills into far slower system memory. That's the entire reason both of these platforms are
+          built around one giant shared memory pool instead of a small, separate VRAM chip.</p>
+
+        <div class="chart-box" style="height:280px; margin-top:1rem" id="chart-vram-devices" data-echarts></div>
+        <p class="mt-2 text-xs" style="color:var(--text-muted)">GPU-addressable memory across this machine, two
+          current discrete gaming GPUs, and the three unified-memory platforms above. The Legion Go S figure is this
+          device's own measured split (512 MiB fixed VRAM + ~15.3 GiB GTT). Model-size figures are an illustrative
+          Q4-quantization rule of thumb, not a benchmark.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-4">
+          <div style="height:340px" id="chart-model-sizes" data-echarts></div>
+          <div class="code-panel" style="font-size:0.8rem">
+            <div class="muted mb-2">qwen3.5 family &middot; on-disk size (Ollama)</div>
+            <ul class="spec-list">
+              <li><span class="spec-k">qwen3.5:122b</span><span class="spec-v">81 GB</span></li>
+              <li><span class="spec-k">qwen3.5:35b</span><span class="spec-v">24 GB</span></li>
+              <li><span class="spec-k">qwen3.5:27b</span><span class="spec-v">17 GB</span></li>
+              <li><span class="spec-k">qwen3.5:9b</span><span class="spec-v">6.6 GB</span></li>
+              <li style="background:rgba(240,197,182,0.14); border-radius:4px; padding:0.35rem 0.5rem; margin:0 -0.5rem;">
+                <span class="spec-k" style="color:var(--primary-200); font-weight:700">qwen3.5:4b &larr; this app</span>
+                <span class="spec-v" style="color:var(--primary-200); font-weight:700">3.4 GB</span>
+              </li>
+              <li><span class="spec-k">qwen3.5:2b</span><span class="spec-v">2.7 GB</span></li>
+              <li><span class="spec-k">qwen3.5:0.8b</span><span class="spec-v">1.0 GB</span></li>
+            </ul>
+          </div>
+        </div>
+        <p class="mt-2 text-xs" style="color:var(--text-muted)">Why 4B, specifically: the squares are
+          area-proportional to on-disk size. On a device with ~15.8 GB of GPU-addressable memory, anything past the
+          9B tier already eats most of the budget before a single highlight is retrieved.</p>
+      </div>
+    </section>
+
+    <!-- 13. Extra Use Cases -->
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="kicker">13 &middot; Beyond books</div>
+        <h1 class="slide-title">The Same Pattern, Other Domains</h1>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
+          <div class="card">
+            <div class="tag">Behavioral embeddings</div>
+            <p class="mt-2 text-sm" style="color:var(--text-muted)">Nubank-style fraud and recommendation systems embed
+              transactions and user behavior, not just text. Similar spending or usage patterns land close together in
+              the same vector space.</p>
+          </div>
+          <div class="card">
+            <div class="tag">Semantic search</div>
+            <p class="mt-2 text-sm" style="color:var(--text-muted)">A natural-language search bar over internal docs or
+              support tickets. For many internal tools, pgvector inside the database you already run is a simpler
+              starting point than standing up Elasticsearch.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14. Final Slide -->
+    <section class="slide">
+      <div class="slide-inner text-center">
+        <div class="kicker">14 &middot; Closing</div>
+        <h1 class="slide-title glow-pulse">Reliable Local Agents Are Built,<br/>Not Just Downloaded</h1>
+        <div class="flex flex-wrap justify-center gap-3 mt-8">
+          <span class="tag">Local model</span>
+          <span class="tag">Private data</span>
+          <span class="tag">Embeddings</span>
+          <span class="tag">Vector search</span>
+          <span class="tag">Context management</span>
+          <span class="tag">Token counting</span>
+          <span class="tag">Hardware-aware execution</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="slide-dots"></div>
+<div id="controls">
+  <button id="prev-btn" class="nav-btn" aria-label="Previous slide">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <button id="next-btn" class="nav-btn" aria-label="Next slide">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>
+
+<script src="charts.js"></script>
+<script src="presentation.js"></script>
+</body>
+</html>

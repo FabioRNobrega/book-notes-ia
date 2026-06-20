@@ -1,0 +1,8 @@
+{
+  "name": "book-notes-ia-presentation-build",
+  "private": true,
+  "description": "Build-only tooling for bundling the standalone presentation. Not part of the .NET app.",
+  "devDependencies": {
+    "html-minifier-terser": "^7.2.0"
+  }
+}

@@ -57,6 +57,9 @@ nunit-*.xml
 .env
 # Generated local CSS
 WebApp/wwwroot/css/
+# Generated standalone presentation bundle
+Presentation/dist/
+Presentation/node_modules/
 # Supertonic model assets (large external artifacts — download via Git LFS)
 services/TtsService.Api/assets/supertonic-3/
 # Local audio storage data (managed via Docker volume)
