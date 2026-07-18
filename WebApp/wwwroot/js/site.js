@@ -259,6 +259,19 @@
     let currentObjectUrl = null;
     let currentWidget = null;
 
+    // Per-message playback position, kept only for the lifetime of the page.
+    const messagePositions = new Map();
+
+    function rememberPosition(messageId, seconds) {
+        if (!messageId) return;
+        messagePositions.set(messageId, seconds);
+    }
+
+    function getRememberedPosition(messageId) {
+        if (!messageId) return 0;
+        return messagePositions.get(messageId) ?? 0;
+    }
+
     function cleanupCurrentAudio() {
         if (currentAudio) {
             currentAudio.pause();
@@ -267,6 +280,62 @@
         if (currentObjectUrl) {
             URL.revokeObjectURL(currentObjectUrl);
             currentObjectUrl = null;
+        }
+    }
+
+    function formatDuration(totalSeconds) {
+        if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+            return "0:00";
+        }
+
+        const seconds = Math.floor(totalSeconds);
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = String(seconds % 60).padStart(2, "0");
+
+        if (hours > 0) {
+            return `${hours}:${String(minutes).padStart(2, "0")}:${secs}`;
+        }
+
+        return `${minutes}:${secs}`;
+    }
+
+    function getProgressElements(widget) {
+        return {
+            seek: widget.querySelector(".tts-seek"),
+            time: widget.querySelector(".tts-time")
+        };
+    }
+
+    function resetProgressUI(widget) {
+        const { seek, time } = getProgressElements(widget);
+        if (seek instanceof HTMLInputElement) {
+            seek.disabled = true;
+            seek.value = "0";
+            seek.max = "1";
+        }
+        if (time) {
+            time.textContent = "0:00 / 0:00";
+        }
+    }
+
+    function updateProgressUI(widget, currentTime, duration) {
+        const { seek, time } = getProgressElements(widget);
+        const hasDuration = Number.isFinite(duration) && duration > 0;
+
+        if (seek instanceof HTMLInputElement) {
+            seek.max = hasDuration ? String(duration) : "1";
+            seek.value = String(currentTime);
+        }
+        if (time) {
+            time.textContent = `${formatDuration(currentTime)} / ${hasDuration ? formatDuration(duration) : "0:00"}`;
+        }
+    }
+
+    function setSeekDisabled(widget, disabled) {
+        const { seek } = getProgressElements(widget);
+        if (seek instanceof HTMLInputElement) {
+            seek.disabled = disabled;
         }
     }
 
@@ -287,6 +356,7 @@
         if (state === "loading") {
             if (tooltip) tooltip.style.display = "none";
             if (loading) loading.style.display = "inline-flex";
+            resetProgressUI(widget);
         } else if (state === "playing") {
             if (btn) btn.setAttribute("name", "pause-circle");
             if (btn) btn.setAttribute("label", "Pause");
@@ -297,8 +367,11 @@
         } else if (state === "error") {
             if (tooltip) tooltip.style.display = "none";
             if (error) error.style.display = "inline-flex";
+            resetProgressUI(widget);
+        } else {
+            // idle
+            resetProgressUI(widget);
         }
-        // "idle" is fully handled by the reset above.
     }
 
     async function handlePlayClick(widget) {
@@ -323,8 +396,12 @@
             return;
         }
 
-        // Reset any previously active widget before starting a new one.
+        // Reset any previously active widget before starting a new one, remembering its position.
         if (currentWidget && currentWidget !== widget) {
+            if (currentAudio) {
+                const previousMessageId = currentWidget.getAttribute("data-audio-message-id");
+                rememberPosition(previousMessageId, currentAudio.currentTime);
+            }
             setAudioState(currentWidget, "idle");
         }
 
@@ -349,8 +426,26 @@
             currentAudio = audio;
 
             // Guard against stale closures: only act if this audio is still the active one.
+            audio.addEventListener("loadedmetadata", () => {
+                if (currentAudio !== audio) return;
+
+                const remembered = getRememberedPosition(messageId);
+                if (remembered > 0 && Number.isFinite(audio.duration) && remembered < audio.duration) {
+                    audio.currentTime = remembered;
+                }
+
+                updateProgressUI(widget, audio.currentTime, audio.duration);
+                setSeekDisabled(widget, false);
+            });
+
+            audio.addEventListener("timeupdate", () => {
+                if (currentAudio !== audio) return;
+                updateProgressUI(widget, audio.currentTime, audio.duration);
+            });
+
             audio.addEventListener("ended", () => {
                 if (currentAudio === audio) {
+                    rememberPosition(messageId, 0);
                     setAudioState(widget, "idle");
                     cleanupCurrentAudio();
                     currentWidget = null;
@@ -374,11 +469,29 @@
         }
     }
 
+    function handleSeekInput(seek) {
+        if (!(seek instanceof HTMLInputElement) || seek.disabled) return;
+
+        const widget = seek.closest(".tts-widget");
+        if (!widget || widget !== currentWidget || !currentAudio) return;
+
+        const value = Number(seek.value);
+        if (!Number.isFinite(value)) return;
+
+        currentAudio.currentTime = value;
+        updateProgressUI(widget, value, currentAudio.duration);
+    }
+
     document.body.addEventListener("click", (event) => {
         const btn = event.target.closest(".tts-play-btn");
         if (!btn) return;
         const widget = btn.closest(".tts-widget");
         if (widget) void handlePlayClick(widget);
+    });
+
+    document.body.addEventListener("input", (event) => {
+        const seek = event.target.closest(".tts-seek");
+        if (seek) handleSeekInput(seek);
     });
 
     window.BookNotesChat = {

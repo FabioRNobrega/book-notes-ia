@@ -1,0 +1,89 @@
+@use '../variables'
+
+.tts-progress
+  display: flex
+  align-items: center
+  gap: 6px
+  flex: 1 1 auto
+  min-width: 0
+
+.tts-seek-wrap
+  position: relative
+  display: flex
+  align-items: center
+  flex: 1 1 auto
+  min-width: 48px
+  max-width: 140px
+
+  &::before
+    content: ""
+    position: absolute
+    left: 0
+    right: 0
+    top: 50%
+    transform: translateY(-50%)
+    height: 3px
+    border-radius: 999px
+    background: rgba(255, 255, 255, 0.18)
+    pointer-events: none
+
+.tts-seek
+  position: relative
+  z-index: 1
+  -webkit-appearance: none
+  appearance: none
+  display: block
+  width: 100%
+  height: 10px
+  margin: 0
+  padding: 0
+  border: none
+  background: transparent
+  cursor: pointer
+
+  &:disabled
+    cursor: default
+
+  &::-webkit-slider-runnable-track
+    height: 10px
+    background: transparent
+
+  &::-webkit-slider-thumb
+    -webkit-appearance: none
+    appearance: none
+    width: 10px
+    height: 10px
+    border-radius: 50%
+    background: rgba(255, 255, 255, 0.85)
+    cursor: pointer
+
+  &:disabled::-webkit-slider-thumb
+    background: rgba(255, 255, 255, 0.7)
+    cursor: default
+
+  &::-moz-range-track
+    height: 10px
+    background: transparent
+
+  &::-moz-range-thumb
+    width: 10px
+    height: 10px
+    border: none
+    border-radius: 50%
+    background: rgba(255, 255, 255, 0.85)
+    cursor: pointer
+
+  &:disabled::-moz-range-thumb
+    background: rgba(255, 255, 255, 0.7)
+    cursor: default
+
+.tts-time
+  font-size: 11px
+  color: rgba(255, 255, 255, 0.45)
+  white-space: nowrap
+  min-width: 4.5em
+  text-align: right
+
+@media (max-width: 640px)
+  .tts-seek
+    max-width: 80px
