@@ -10,6 +10,7 @@ using OllamaSharp;
 using Pgvector.EntityFrameworkCore;
 using Pgvector.Npgsql;
 using System.ClientModel;
+using System.Net.Sockets;
 using WebApp.Services;
 
 
@@ -29,7 +30,11 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     options.UseNpgsql(
         sp.GetRequiredService<NpgsqlDataSource>(),
-        npgsql => npgsql.UseVector()
+        npgsql =>
+        {
+            npgsql.UseVector();
+            npgsql.EnableRetryOnFailure();
+        }
     )
 );
 
@@ -206,7 +211,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseRouting();
 
 app.UseAuthentication();
@@ -222,12 +230,49 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var dataSource = scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>();
-    db.Database.Migrate();
-    dataSource.ReloadTypes();
-}
+await DatabaseStartup.ApplyMigrationsAsync(app.Services);
 
 app.Run();
+
+file static class DatabaseStartup
+{
+    public static async Task ApplyMigrationsAsync(IServiceProvider services)
+    {
+        const int maxAttempts = 30;
+        var logger = services
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("DatabaseStartup");
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var scope = services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var dataSource = scope.ServiceProvider.GetRequiredService<NpgsqlDataSource>();
+
+                db.Database.Migrate();
+                dataSource.ReloadTypes();
+                return;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsRetryableDatabaseStartupFailure(ex))
+            {
+                logger.LogWarning(
+                    ex,
+                    "Database startup check failed on attempt {Attempt}/{MaxAttempts}. Retrying...",
+                    attempt,
+                    maxAttempts);
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
+
+    private static bool IsRetryableDatabaseStartupFailure(Exception ex)
+    {
+        if (ex is SocketException or NpgsqlException or TimeoutException)
+            return true;
+
+        return ex.InnerException is not null && IsRetryableDatabaseStartupFailure(ex.InnerException);
+    }
+}

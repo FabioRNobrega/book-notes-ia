@@ -29,20 +29,8 @@
         <div class="mx-auto border border-white/10 p-3 shadow-2xl backdrop-blur-md"
              style="max-width: var(--book-dock-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
             <div id="chat-composer">
-                <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
-                    <div class="min-w-[220px]">
-                        <sl-select id="agent-selector"
-                                   name="agentKey"
-                                   label="AI agent"
-                                   value="@activeAgent">
-                            <sl-option value="premium">Premium — ChatGPT</sl-option>
-                            <sl-option value="free">Free — Qwen 3.5</sl-option>
-                        </sl-select>
-                    </div>
-                    @await Html.PartialAsync("~/Views/Chat/_AgentIndicator.cshtml", activeAgent)
-                </div>
                 <form id="chat-form"
-                      class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
+                      class="relative flex items-center gap-2 border px-3 py-2 shadow-xl transition-colors"
                       style="background-color: var(--background-transparency-default); border-color: #3d3d3d; border-radius: var(--book-radius);"
                       hx-post="/chat/send"
                       hx-swap="none"
@@ -117,10 +105,14 @@
                         type="text"
                         placeholder="How can I help you today?"
                         autocomplete="off"
-                        class="flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
+                        class="min-w-0 flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
                         style="font-family:'Crimson Text',Georgia,serif; font-size:16px; color:white;"
                         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').requestSubmit();}"
                     />
+
+                    <div class="border-l border-white/10 pl-2">
+                        @await Html.PartialAsync("~/Views/Chat/_AgentIndicator.cshtml", activeAgent)
+                    </div>
 
                     <sl-tooltip content="Clear chat history" placement="top">
                         <button type="button" aria-label="Clear history"

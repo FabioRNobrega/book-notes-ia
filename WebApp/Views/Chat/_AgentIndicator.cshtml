@@ -2,12 +2,42 @@
 
 @{
     var agentKey = WebApp.Controllers.ChatController.NormalizeAgentKey(Model);
-    var label = agentKey == "premium" ? "Premium — ChatGPT" : "Free — Qwen 3.5";
+    var isPremium = agentKey == "premium";
 }
 
-<span id="active-agent-indicator"
-      hx-swap-oob="outerHTML"
-      class="text-xs text-white/55"
-      data-active-agent="@agentKey">
-    Currently using: @label
-</span>
+<sl-dropdown id="active-agent-indicator"
+             hx-swap-oob="outerHTML"
+             placement="top-end"
+             distance="8"
+             hoist
+             data-active-agent="@agentKey">
+    <button type="button" slot="trigger" id="agent-trigger" aria-label="Choose AI agent"
+            class="flex h-10 items-center gap-1.5 shrink-0 bg-transparent px-2.5 text-gray-300 transition-all hover:bg-[#3d3d3d] hover:text-white active:scale-95"
+            style="border-radius: var(--book-radius);">
+        <span id="agent-trigger-dot" class="inline-block size-1.5 rounded-full @(isPremium ? "bg-amber-300" : "bg-emerald-400")"></span>
+        <span id="agent-trigger-label" class="text-xs font-medium whitespace-nowrap">@(isPremium ? "Premium" : "Free")</span>
+        <sl-icon name="chevron-down" style="font-size:0.65rem;"></sl-icon>
+    </button>
+
+    <sl-menu id="agent-menu"
+             style="background-color: var(--background-transparency-default); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--book-radius); min-width: 240px;">
+        <sl-menu-item type="checkbox" value="premium" checked="@isPremium">
+            <span slot="prefix" class="flex items-center justify-center size-7 rounded-md bg-black/45 text-amber-300 mr-2">
+                <sl-icon name="stars" style="font-size:0.9rem;"></sl-icon>
+            </span>
+            <div class="flex flex-col gap-0.5 py-1">
+                <span class="agent-menu-item-title text-sm text-white/90">Premium — ChatGPT</span>
+                <span class="agent-menu-item-subtitle text-xs text-white/45">Azure OpenAI &middot; cloud</span>
+            </div>
+        </sl-menu-item>
+        <sl-menu-item type="checkbox" value="free" checked="@(!isPremium)">
+            <span slot="prefix" class="flex items-center justify-center size-7 rounded-md bg-black/45 text-emerald-400 mr-2">
+                <sl-icon name="cpu" style="font-size:0.9rem;"></sl-icon>
+            </span>
+            <div class="flex flex-col gap-0.5 py-1">
+                <span class="agent-menu-item-title text-sm text-white/90">Free — Qwen 3.5</span>
+                <span class="agent-menu-item-subtitle text-xs text-white/45">Local Ollama &middot; private</span>
+            </div>
+        </sl-menu-item>
+    </sl-menu>
+</sl-dropdown>

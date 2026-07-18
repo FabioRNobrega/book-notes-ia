@@ -49,8 +49,34 @@
         return normalized;
     }
 
-    async function persistAgentSelection(select) {
-        const agentKey = syncAgentInputs(select.value);
+    function updateAgentTrigger(indicator, agentKey) {
+        if (!(indicator instanceof HTMLElement)) {
+            return;
+        }
+
+        const isPremium = agentKey === "premium";
+        const dot = indicator.querySelector("#agent-trigger-dot");
+        const label = indicator.querySelector("#agent-trigger-label");
+
+        if (dot) {
+            dot.classList.toggle("bg-amber-300", isPremium);
+            dot.classList.toggle("bg-emerald-400", !isPremium);
+        }
+        if (label) {
+            label.textContent = isPremium ? "Premium" : "Free";
+        }
+
+        indicator.setAttribute("data-active-agent", agentKey);
+    }
+
+    async function persistAgentSelection(agentKey) {
+        const normalized = syncAgentInputs(agentKey);
+        const indicator = document.getElementById("active-agent-indicator");
+
+        if (indicator && typeof indicator.hide === "function") {
+            indicator.hide();
+        }
+        updateAgentTrigger(indicator, normalized);
 
         try {
             const response = await fetch("/chat/agent", {
@@ -58,7 +84,7 @@
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded"
                 },
-                body: new URLSearchParams({ agentKey })
+                body: new URLSearchParams({ agentKey: normalized })
             });
 
             if (!response.ok) {
@@ -171,17 +197,24 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         setMode("ai");
-        const selector = document.getElementById("agent-selector");
-        if (selector) {
-            syncAgentInputs(selector.value);
+        const indicator = document.getElementById("active-agent-indicator");
+        if (indicator) {
+            syncAgentInputs(indicator.getAttribute("data-active-agent"));
         }
     });
 
-    document.addEventListener("sl-change", (event) => {
-        const target = event.target;
-        if (target?.id === "agent-selector") {
-            void persistAgentSelection(target);
+    document.addEventListener("sl-select", (event) => {
+        const menu = event.target;
+        if (menu?.id !== "agent-menu") {
+            return;
         }
+
+        const item = event.detail?.item;
+        if (!item) {
+            return;
+        }
+
+        void persistAgentSelection(item.value);
     });
 
     document.addEventListener("change", (event) => {

@@ -24,10 +24,14 @@ services:
       - Tts__BaseUrl=http://tts:5080
       - AudioStorage__BasePath=/audio-storage
     depends_on:
-      - ollama
-      - postgres
-      - redis
-      - tts
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+      tts:
+        condition: service_started
 
   tts:
     build:
@@ -65,6 +69,11 @@ services:
       - "5432:5432"
     volumes: 
       - pg18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booknotes"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
 
   ollama:
     image: ollama/ollama:latest

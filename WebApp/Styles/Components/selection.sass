@@ -4,3 +4,19 @@ sl-radio, sl-checkbox
   --sl-color-neutral-700: rgba(255,255,255,0.70)
   --sl-color-neutral-600: rgba(255,255,255,0.50)
   color: rgba(255,255,255,0.80)
+
+sl-menu-item
+  &::part(base)
+    transition: background-color 0.15s ease
+
+  &:hover::part(base),
+  &:focus-visible::part(base)
+    background-color: var(--sl-color-primary-500)
+
+  &:hover .agent-menu-item-title,
+  &:focus-visible .agent-menu-item-title
+    color: var(--sl-color-primary-950)
+
+  &:hover .agent-menu-item-subtitle,
+  &:focus-visible .agent-menu-item-subtitle
+    color: var(--sl-color-primary-800)
