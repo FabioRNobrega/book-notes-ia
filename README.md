@@ -295,6 +295,31 @@ The Supertonic 3 model assets must be placed at `services/TtsService.Api/assets/
 
 Unsplash is optional. When `Unsplash:AccessKey` is configured, the app can fetch and cache a home background image. When it is missing, the app does not call Unsplash and falls back to a solid background color.
 
+### Azure OpenAI (Premium agent)
+
+The home page lets a signed-in user pick between the **Free** agent (local Ollama `qwen3.5:4b`, no setup required) and the **Premium** agent (Azure OpenAI). Premium requires three values in `.env`:
+
+```env
+AZURE_OPENAI_ENDPOINT=https://<your-resource-name>.openai.azure.com/
+AZURE_LLM_DEPLOYMENT_NAME=<your-deployment-name>
+AZURE_OPENAI_API_KEY=<your-api-key>
+```
+
+How to find these in the [Azure AI Foundry](https://ai.azure.com) portal:
+
+1. Open your project's **Overview** page.
+2. Under **"Call this model"**, copy the **Azure OpenAI endpoint** — it looks like `https://<resource-name>.openai.azure.com/openai/v1`. Use only the base URL (scheme + host), e.g. `https://<resource-name>.openai.azure.com/`. Do **not** use the `/openai/v1` suffix, and do **not** use the **Project endpoint** (`services.ai.azure.com/api/projects/...`) — that's a different API (Foundry Agents), not the Chat Completions API this app calls.
+3. Copy the **API key** shown on the same page.
+4. Go to **Build → Deployments** and find your model. Use the **deployment name** shown there, not the underlying model name — they can differ (e.g. a `gpt-5.5` model can be deployed under any custom deployment name you chose).
+5. Restart the stack after editing `.env` — environment variables are only read at container start:
+
+```bash
+make docker-down
+make docker-run
+```
+
+If `AZURE_OPENAI_ENDPOINT`/`AZURE_LLM_DEPLOYMENT_NAME`/`AZURE_OPENAI_API_KEY` are left empty, only the Free agent is usable; selecting Premium will surface an error in chat instead of silently falling back to Ollama.
+
 ## Troubleshooting
 
 ### PostgreSQL 18 volume layout error
@@ -359,6 +384,22 @@ docker ps
 docker logs tts
 docker logs webapp
 ```
+
+### Premium agent (Azure OpenAI) fails to respond
+
+Selecting Premium and sending a message can fail in a few distinct ways — check the `webapp` logs to see which one:
+
+```bash
+docker logs webapp
+```
+
+**`SocketException: Name or service not known (<host>:443)`** — DNS cannot resolve `AZURE_OPENAI_ENDPOINT`'s host. Usually means the resource name in `.env` is stale or mistyped. Re-check the endpoint in the Azure AI Foundry portal (see [Configuration → Azure OpenAI](#azure-openai-premium-agent)) and confirm it matches exactly, including the resource name.
+
+**`HTTP 404 invalid_request_error: DeploymentNotFound`** — the endpoint itself is reachable and correct, but `AZURE_LLM_DEPLOYMENT_NAME` does not match any deployment on that resource. Go to **Build → Deployments** in the portal and copy the exact deployment name (not the model name) into `.env`.
+
+**`HTTP 400 invalid_request_error: unsupported_value` for `temperature`** — some models (reasoning-family models like `gpt-5.x`/`o1`/`o3`) only support the default `temperature=1` and reject any explicit override. `Program.cs`'s Azure `IChatClient` registration does not set `Temperature` for this reason; if you see this error after modifying that registration, remove the `Temperature` override again.
+
+In all three cases, the Free/Ollama agent is unaffected — Premium failures do not silently fall back to Ollama, they surface as an error message in the chat UI.
 
 ### Rebuild everything clean
 

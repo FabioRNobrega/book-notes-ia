@@ -244,7 +244,7 @@ public class NotesController : Controller
 
         try
         {
-            var context = await _bookContextService.GenerateAndSaveAsync(id, userId, ct);
+            var context = await _bookContextService.GenerateAndSaveAsync(id, userId, "free", ct);
             return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = context });
         }
         catch (KeyNotFoundException)

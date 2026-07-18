@@ -19,12 +19,12 @@ public sealed record ChatAgentRunResult(
 
 public interface IChatOrchestratorAgent
 {
-    Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default);
+    Task<ChatAgentRunResult> RunAsync(AIAgent agent, string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default);
 }
 
-public sealed class ChatOrchestratorAgent(AIAgent agent) : IChatOrchestratorAgent
+public sealed class ChatOrchestratorAgent : IChatOrchestratorAgent
 {
-    public async Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
+    public async Task<ChatAgentRunResult> RunAsync(AIAgent agent, string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
     {
         AgentSession session;
 

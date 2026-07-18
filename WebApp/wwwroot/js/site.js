@@ -36,6 +36,75 @@
         setActiveModeButton(mode);
     }
 
+    function normalizeAgentKey(value) {
+        return value === "premium" ? "premium" : "free";
+    }
+
+    function syncAgentInputs(agentKey) {
+        const normalized = normalizeAgentKey(agentKey);
+        const hiddenInput = document.getElementById("active-agent-input");
+        if (hiddenInput instanceof HTMLInputElement) {
+            hiddenInput.value = normalized;
+        }
+        return normalized;
+    }
+
+    function updateAgentTrigger(indicator, agentKey) {
+        if (!(indicator instanceof HTMLElement)) {
+            return;
+        }
+
+        const isPremium = agentKey === "premium";
+        const dot = indicator.querySelector("#agent-trigger-dot");
+        const label = indicator.querySelector("#agent-trigger-label");
+
+        if (dot) {
+            dot.classList.toggle("bg-amber-300", isPremium);
+            dot.classList.toggle("bg-emerald-400", !isPremium);
+        }
+        if (label) {
+            label.textContent = isPremium ? "Premium" : "Free";
+        }
+
+        indicator.setAttribute("data-active-agent", agentKey);
+    }
+
+    async function persistAgentSelection(agentKey) {
+        const normalized = syncAgentInputs(agentKey);
+        const indicator = document.getElementById("active-agent-indicator");
+
+        if (indicator && typeof indicator.hide === "function") {
+            indicator.hide();
+        }
+        updateAgentTrigger(indicator, normalized);
+
+        try {
+            const response = await fetch("/chat/agent", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({ agentKey: normalized })
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const html = await response.text();
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = html;
+            const nextIndicator = wrapper.querySelector("#active-agent-indicator");
+            const currentIndicator = document.getElementById("active-agent-indicator");
+
+            if (nextIndicator && currentIndicator) {
+                currentIndicator.replaceWith(nextIndicator);
+            }
+        } catch (error) {
+            console.error("Agent selection update failed", error);
+        }
+    }
+
     function scrollContainerToBottom(container) {
         if (!container) {
             return;
@@ -128,6 +197,24 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         setMode("ai");
+        const indicator = document.getElementById("active-agent-indicator");
+        if (indicator) {
+            syncAgentInputs(indicator.getAttribute("data-active-agent"));
+        }
+    });
+
+    document.addEventListener("sl-select", (event) => {
+        const menu = event.target;
+        if (menu?.id !== "agent-menu") {
+            return;
+        }
+
+        const item = event.detail?.item;
+        if (!item) {
+            return;
+        }
+
+        void persistAgentSelection(item.value);
     });
 
     document.addEventListener("change", (event) => {

@@ -251,6 +251,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
              .HasMaxLength(20)
              .IsRequired();
 
+            e.Property(x => x.AgentType)
+             .HasMaxLength(20);
+
             e.Property(x => x.Content)
              .IsRequired();
 

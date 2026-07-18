@@ -4,6 +4,7 @@
 @{
     ViewData["Title"] = "Home";
     var photo = ViewData["BackgroundPhoto"] as UnsplashPhoto;
+    var activeAgent = WebApp.Controllers.ChatController.NormalizeAgentKey(ViewData["ActiveAgent"] as string);
 }
 
 <div class="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
@@ -29,7 +30,7 @@
              style="max-width: var(--book-dock-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
             <div id="chat-composer">
                 <form id="chat-form"
-                      class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
+                      class="relative flex items-center gap-2 border px-3 py-2 shadow-xl transition-colors"
                       style="background-color: var(--background-transparency-default); border-color: #3d3d3d; border-radius: var(--book-radius);"
                       hx-post="/chat/send"
                       hx-swap="none"
@@ -86,6 +87,7 @@
                             end
                         end
                     ">
+                    <input type="hidden" id="active-agent-input" name="agentKey" value="@activeAgent" />
 
                     <input type="file" id="file-attach" class="hidden"
                            accept=".txt" data-chat-file-input="true" />
@@ -103,10 +105,14 @@
                         type="text"
                         placeholder="How can I help you today?"
                         autocomplete="off"
-                        class="flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
+                        class="min-w-0 flex-1 bg-transparent px-2 py-2 outline-none placeholder-gray-500"
                         style="font-family:'Crimson Text',Georgia,serif; font-size:16px; color:white;"
                         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').requestSubmit();}"
                     />
+
+                    <div class="border-l border-white/10 pl-2">
+                        @await Html.PartialAsync("~/Views/Chat/_AgentIndicator.cshtml", activeAgent)
+                    </div>
 
                     <sl-tooltip content="Clear chat history" placement="top">
                         <button type="button" aria-label="Clear history"

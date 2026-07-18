@@ -4,14 +4,14 @@ namespace WebApp.Services;
 
 public interface IBookContextAgentTool
 {
-    AIFunction Create(string userId);
+    AIFunction Create(string userId, string agentKey);
 }
 
 public sealed class BookContextAgentTool(
     IBookContextService bookContextService,
     IBookLookupService bookLookupService) : IBookContextAgentTool
 {
-    public AIFunction Create(string userId)
+    public AIFunction Create(string userId, string agentKey)
     {
         return AIFunctionFactory.Create(
             async (string bookTitle, CancellationToken ct) =>
@@ -23,7 +23,7 @@ public sealed class BookContextAgentTool(
 
                 var context = !string.IsNullOrWhiteSpace(match.Context)
                     ? match.Context
-                    : await bookContextService.GenerateAndSaveAsync(match.Id, userId, ct);
+                    : await bookContextService.GenerateAndSaveAsync(match.Id, userId, agentKey, ct);
 
                 return $"<book-context>\n{context}\n</book-context>";
             },

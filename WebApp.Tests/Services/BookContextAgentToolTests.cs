@@ -22,7 +22,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("Arrakis literary context.");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "premium");
 
         Assert.Equal("GenerateBookContext", function.Name);
 
@@ -32,6 +32,7 @@ public class BookContextAgentToolTests
 
         Assert.Equal("<book-context>\nArrakis literary context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
+        Assert.Equal("premium", service.LastAgentKey);
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("context");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "free");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
@@ -64,7 +65,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("context");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "free");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Unknown Book" },
@@ -83,7 +84,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("Gather Yourselves Together context.");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "premium");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Gather Yourselves Together" },
@@ -91,6 +92,7 @@ public class BookContextAgentToolTests
 
         Assert.Equal("<book-context>\nGather Yourselves Together context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
+        Assert.Equal("premium", service.LastAgentKey);
     }
 
     [Fact]
@@ -104,7 +106,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("Should not be called.");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "free");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Foundation" },
@@ -123,7 +125,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("Fallback Dune context.");
         var tool = CreateTool(db, service, new ThrowingEmbeddingService());
-        var function = tool.Create("user-1");
+        var function = tool.Create("user-1", "premium");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
@@ -131,6 +133,7 @@ public class BookContextAgentToolTests
 
         Assert.Equal("<book-context>\nFallback Dune context.\n</book-context>", result?.ToString());
         Assert.True(service.GenerateAndSaveCalled);
+        Assert.Equal("premium", service.LastAgentKey);
     }
 
     private static BookContextAgentTool CreateTool(
@@ -209,12 +212,14 @@ public class BookContextAgentToolTests
     private sealed class FakeBookContextService(string context) : IBookContextService
     {
         public bool GenerateAndSaveCalled { get; private set; }
+        public string? LastAgentKey { get; private set; }
 
         public Task<string?> GetContextAsync(Guid bookId, string userId) => Task.FromResult<string?>(null);
 
-        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
+        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default)
         {
             GenerateAndSaveCalled = true;
+            LastAgentKey = agentKey;
             return Task.FromResult(context);
         }
 

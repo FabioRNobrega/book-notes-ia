@@ -5,7 +5,7 @@ namespace WebApp.Services;
 
 public class BookContextService(
     AppDbContext db,
-    IOllamaService ollamaService,
+    IChatCompletionService chatCompletionService,
     IOpenLibraryService openLibraryService) : IBookContextService
 {
     public async Task<string?> GetContextAsync(Guid bookId, string userId)
@@ -16,7 +16,7 @@ public class BookContextService(
         return book?.Context;
     }
 
-    public async Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
+    public async Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default)
     {
         var book = await db.Books
             .FirstOrDefaultAsync(b => b.Id == bookId && b.UserId == userId, ct)
@@ -29,7 +29,7 @@ public class BookContextService(
                 book.Synopsis = synopsis;
         }
 
-        var generatedContext = await GenerateContextAsync(book, userId, ct);
+        var generatedContext = await GenerateContextAsync(book, userId, agentKey, ct);
 
         book.Context = generatedContext;
         book.UpdatedAt = DateTime.UtcNow;
@@ -62,7 +62,7 @@ public class BookContextService(
         await db.SaveChangesAsync();
     }
 
-    private async Task<string> GenerateContextAsync(Book book, string userId, CancellationToken ct)
+    private async Task<string> GenerateContextAsync(Book book, string userId, string agentKey, CancellationToken ct)
     {
         var profile = await db.UserProfiles
             .FirstOrDefaultAsync(p => p.UserId == userId, ct);
@@ -87,6 +87,6 @@ public class BookContextService(
             Respond in {language}. Keep it under 120 words. Plain text only, no markdown, no lists.
             """;
 
-        return await ollamaService.CompleteAsync(prompt, ct);
+        return await chatCompletionService.CompleteAsync(prompt, agentKey, ct);
     }
 }

@@ -488,6 +488,10 @@ namespace WebApp.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("AgentType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<int?>("ContextUsagePct")
                         .HasColumnType("integer");
 

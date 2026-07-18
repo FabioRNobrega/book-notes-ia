@@ -18,13 +18,20 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Unsplash__AccessKey=${UNSPLASH_ACCESS_KEY}
       - Unsplash__SecretKey=${UNSPLASH_SECRET_KEY}
+      - Azure__OpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
+      - Azure__OpenAI__DeploymentName=${AZURE_LLM_DEPLOYMENT_NAME}
+      - Azure__OpenAI__ApiKey=${AZURE_OPENAI_API_KEY}
       - Tts__BaseUrl=http://tts:5080
       - AudioStorage__BasePath=/audio-storage
     depends_on:
-      - ollama
-      - postgres
-      - redis
-      - tts
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+      tts:
+        condition: service_started
 
   tts:
     build:
@@ -62,6 +69,11 @@ services:
       - "5432:5432"
     volumes: 
       - pg18_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booknotes"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
 
   ollama:
     image: ollama/ollama:latest
