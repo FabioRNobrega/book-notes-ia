@@ -36,6 +36,49 @@
         setActiveModeButton(mode);
     }
 
+    function normalizeAgentKey(value) {
+        return value === "premium" ? "premium" : "free";
+    }
+
+    function syncAgentInputs(agentKey) {
+        const normalized = normalizeAgentKey(agentKey);
+        const hiddenInput = document.getElementById("active-agent-input");
+        if (hiddenInput instanceof HTMLInputElement) {
+            hiddenInput.value = normalized;
+        }
+        return normalized;
+    }
+
+    async function persistAgentSelection(select) {
+        const agentKey = syncAgentInputs(select.value);
+
+        try {
+            const response = await fetch("/chat/agent", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({ agentKey })
+            });
+
+            if (!response.ok) {
+                return;
+            }
+
+            const html = await response.text();
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = html;
+            const nextIndicator = wrapper.querySelector("#active-agent-indicator");
+            const currentIndicator = document.getElementById("active-agent-indicator");
+
+            if (nextIndicator && currentIndicator) {
+                currentIndicator.replaceWith(nextIndicator);
+            }
+        } catch (error) {
+            console.error("Agent selection update failed", error);
+        }
+    }
+
     function scrollContainerToBottom(container) {
         if (!container) {
             return;
@@ -128,6 +171,17 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         setMode("ai");
+        const selector = document.getElementById("agent-selector");
+        if (selector) {
+            syncAgentInputs(selector.value);
+        }
+    });
+
+    document.addEventListener("sl-change", (event) => {
+        const target = event.target;
+        if (target?.id === "agent-selector") {
+            void persistAgentSelection(target);
+        }
     });
 
     document.addEventListener("change", (event) => {

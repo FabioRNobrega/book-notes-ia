@@ -30,7 +30,7 @@
                         <div class="prose prose-invert max-w-none prose-sm">
                             @Html.Raw(entry.Content)
                         </div>
-                        <div class="flex items-center mt-3 pt-1.5 border-t border-white/10">
+                        <div class="flex items-center gap-3 mt-3 pt-1.5 border-t border-white/10">
                             @if (entry.MessageId.HasValue)
                             {
                                 <div class="tts-widget flex items-center gap-1.5" data-audio-message-id="@entry.MessageId">
@@ -50,6 +50,10 @@
                                         Audio unavailable
                                     </span>
                                 </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(entry.AgentLabel))
+                            {
+                                <span class="text-xs text-white/45 shrink-0">@entry.AgentLabel</span>
                             }
                             @if (entry.ResponseTimeMs is not null)
                             {

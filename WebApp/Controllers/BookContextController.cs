@@ -29,7 +29,7 @@ public class BookContextController(IBookContextService bookContextService) : Con
 
         try
         {
-            var context = await bookContextService.GenerateAndSaveAsync(bookId, userId, ct);
+            var context = await bookContextService.GenerateAndSaveAsync(bookId, userId, "free", ct);
             return Ok(new { context });
         }
         catch (KeyNotFoundException ex)

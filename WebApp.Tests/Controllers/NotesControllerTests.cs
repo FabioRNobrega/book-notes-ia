@@ -304,7 +304,7 @@ public class NotesControllerTests
     {
         public Task ClearAsync(Guid bookId, string userId) => Task.CompletedTask;
         public Task<string?> GetContextAsync(Guid bookId, string userId) => Task.FromResult<string?>(null);
-        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default) => Task.FromResult(string.Empty);
+        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default) => Task.FromResult(string.Empty);
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);
     }
 

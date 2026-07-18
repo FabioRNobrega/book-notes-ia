@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Agents.AI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -32,13 +33,34 @@ public class ChatControllerTests
 
         var controller = CreateController(agent, new FakeCacheHandler(), new FakeBookContextAgentTool(), userId, db);
 
-        await controller.Send("Tell me about Dune", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "Tell me about Dune" }, CancellationToken.None);
 
         Assert.NotNull(agent.LastTools);
         Assert.Equal(3, agent.LastTools.Count);
         Assert.Equal("GenerateBookContext", agent.LastTools[0].Name);
         Assert.Equal("GetBookNotesWithAnalysis", agent.LastTools[1].Name);
         Assert.Equal("GetRelevantBookNotes", agent.LastTools[2].Name);
+    }
+
+    [Fact]
+    public async Task SetAgent_WithPremium_PersistsActiveAgentAndReturnsIndicator()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        var sessionId = Guid.NewGuid();
+        await cache.SetAsync($"activesessionid:{userId}", sessionId.ToString("D"), TimeSpan.FromMinutes(5));
+        await cache.SetAsync($"agentsession:{userId}:{sessionId:D}", """{"session":"existing"}""", TimeSpan.FromMinutes(5));
+
+        var controller = CreateController(new FakeChatOrchestratorAgent(), cache, new FakeBookContextAgentTool(), userId);
+
+        var result = await controller.SetAgent("premium", CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("_AgentIndicator", partial.ViewName);
+        Assert.Equal("premium", partial.Model);
+        Assert.Equal("premium", await cache.GetAsync($"activeagent:{userId}"));
+        Assert.Equal(sessionId.ToString("D"), await cache.GetAsync($"activesessionid:{userId}"));
+        Assert.Equal("""{"session":"existing"}""", await cache.GetAsync($"agentsession:{userId}:{sessionId:D}"));
     }
 
     [Fact]
@@ -49,16 +71,74 @@ public class ChatControllerTests
         var agent = new FakeChatOrchestratorAgent();
         var controller = CreateController(agent, cache, new FakeBookContextAgentTool(), userId);
 
-        var result = await controller.Send("Hello", CancellationToken.None);
+        var result = await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
 
         var partial = Assert.IsType<PartialViewResult>(result);
         Assert.Equal("_BotMessage", partial.ViewName);
         Assert.Equal("Hello", agent.LastMessage);
         Assert.NotNull(agent.LastTools);
         Assert.Equal(3, agent.LastTools.Count);
+        Assert.Same(FakeChatAgentProvider.FreeAgent, agent.LastAgent);
         Assert.True(Guid.TryParse(await cache.GetAsync($"activesessionid:{userId}"), out var sessionId));
         Assert.Equal("""{"session":"updated"}""", await cache.GetAsync($"agentsession:{userId}:{sessionId:D}"));
         Assert.Equal(2, await controllerDbCountAsync(controller, userId));
+    }
+
+    [Fact]
+    public async Task Send_WhenActiveAgentIsPremium_UsesPremiumAgentAndPersistsAgentType()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "premium", TimeSpan.FromMinutes(5));
+        var agent = new FakeChatOrchestratorAgent { ResponseText = "Premium answer" };
+        var bookContextTool = new FakeBookContextAgentTool();
+        var db = CreateDbContext();
+        var controller = CreateController(agent, cache, bookContextTool, userId, db);
+
+        var result = await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var model = Assert.IsType<BotMessageViewModel>(partial.Model);
+        Assert.Equal("premium", model.AgentType);
+        Assert.Equal("Premium", model.AgentLabel);
+        Assert.Same(FakeChatAgentProvider.PremiumAgent, agent.LastAgent);
+        Assert.Equal("premium", bookContextTool.LastAgentKey);
+
+        var assistant = await db.ChatMessages.SingleAsync(x => x.Role == "assistant");
+        Assert.Equal("premium", assistant.AgentType);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("bad")]
+    public async Task Send_WhenActiveAgentMissingOrInvalid_DefaultsToFree(string? cachedAgent)
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        if (cachedAgent is not null)
+            await cache.SetAsync($"activeagent:{userId}", cachedAgent, TimeSpan.FromMinutes(5));
+
+        var agent = new FakeChatOrchestratorAgent();
+        var controller = CreateController(agent, cache, new FakeBookContextAgentTool(), userId);
+
+        await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
+
+        Assert.Same(FakeChatAgentProvider.FreeAgent, agent.LastAgent);
+    }
+
+    [Fact]
+    public async Task Send_WhenFormAgentDiffersFromCache_UsesFormAgentAndUpdatesCache()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "premium", TimeSpan.FromMinutes(5));
+        var agent = new FakeChatOrchestratorAgent();
+        var controller = CreateController(agent, cache, new FakeBookContextAgentTool(), userId);
+
+        await controller.Send(new ChatSendRequest { Message = "Hello", AgentKey = "free" }, CancellationToken.None);
+
+        Assert.Same(FakeChatAgentProvider.FreeAgent, agent.LastAgent);
+        Assert.Equal("free", await cache.GetAsync($"activeagent:{userId}"));
     }
 
     [Fact]
@@ -80,7 +160,7 @@ public class ChatControllerTests
 
         var controller = CreateController(agent, new FakeCacheHandler(), new FakeBookContextAgentTool(), userId, db);
 
-        await controller.Send("Hello", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
 
         Assert.DoesNotContain("Title: \"Foundation\" | Author: \"Isaac Asimov\"", agent.LastInstructions);
         Assert.DoesNotContain("User's book library", agent.LastInstructions);
@@ -126,7 +206,7 @@ public class ChatControllerTests
 
         var controller = CreateController(agent, new FakeCacheHandler(), new FakeBookContextAgentTool(), userId, db);
 
-        await controller.Send("Tell me about Gather Yourselves Together", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "Tell me about Gather Yourselves Together" }, CancellationToken.None);
 
         Assert.DoesNotContain("Dick, Philip K - Gather Yourselves Together", agent.LastInstructions);
     }
@@ -154,6 +234,7 @@ public class ChatControllerTests
                 SessionId = sessionId,
                 Role = "assistant",
                 Content = "Leviathan Wakes context.",
+                AgentType = "free",
                 DisplayOrder = 2,
                 ResponseTimeMs = 24000
             });
@@ -181,7 +262,26 @@ public class ChatControllerTests
                 Assert.Equal("assistant", entry.Role);
                 Assert.Contains("Leviathan Wakes context.", entry.Content);
                 Assert.Equal(24000, entry.ResponseTimeMs);
+                Assert.Equal("free", entry.AgentType);
+                Assert.Equal("Free", entry.AgentLabel);
             });
+    }
+
+    [Fact]
+    public async Task Send_WhenPremiumAgentThrows_ReturnsErrorWithoutUsingFreeAgent()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "premium", TimeSpan.FromMinutes(5));
+        var agent = new ThrowingChatOrchestratorAgent();
+        var controller = CreateController(agent, cache, new FakeBookContextAgentTool(), userId);
+
+        var result = await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("_BotMessage", partial.ViewName);
+        Assert.Contains("Error", Assert.IsType<BotMessageViewModel>(partial.Model).HtmlContent);
+        Assert.Same(FakeChatAgentProvider.PremiumAgent, agent.LastAgent);
     }
 
     [Fact]
@@ -230,7 +330,7 @@ public class ChatControllerTests
             new FakeBookContextAgentTool(),
             "user-1");
 
-        var result = await controller.Send("", CancellationToken.None);
+        var result = await controller.Send(new ChatSendRequest { Message = "" }, CancellationToken.None);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Equal("", content.Content);
@@ -245,7 +345,7 @@ public class ChatControllerTests
             new FakeBookContextAgentTool(),
             "user-1");
 
-        var result = await controller.Send("Hello", CancellationToken.None);
+        var result = await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
 
         var partial = Assert.IsType<PartialViewResult>(result);
         Assert.Equal("_BotMessage", partial.ViewName);
@@ -282,6 +382,7 @@ public class ChatControllerTests
     {
         var controller = new ChatController(
             new FakeChatOrchestratorAgent(),
+            new FakeChatAgentProvider(),
             new FakeCacheHandler(),
             new FakeBookContextAgentTool(),
             new FakeBookNotesAgentTool(),
@@ -318,6 +419,7 @@ public class ChatControllerTests
         db ??= CreateDbContext();
         var controller = new ChatController(
             agent,
+            new FakeChatAgentProvider(),
             cache,
             bookContextTool,
             new FakeBookNotesAgentTool(),
@@ -348,25 +450,47 @@ public class ChatControllerTests
 
     private sealed class FakeChatOrchestratorAgent : IChatOrchestratorAgent
     {
+        public string ResponseText { get; init; } = "Grounded answer";
+        public AIAgent? LastAgent { get; private set; }
         public string? LastMessage { get; private set; }
         public string? LastInstructions { get; private set; }
         public IReadOnlyList<AITool>? LastTools { get; private set; }
 
-        public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
+        public Task<ChatAgentRunResult> RunAsync(AIAgent agent, string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
         {
+            LastAgent = agent;
             LastMessage = message;
             LastInstructions = instructions;
             LastTools = tools;
-            return Task.FromResult(new ChatAgentRunResult("Grounded answer", """{"session":"updated"}""", 100, 50, 100, 50, 100, 50, 1, 1200));
+            return Task.FromResult(new ChatAgentRunResult(ResponseText, """{"session":"updated"}""", 100, 50, 100, 50, 100, 50, 1, 1200));
         }
+    }
+
+    private sealed class FakeChatAgentProvider : IChatAgentProvider
+    {
+        public static readonly AIAgent FreeAgent = new ChatClientAgent(new FakeChatClient(), name: "FreeAgent");
+        public static readonly AIAgent PremiumAgent = new ChatClientAgent(new FakeChatClient(), name: "PremiumAgent");
+
+        public AIAgent GetAgent(string agentKey) => agentKey switch
+        {
+            "premium" => PremiumAgent,
+            "free" => FreeAgent,
+            _ => throw new InvalidOperationException($"Unknown chat agent key '{agentKey}'.")
+        };
     }
 
     private sealed class FakeBookContextAgentTool : IBookContextAgentTool
     {
-        public AIFunction Create(string userId) =>
+        public string? LastAgentKey { get; private set; }
+
+        public AIFunction Create(string userId, string agentKey)
+        {
+            LastAgentKey = agentKey;
+            return
             AIFunctionFactory.Create(
                 (string bookTitle) => Task.FromResult<string>("context"),
                 name: "GenerateBookContext");
+        }
     }
 
     private sealed class FakeBookNotesAgentTool : IBookNotesAgentTool
@@ -387,8 +511,37 @@ public class ChatControllerTests
 
     private sealed class ThrowingChatOrchestratorAgent : IChatOrchestratorAgent
     {
-        public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
-            => throw new InvalidOperationException("agent failure");
+        public AIAgent? LastAgent { get; private set; }
+
+        public Task<ChatAgentRunResult> RunAsync(AIAgent agent, string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default)
+        {
+            LastAgent = agent;
+            throw new InvalidOperationException("agent failure");
+        }
+    }
+
+    private sealed class FakeChatClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ChatResponse(new Microsoft.Extensions.AI.ChatMessage(ChatRole.Assistant, "ok")));
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeChatMessageAudioService : WebApp.Services.IChatMessageAudioService

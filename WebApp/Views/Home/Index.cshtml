@@ -4,6 +4,7 @@
 @{
     ViewData["Title"] = "Home";
     var photo = ViewData["BackgroundPhoto"] as UnsplashPhoto;
+    var activeAgent = WebApp.Controllers.ChatController.NormalizeAgentKey(ViewData["ActiveAgent"] as string);
 }
 
 <div class="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
@@ -28,6 +29,18 @@
         <div class="mx-auto border border-white/10 p-3 shadow-2xl backdrop-blur-md"
              style="max-width: var(--book-dock-width); background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
             <div id="chat-composer">
+                <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <div class="min-w-[220px]">
+                        <sl-select id="agent-selector"
+                                   name="agentKey"
+                                   label="AI agent"
+                                   value="@activeAgent">
+                            <sl-option value="premium">Premium — ChatGPT</sl-option>
+                            <sl-option value="free">Free — Qwen 3.5</sl-option>
+                        </sl-select>
+                    </div>
+                    @await Html.PartialAsync("~/Views/Chat/_AgentIndicator.cshtml", activeAgent)
+                </div>
                 <form id="chat-form"
                       class="relative flex items-center gap-3 border p-3 shadow-xl transition-colors"
                       style="background-color: var(--background-transparency-default); border-color: #3d3d3d; border-radius: var(--book-radius);"
@@ -86,6 +99,7 @@
                             end
                         end
                     ">
+                    <input type="hidden" id="active-agent-input" name="agentKey" value="@activeAgent" />
 
                     <input type="file" id="file-attach" class="hidden"
                            accept=".txt" data-chat-file-input="true" />

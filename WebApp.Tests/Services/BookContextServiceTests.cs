@@ -31,11 +31,11 @@ public class BookContextServiceTests
         });
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Generated summary from Ollama.");
+        var completion = new FakeChatCompletionService("Generated summary from Ollama.");
         var openLibrary = new FakeOpenLibraryService(null);
-        var service = new BookContextService(db, ollama, openLibrary);
+        var service = new BookContextService(db, completion, openLibrary);
 
-        var result = await service.GenerateAndSaveAsync(book.Id, userId, CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, "premium", CancellationToken.None);
 
         Assert.Equal("Generated summary from Ollama.", result);
 
@@ -43,7 +43,8 @@ public class BookContextServiceTests
         Assert.Equal("Generated summary from Ollama.", savedBook.Context);
         Assert.Null(savedBook.Synopsis);
         Assert.Equal(1, openLibrary.CallCount);
-        Assert.Contains("Respond in Portuguese.", ollama.LastPrompt);
+        Assert.Contains("Respond in Portuguese.", completion.LastPrompt);
+        Assert.Equal("premium", completion.LastAgentKey);
     }
 
     [Fact]
@@ -55,15 +56,16 @@ public class BookContextServiceTests
         await db.SaveChangesAsync();
 
         var synopsis = "A desert world novel about ecology, power, and prophecy.";
-        var ollama = new FakeOllamaService("Generated Dune context.");
+        var completion = new FakeChatCompletionService("Generated Dune context.");
         var openLibrary = new FakeOpenLibraryService(synopsis);
-        var service = new BookContextService(db, ollama, openLibrary);
+        var service = new BookContextService(db, completion, openLibrary);
 
-        var result = await service.GenerateAndSaveAsync(book.Id, userId, CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free", CancellationToken.None);
 
         Assert.Equal("Generated Dune context.", result);
-        Assert.Contains(synopsis, ollama.LastPrompt);
-        Assert.Equal(1, ollama.CallCount);
+        Assert.Contains(synopsis, completion.LastPrompt);
+        Assert.Equal(1, completion.CallCount);
+        Assert.Equal("free", completion.LastAgentKey);
         Assert.Equal(1, openLibrary.CallCount);
 
         var savedBook = await db.Books.SingleAsync();
@@ -80,14 +82,14 @@ public class BookContextServiceTests
         var book = SeedBook(db, userId, "Foundation", "Isaac Asimov", synopsis: existingSynopsis);
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Generated Foundation context.");
+        var completion = new FakeChatCompletionService("Generated Foundation context.");
         var openLibrary = new FakeOpenLibraryService("Should not be used.");
-        var service = new BookContextService(db, ollama, openLibrary);
+        var service = new BookContextService(db, completion, openLibrary);
 
-        await service.GenerateAndSaveAsync(book.Id, userId, CancellationToken.None);
+        await service.GenerateAndSaveAsync(book.Id, userId, "premium", CancellationToken.None);
 
         Assert.Equal(0, openLibrary.CallCount);
-        Assert.Contains(existingSynopsis, ollama.LastPrompt);
+        Assert.Contains(existingSynopsis, completion.LastPrompt);
 
         var savedBook = await db.Books.SingleAsync();
         Assert.Equal(existingSynopsis, savedBook.Synopsis);
@@ -102,14 +104,14 @@ public class BookContextServiceTests
         var book = SeedBook(db, userId, "Unknown Book", "Unknown Author");
         await db.SaveChangesAsync();
 
-        var ollama = new FakeOllamaService("Generated fallback context.");
+        var completion = new FakeChatCompletionService("Generated fallback context.");
         var openLibrary = new FakeOpenLibraryService(null);
-        var service = new BookContextService(db, ollama, openLibrary);
+        var service = new BookContextService(db, completion, openLibrary);
 
-        var result = await service.GenerateAndSaveAsync(book.Id, userId, CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free", CancellationToken.None);
 
         Assert.Equal("Generated fallback context.", result);
-        Assert.Equal(1, ollama.CallCount);
+        Assert.Equal(1, completion.CallCount);
         Assert.Equal(1, openLibrary.CallCount);
 
         var savedBook = await db.Books.SingleAsync();
@@ -148,15 +150,17 @@ public class BookContextServiceTests
         return new TestAppDbContext(options);
     }
 
-    private sealed class FakeOllamaService(string response) : IOllamaService
+    private sealed class FakeChatCompletionService(string response) : IChatCompletionService
     {
         public string LastPrompt { get; private set; } = string.Empty;
+        public string LastAgentKey { get; private set; } = string.Empty;
         public int CallCount { get; private set; }
 
-        public Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
+        public Task<string> CompleteAsync(string prompt, string agentKey, CancellationToken ct = default)
         {
             CallCount++;
             LastPrompt = prompt;
+            LastAgentKey = agentKey;
             return Task.FromResult(response);
         }
     }

@@ -11,12 +11,22 @@ using WebApp.Services;
 
 namespace WebApp.Controllers;
 
-public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null, Guid? MessageId = null);
+public record ChatEntry(string Role, string Content, long? ResponseTimeMs = null, Guid? MessageId = null, string? AgentType = null)
+{
+    public string? AgentLabel => ChatController.GetAgentLabel(AgentType);
+}
+
+public sealed class ChatSendRequest
+{
+    public string Message { get; set; } = string.Empty;
+    public string? AgentKey { get; set; }
+}
 
 [Authorize]
 public class ChatController : Controller
 {
     private readonly IChatOrchestratorAgent _agent;
+    private readonly IChatAgentProvider _agentProvider;
     private readonly ICacheHandler _cache;
     private readonly IBookContextAgentTool _bookContextTool;
     private readonly IBookNotesAgentTool _bookNotesTool;
@@ -31,6 +41,7 @@ public class ChatController : Controller
 
     public ChatController(
         IChatOrchestratorAgent agent,
+        IChatAgentProvider agentProvider,
         ICacheHandler cache,
         IBookContextAgentTool bookContextTool,
         IBookNotesAgentTool bookNotesTool,
@@ -41,6 +52,7 @@ public class ChatController : Controller
         IConfiguration configuration)
     {
         _agent = agent;
+        _agentProvider = agentProvider;
         _cache = cache;
         _bookContextTool = bookContextTool;
         _bookNotesTool = bookNotesTool;
@@ -72,15 +84,42 @@ public class ChatController : Controller
                 x.Role,
                 x.Role == "assistant" ? Markdown.ToHtml(x.Content, MarkdownPipeline) : x.Content,
                 x.ResponseTimeMs,
-                x.Role == "assistant" ? x.Id : null))
+                x.Role == "assistant" ? x.Id : null,
+                x.Role == "assistant" ? x.AgentType : null))
             .ToList();
 
         return PartialView("Chat", history);
     }
 
-    [HttpPost("/chat/send")]
-    public async Task<IActionResult> Send([FromForm] string message, CancellationToken ct)
+    [HttpGet("/chat/agent")]
+    public async Task<IActionResult> GetAgent(CancellationToken ct)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var agentKey = await GetActiveAgentKeyAsync(userId, ct);
+        return PartialView("_AgentIndicator", agentKey);
+    }
+
+    [HttpPost("/chat/agent")]
+    public async Task<IActionResult> SetAgent([FromForm] string agentKey, CancellationToken ct)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var normalizedAgentKey = NormalizeAgentKey(agentKey);
+        await _cache.SetAsync(BuildActiveAgentKey(userId), normalizedAgentKey, SessionTtl, ct);
+        return PartialView("_AgentIndicator", normalizedAgentKey);
+    }
+
+    [HttpPost("/chat/send")]
+    public async Task<IActionResult> Send([FromForm] ChatSendRequest request, CancellationToken ct)
+    {
+        var message = request.Message;
+        var agentKey = request.AgentKey;
+
         if (string.IsNullOrWhiteSpace(message))
             return Content("");
 
@@ -96,6 +135,14 @@ public class ChatController : Controller
             var sessionId = await GetOrCreateSessionIdAsync(userId, activeSessionIdKey, ct);
             var sessionKey = BuildSessionKey(userId, sessionId);
             var contextKey = BuildContextKey(userId, sessionId);
+            var selectedAgentKey = NormalizeAgentKey(agentKey);
+            var cachedAgentKey = await GetActiveAgentKeyAsync(userId, ct);
+            if (!string.IsNullOrWhiteSpace(agentKey) && selectedAgentKey != cachedAgentKey)
+                await _cache.SetAsync(BuildActiveAgentKey(userId), selectedAgentKey, SessionTtl, ct);
+            else
+                selectedAgentKey = cachedAgentKey;
+
+            var activeAgent = _agentProvider.GetAgent(selectedAgentKey);
             var sessionJson = await _cache.GetAsync(sessionKey, ct);
             var userProfileJson = await _cache.GetAsync(userProfileKey, ct);
 
@@ -103,9 +150,10 @@ public class ChatController : Controller
             var preferredLanguage = ExtractPreferredLanguage(userProfileJson);
             var orchestratorInstructions = BuildOrchestratorInstructions(profileInstructions, preferredLanguage);
 
-            IReadOnlyList<AITool> tools = [_bookContextTool.Create(userId), _bookNotesTool.Create(userId), _bookNoteSearchTool.Create(userId)];
+            IReadOnlyList<AITool> tools = [_bookContextTool.Create(userId, selectedAgentKey), _bookNotesTool.Create(userId), _bookNoteSearchTool.Create(userId)];
 
             var runResult = await _agent.RunAsync(
+                activeAgent,
                 message,
                 sessionJson,
                 orchestratorInstructions,
@@ -125,6 +173,7 @@ public class ChatController : Controller
                 UserId = userId,
                 SessionId = sessionId,
                 Role = "assistant",
+                AgentType = selectedAgentKey,
                 Content = runResult.ResponseText,
                 DisplayOrder = nextDisplayOrder + 1,
                 TotalInputTokensProcessed = runResult.TotalInputTokensProcessed,
@@ -175,7 +224,7 @@ public class ChatController : Controller
                 orchestratorInstructions.Length + message.Length);
 
             var html = Markdown.ToHtml(runResult.ResponseText, MarkdownPipeline);
-            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs, assistantMessage.Id));
+            return PartialView("_BotMessage", new BotMessageViewModel(html, contextUsagePct, runResult.ElapsedMs, assistantMessage.Id, selectedAgentKey));
         }
         catch (Exception ex)
         {
@@ -356,6 +405,12 @@ public class ChatController : Controller
         return sessionId;
     }
 
+    private async Task<string> GetActiveAgentKeyAsync(string userId, CancellationToken ct)
+    {
+        var value = await _cache.GetAsync(BuildActiveAgentKey(userId), ct);
+        return NormalizeAgentKey(value);
+    }
+
     private int ComputeUsagePct(int maxPromptTokens)
     {
         if (_numCtx <= 0)
@@ -367,6 +422,18 @@ public class ChatController : Controller
     private static string BuildSessionKey(string userId, Guid sessionId) => $"agentsession:{userId}:{sessionId:D}";
 
     private static string BuildContextKey(string userId, Guid sessionId) => $"agentcontext:{userId}:{sessionId:D}";
+
+    private static string BuildActiveAgentKey(string userId) => $"activeagent:{userId}";
+
+    public static string NormalizeAgentKey(string? value) =>
+        string.Equals(value, "premium", StringComparison.OrdinalIgnoreCase) ? "premium" : "free";
+
+    public static string? GetAgentLabel(string? agentType) => agentType switch
+    {
+        "premium" => "Premium",
+        "free" => "Free",
+        _ => null
+    };
 
     private static void AddPart(List<string> parts, string? value, string prefix = "", string suffix = "")
     {

@@ -1,0 +1,13 @@
+@model string
+
+@{
+    var agentKey = WebApp.Controllers.ChatController.NormalizeAgentKey(Model);
+    var label = agentKey == "premium" ? "Premium — ChatGPT" : "Free — Qwen 3.5";
+}
+
+<span id="active-agent-indicator"
+      hx-swap-oob="outerHTML"
+      class="text-xs text-white/55"
+      data-active-agent="@agentKey">
+    Currently using: @label
+</span>

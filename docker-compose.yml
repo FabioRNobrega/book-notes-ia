@@ -18,6 +18,9 @@ services:
       - ConnectionStrings__Redis=redis:6379
       - Unsplash__AccessKey=${UNSPLASH_ACCESS_KEY}
       - Unsplash__SecretKey=${UNSPLASH_SECRET_KEY}
+      - Azure__OpenAI__Endpoint=${AZURE_OPENAI_ENDPOINT}
+      - Azure__OpenAI__DeploymentName=${AZURE_LLM_DEPLOYMENT_NAME}
+      - Azure__OpenAI__ApiKey=${AZURE_OPENAI_API_KEY}
       - Tts__BaseUrl=http://tts:5080
       - AudioStorage__BasePath=/audio-storage
     depends_on:

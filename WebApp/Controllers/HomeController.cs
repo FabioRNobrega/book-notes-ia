@@ -28,9 +28,12 @@ public class HomeController : Controller
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         ViewData["ContextUsagePct"] = 0;
+        ViewData["ActiveAgent"] = "free";
 
         if (!string.IsNullOrWhiteSpace(userId))
         {
+            ViewData["ActiveAgent"] = ChatController.NormalizeAgentKey(await _cache.GetAsync($"activeagent:{userId}"));
+
             var sessionIdRaw = await _cache.GetAsync($"activesessionid:{userId}");
             if (Guid.TryParse(sessionIdRaw, out var sessionId))
             {

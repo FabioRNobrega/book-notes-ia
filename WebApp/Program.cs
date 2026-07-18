@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
+using Azure.AI.OpenAI;
 using Npgsql;
 using OllamaSharp;
 using Pgvector.EntityFrameworkCore;
 using Pgvector.Npgsql;
+using System.ClientModel;
 using WebApp.Services;
 
 
@@ -40,7 +42,7 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 
 
 // Build with Ollama
-builder.Services.AddSingleton<IChatClient>(_ =>
+builder.Services.AddKeyedSingleton<IChatClient>("free", (_, _) =>
 {
     var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
     var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen3.5:4b";
@@ -65,6 +67,29 @@ builder.Services.AddSingleton<IChatClient>(_ =>
         .Build();
 });
 
+builder.Services.AddKeyedSingleton<IChatClient>("premium", (_, _) =>
+{
+    var endpoint = builder.Configuration["Azure:OpenAI:Endpoint"]
+        ?? builder.Configuration["AZURE_OPENAI_ENDPOINT"];
+    var deploymentName = builder.Configuration["Azure:OpenAI:DeploymentName"]
+        ?? builder.Configuration["AZURE_LLM_DEPLOYMENT_NAME"];
+    var apiKey = builder.Configuration["Azure:OpenAI:ApiKey"]
+        ?? builder.Configuration["AZURE_OPENAI_API_KEY"];
+
+    if (string.IsNullOrWhiteSpace(endpoint))
+        throw new InvalidOperationException("Azure OpenAI endpoint is not configured.");
+    if (string.IsNullOrWhiteSpace(deploymentName))
+        throw new InvalidOperationException("Azure OpenAI deployment name is not configured.");
+    if (string.IsNullOrWhiteSpace(apiKey))
+        throw new InvalidOperationException("Azure OpenAI API key is not configured.");
+
+    var azureClient = new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(apiKey));
+
+    // gpt-5.5 is a reasoning-family model and only supports the default temperature (1);
+    // unlike the Ollama client, no Temperature override is set here.
+    return (IChatClient)new TokenCountingChatClient(azureClient.GetChatClient(deploymentName).AsIChatClient());
+});
+
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
 {
     var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
@@ -78,9 +103,9 @@ builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =
     return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(httpClient, "mxbai-embed-large");
 });
 
-builder.Services.AddSingleton<AIAgent>(sp =>
+builder.Services.AddKeyedSingleton<AIAgent>("free", (sp, _) =>
 {
-    var chatClient = sp.GetRequiredService<IChatClient>();
+    var chatClient = sp.GetRequiredKeyedService<IChatClient>("free");
 
     return new ChatClientAgent(
         chatClient,
@@ -93,6 +118,23 @@ builder.Services.AddSingleton<AIAgent>(sp =>
             """
     );
 });
+builder.Services.AddKeyedSingleton<AIAgent>("premium", (sp, _) =>
+{
+    var chatClient = sp.GetRequiredKeyedService<IChatClient>("premium");
+
+    return new ChatClientAgent(
+        chatClient,
+        name: "PremiumChatGptAgent",
+        instructions:
+            """
+            You are a helpful assistant.
+            Be concise and practical.
+            When giving recommendations, explain briefly why they match the user's preferences.
+            """
+    );
+});
+builder.Services.AddSingleton<IChatAgentProvider, ChatAgentProvider>();
+builder.Services.AddSingleton<IChatClientProvider, ChatClientProvider>();
 builder.Services.AddSingleton<IChatOrchestratorAgent, ChatOrchestratorAgent>();
 builder.Services.AddScoped<IBookContextAgentTool, BookContextAgentTool>();
 builder.Services.AddScoped<IBookNotesAnalysisService, BookNotesAnalysisService>();
@@ -124,7 +166,7 @@ builder.Services.AddHttpClient("Unsplash", client =>
 });
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
-builder.Services.AddScoped<IOllamaService, OllamaService>();
+builder.Services.AddScoped<IChatCompletionService, ChatCompletionService>();
 builder.Services.AddHttpClient<IOpenLibraryService, OpenLibraryService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();
 builder.Services.AddScoped<IBookTitleService, BookTitleService>();

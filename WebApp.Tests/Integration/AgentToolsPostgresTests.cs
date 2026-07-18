@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Agents.AI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +27,7 @@ public class AgentToolsPostgresTests
 
         var service = new BookContextService(
             db,
-            new FakeOllamaService("Generated Expanse context."),
+            new FakeChatCompletionService("Generated Expanse context."),
             new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
@@ -52,7 +53,7 @@ public class AgentToolsPostgresTests
 
         var service = new BookContextService(
             db,
-            new FakeOllamaService("Generated PKD context."),
+            new FakeChatCompletionService("Generated PKD context."),
             new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId);
 
@@ -80,7 +81,7 @@ public class AgentToolsPostgresTests
 
         var service = new BookContextService(
             db,
-            new FakeOllamaService("Generated On the Beach context."),
+            new FakeChatCompletionService("Generated On the Beach context."),
             new FakeOpenLibraryService());
         var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(VectorWithFirstValue(-1)), userId);
 
@@ -115,7 +116,7 @@ public class AgentToolsPostgresTests
             db,
             userId);
 
-        await controller.Send("tell me about Dick, Philip K - Galactic Pot-Healer", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "tell me about Dick, Philip K - Galactic Pot-Healer" }, CancellationToken.None);
         var result = await controller.Chat(CancellationToken.None);
 
         var partial = Assert.IsType<PartialViewResult>(result);
@@ -151,7 +152,7 @@ public class AgentToolsPostgresTests
             db,
             userId);
 
-        await controller.Send("Tell me about Dune", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "Tell me about Dune" }, CancellationToken.None);
 
         var messages = await db.ChatMessages
             .Where(x => x.UserId == userId)
@@ -176,6 +177,7 @@ public class AgentToolsPostgresTests
                 Assert.Equal(500, assistantMessage.MaxPromptTokens);
                 Assert.Equal(2, assistantMessage.ModelCallCount);
                 Assert.Equal(38000, assistantMessage.ResponseTimeMs);
+                Assert.Equal("free", assistantMessage.AgentType);
             });
     }
 
@@ -196,7 +198,7 @@ public class AgentToolsPostgresTests
             db,
             userId);
 
-        await controller.Send("Tell me about Dune", CancellationToken.None);
+        await controller.Send(new ChatSendRequest { Message = "Tell me about Dune" }, CancellationToken.None);
         var oldSessionId = await cache.GetAsync($"activesessionid:{userId}");
 
         await controller.Reset(CancellationToken.None);
@@ -480,7 +482,7 @@ public class AgentToolsPostgresTests
         IBookNoteSearchAgentTool? bookNoteSearchTool = null)
     {
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        var controller = new ChatController(agent, cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, new FakeChatMessageAudioService(), NullLogger<ChatController>.Instance, configuration);
+        var controller = new ChatController(agent, new FakeChatAgentProvider(), cache, bookContextTool, bookNotesTool, bookNoteSearchTool ?? new FakeBookNoteSearchAgentTool(), db, new FakeChatMessageAudioService(), NullLogger<ChatController>.Instance, configuration);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -615,7 +617,7 @@ public class AgentToolsPostgresTests
         string userId)
     {
         var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
-        return new BookContextAgentTool(bookContextService, lookup).Create(userId);
+        return new BookContextAgentTool(bookContextService, lookup).Create(userId, "free");
     }
 
     private static BookNotesAnalysisService MakeAnalysisService(AppDbContext db) =>
@@ -648,15 +650,17 @@ public class AgentToolsPostgresTests
     private static string NormalizeKey(string value) =>
         new(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-    private sealed class FakeOllamaService(string response) : IOllamaService
+    private sealed class FakeChatCompletionService(string response) : IChatCompletionService
     {
         public int CallCount { get; private set; }
         public string LastPrompt { get; private set; } = string.Empty;
+        public string LastAgentKey { get; private set; } = string.Empty;
 
-        public Task<string> CompleteAsync(string prompt, CancellationToken ct = default)
+        public Task<string> CompleteAsync(string prompt, string agentKey, CancellationToken ct = default)
         {
             CallCount++;
             LastPrompt = prompt;
+            LastAgentKey = agentKey;
             return Task.FromResult(response);
         }
     }
@@ -675,14 +679,45 @@ public class AgentToolsPostgresTests
 
     private sealed class FakeChatOrchestratorAgent : IChatOrchestratorAgent
     {
-        public Task<ChatAgentRunResult> RunAsync(string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default) =>
+        public Task<ChatAgentRunResult> RunAsync(AIAgent agent, string message, string? sessionJson, string? instructions, IReadOnlyList<AITool>? tools = null, CancellationToken ct = default) =>
             Task.FromResult(new ChatAgentRunResult("Saved answer", AgentToolsPostgresTests.MafSessionJson, 500, 200, 300, 150, 500, 200, 2, 38000));
+    }
+
+    private sealed class FakeChatAgentProvider : IChatAgentProvider
+    {
+        private static readonly AIAgent Agent = new ChatClientAgent(new FakeChatClient(), name: "TestAgent");
+
+        public AIAgent GetAgent(string agentKey) => Agent;
     }
 
     private sealed class FakeBookContextAgentTool : IBookContextAgentTool
     {
-        public AIFunction Create(string userId) =>
+        public AIFunction Create(string userId, string agentKey) =>
             AIFunctionFactory.Create((string bookTitle) => Task.FromResult("context"), name: "GenerateBookContext");
+    }
+
+    private sealed class FakeChatClient : IChatClient
+    {
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ChatResponse(new Microsoft.Extensions.AI.ChatMessage(ChatRole.Assistant, "ok")));
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<Microsoft.Extensions.AI.ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeBookNotesAgentTool : IBookNotesAgentTool

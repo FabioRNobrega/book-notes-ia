@@ -59,7 +59,7 @@ public class BookContextControllerTests
 
         public Task<string?> GetContextAsync(Guid bookId, string userId) => Task.FromResult<string?>(null);
 
-        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, CancellationToken ct = default)
+        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default)
         {
             if (GenerateException is not null)
                 throw GenerateException;
