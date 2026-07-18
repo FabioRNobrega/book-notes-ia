@@ -374,6 +374,98 @@
         }
     }
 
+    function getDownloadButton(widget) {
+        return widget.querySelector(".tts-download-btn");
+    }
+
+    function setDownloadButtonState(widget, state) {
+        const btn = getDownloadButton(widget);
+        const tooltip = widget.querySelector(".tts-download-tooltip");
+        if (!btn) return;
+
+        window.clearTimeout(Number(btn.dataset.downloadStateTimer || 0));
+        delete btn.dataset.downloadStateTimer;
+
+        btn.removeAttribute("disabled");
+        btn.setAttribute("name", "download");
+        btn.setAttribute("label", "Download audio");
+        if (tooltip) tooltip.setAttribute("content", "Download audio");
+
+        if (state === "loading") {
+            btn.setAttribute("disabled", "true");
+            btn.setAttribute("name", "arrow-clockwise");
+            btn.setAttribute("label", "Downloading audio");
+            if (tooltip) tooltip.setAttribute("content", "Downloading audio");
+        } else if (state === "error") {
+            btn.setAttribute("name", "exclamation-circle");
+            btn.setAttribute("label", "Download failed");
+            if (tooltip) tooltip.setAttribute("content", "Download failed");
+
+            const timer = window.setTimeout(() => setDownloadButtonState(widget, "idle"), 2500);
+            btn.dataset.downloadStateTimer = String(timer);
+        } else if (state === "success") {
+            btn.setAttribute("name", "check-circle");
+            btn.setAttribute("label", "Audio download started");
+            if (tooltip) tooltip.setAttribute("content", "Audio download started");
+
+            const timer = window.setTimeout(() => setDownloadButtonState(widget, "idle"), 1500);
+            btn.dataset.downloadStateTimer = String(timer);
+        }
+    }
+
+    function getAudioDownloadFileName(messageId) {
+        const safeId = String(messageId).replace(/[^a-zA-Z0-9_-]/g, "");
+        return `book-response-${safeId}.wav`;
+    }
+
+    function triggerAudioDownload(url, messageId) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = getAudioDownloadFileName(messageId);
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    async function handleDownloadClick(widget) {
+        const messageId = widget.getAttribute("data-audio-message-id");
+        if (!messageId) return;
+
+        const btn = getDownloadButton(widget);
+        if (btn?.hasAttribute("disabled")) return;
+
+        const canReuseCurrentAudio = currentWidget === widget && currentObjectUrl;
+        let downloadUrl = currentObjectUrl;
+        let shouldRevokeDownloadUrl = false;
+
+        try {
+            if (!canReuseCurrentAudio) {
+                setDownloadButtonState(widget, "loading");
+
+                const response = await fetch(`/chat/messages/${messageId}/audio`);
+
+                if (!response.ok) {
+                    setDownloadButtonState(widget, "error");
+                    return;
+                }
+
+                const blob = await response.blob();
+                downloadUrl = URL.createObjectURL(blob);
+                shouldRevokeDownloadUrl = true;
+            }
+
+            triggerAudioDownload(downloadUrl, messageId);
+            setDownloadButtonState(widget, "success");
+        } catch {
+            setDownloadButtonState(widget, "error");
+        } finally {
+            if (shouldRevokeDownloadUrl && downloadUrl) {
+                window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+            }
+        }
+    }
+
     async function handlePlayClick(widget) {
         const messageId = widget.getAttribute("data-audio-message-id");
         if (!messageId) return;
@@ -487,6 +579,13 @@
         if (!btn) return;
         const widget = btn.closest(".tts-widget");
         if (widget) void handlePlayClick(widget);
+    });
+
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest(".tts-download-btn");
+        if (!btn) return;
+        const widget = btn.closest(".tts-widget");
+        if (widget) void handleDownloadClick(widget);
     });
 
     document.body.addEventListener("input", (event) => {
