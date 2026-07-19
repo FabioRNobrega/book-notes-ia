@@ -220,25 +220,53 @@ public class NotesControllerTests
         Assert.IsType<NotFoundResult>(missingResult);
     }
 
+    [Fact]
+    public async Task GenerateContext_UsesSelectedAgentFromCache_NotHardcodedFree()
+    {
+        var userId = "test-user";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "free-granite4", TimeSpan.FromMinutes(5));
+        var bookContextService = new FakeBookContextService();
+        var controller = CreateController(bookContextService: bookContextService, cache: cache);
+
+        await controller.GenerateContext(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal("free-granite4", bookContextService.LastAgentKey);
+    }
+
+    [Fact]
+    public async Task GenerateContext_WhenNoActiveAgentCached_DefaultsToFreeQwen()
+    {
+        var bookContextService = new FakeBookContextService();
+        var controller = CreateController(bookContextService: bookContextService);
+
+        await controller.GenerateContext(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal("free-qwen", bookContextService.LastAgentKey);
+    }
+
     private static NotesController CreateController(
         bool authenticated = true,
         AppDbContext? db = null,
         IBookTitleService? bookTitleService = null,
         IBookLibrarySearchService? librarySearch = null,
-        ILibrarianBookSearchService? librarianSearch = null)
+        ILibrarianBookSearchService? librarianSearch = null,
+        IBookContextService? bookContextService = null,
+        ICacheHandler? cache = null)
     {
         db ??= CreateDbContext();
 
         var controller = new NotesController(
             db,
             new FakeImportService(),
-            new FakeBookContextService(),
+            bookContextService ?? new FakeBookContextService(),
             bookTitleService ?? new BookTitleService(
                 db,
                 new FakeEmbeddingService(),
                 NullLogger<BookTitleService>.Instance),
             librarySearch ?? new FakeLibrarySearchService(new LibrarySearchResult([], NoExactSqlMatch: false)),
             librarianSearch ?? new FakeLibrarianSearchService([]),
+            cache ?? new FakeCacheHandler(),
             NullLogger<NotesController>.Instance,
             new ConfigurationBuilder().Build());
 
@@ -302,10 +330,44 @@ public class NotesControllerTests
 
     private sealed class FakeBookContextService : IBookContextService
     {
+        public string? LastAgentKey { get; private set; }
+
         public Task ClearAsync(Guid bookId, string userId) => Task.CompletedTask;
         public Task<string?> GetContextAsync(Guid bookId, string userId) => Task.FromResult<string?>(null);
-        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default) => Task.FromResult(string.Empty);
+
+        public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default)
+        {
+            LastAgentKey = agentKey;
+            return Task.FromResult(string.Empty);
+        }
+
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);
+    }
+
+    private sealed class FakeCacheHandler : ICacheHandler
+    {
+        private readonly Dictionary<string, string> _store = [];
+
+        public Task<string?> GetAsync(string key, CancellationToken ct = default) =>
+            Task.FromResult(_store.TryGetValue(key, out var value) ? value : null);
+
+        public Task RemoveAsync(string key, CancellationToken ct = default)
+        {
+            _store.Remove(key);
+            return Task.CompletedTask;
+        }
+
+        public Task SetAsync(string key, string value, TimeSpan ttl, CancellationToken ct = default)
+        {
+            _store[key] = value;
+            return Task.CompletedTask;
+        }
+
+        public Task SetObjectAsync<T>(string key, T value, TimeSpan ttl, CancellationToken ct = default)
+        {
+            _store[key] = System.Text.Json.JsonSerializer.Serialize(value);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeEmbeddingService : IEmbeddingService

@@ -18,6 +18,7 @@ public class NotesController : Controller
     private readonly IBookTitleService _bookTitleService;
     private readonly IBookLibrarySearchService _librarySearchService;
     private readonly ILibrarianBookSearchService _librarianSearchService;
+    private readonly ICacheHandler _cache;
     private readonly ILogger<NotesController> _logger;
     private readonly long _maxFileSizeBytes;
 
@@ -28,6 +29,7 @@ public class NotesController : Controller
         IBookTitleService bookTitleService,
         IBookLibrarySearchService librarySearchService,
         ILibrarianBookSearchService librarianSearchService,
+        ICacheHandler cache,
         ILogger<NotesController> logger,
         IConfiguration configuration)
     {
@@ -37,6 +39,7 @@ public class NotesController : Controller
         _bookTitleService = bookTitleService;
         _librarySearchService = librarySearchService;
         _librarianSearchService = librarianSearchService;
+        _cache = cache;
         _logger = logger;
         _maxFileSizeBytes = configuration.GetValue<long?>("NotesImport:MaxFileSizeBytes") ?? 1_048_576;
     }
@@ -244,7 +247,8 @@ public class NotesController : Controller
 
         try
         {
-            var context = await _bookContextService.GenerateAndSaveAsync(id, userId, "free", ct);
+            var agentKey = ChatController.NormalizeAgentKey(await _cache.GetAsync($"activeagent:{userId}", ct));
+            var context = await _bookContextService.GenerateAndSaveAsync(id, userId, agentKey, ct);
             return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = context });
         }
         catch (KeyNotFoundException)
