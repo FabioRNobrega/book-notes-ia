@@ -6,7 +6,10 @@ namespace WebApp.Tests.Services;
 public class ChatCompletionServiceTests
 {
     [Theory]
-    [InlineData("free")]
+    [InlineData("free-qwen")]
+    [InlineData("free-llama3")]
+    [InlineData("free-phi4")]
+    [InlineData("free-granite4")]
     [InlineData("premium")]
     public async Task CompleteAsync_ResolvesChatClientByAgentKey(string agentKey)
     {

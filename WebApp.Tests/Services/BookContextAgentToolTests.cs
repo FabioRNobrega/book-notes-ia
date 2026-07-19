@@ -36,6 +36,28 @@ public class BookContextAgentToolTests
     }
 
     [Fact]
+    public async Task Create_WhenSelectedFreeModelIsLlama3_PassesExactKeyToBookContextService()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var book = await SeedUserAndBookAsync(db, "user-1", "Dune", "Frank Herbert");
+        db.BookEmbeddings.Add(CreateBookEmbedding(book, VectorA()));
+        await db.SaveChangesAsync();
+
+        var service = new FakeBookContextService("Arrakis literary context.");
+        var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
+        var function = tool.Create("user-1", "free-llama3");
+
+        var result = await function.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "desert planet messiah novel" },
+            CancellationToken.None);
+
+        Assert.Equal("<book-context>\nArrakis literary context.\n</book-context>", result?.ToString());
+        Assert.True(service.GenerateAndSaveCalled);
+        Assert.Equal("free-llama3", service.LastAgentKey);
+    }
+
+    [Fact]
     public async Task Create_WhenBookBelongsToOtherUser_ReturnsNotFoundOrFallback()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -46,7 +68,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("context");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1", "free");
+        var function = tool.Create("user-1", "free-granite4");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Dune" },
@@ -65,7 +87,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("context");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1", "free");
+        var function = tool.Create("user-1", "free-granite4");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Unknown Book" },
@@ -106,7 +128,7 @@ public class BookContextAgentToolTests
 
         var service = new FakeBookContextService("Should not be called.");
         var tool = CreateTool(db, service, new FakeEmbeddingService(VectorA()));
-        var function = tool.Create("user-1", "free");
+        var function = tool.Create("user-1", "free-granite4");
 
         var result = await function.InvokeAsync(
             new AIFunctionArguments { ["bookTitle"] = "Foundation" },

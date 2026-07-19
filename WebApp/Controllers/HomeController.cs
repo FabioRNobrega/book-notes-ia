@@ -28,7 +28,7 @@ public class HomeController : Controller
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         ViewData["ContextUsagePct"] = 0;
-        ViewData["ActiveAgent"] = "free";
+        ViewData["ActiveAgent"] = ChatAgentCatalog.DefaultKey;
 
         if (!string.IsNullOrWhiteSpace(userId))
         {

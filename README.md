@@ -9,7 +9,7 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - .NET 9 MVC and Razor views
 - Microsoft Agent Framework + `Microsoft.Extensions.AI`
 - Ollama via OllamaSharp
-- Chat model: `qwen3.5:4b`
+- Free chat models: `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`
 - Embedding model: `mxbai-embed-large`
 - PostgreSQL 18 with pgvector
 - EF Core 9 and Npgsql
@@ -30,7 +30,7 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - `postgres` on port `5432`
 - `redis` on port `6379`
 
-The Ollama container pulls both `qwen3.5:4b` and `mxbai-embed-large`. The TTS sidecar mounts Supertonic 3 ONNX model assets from `services/TtsService.Api/assets/supertonic-3/` (not included in the repository — see Setup).
+The Ollama container pulls `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`, and `mxbai-embed-large` on first start — this makes the first startup heavier and slower than before. All four chat models support native tool calling, which the app relies on for book-context and notes lookup. The TTS sidecar mounts Supertonic 3 ONNX model assets from `services/TtsService.Api/assets/supertonic-3/` (not included in the repository — see Setup).
 
 ## Features
 
@@ -266,9 +266,9 @@ The `TtsService.Tests` unit tests cover voice and language resolution logic in t
 Configured in `WebApp/appsettings.json` and container env:
 
 - `Ollama:OllamaURL`
-- `Ollama:OllamaModel`
+- `Ollama:NumCtx`
 
-The chat model is `qwen3.5:4b`. The embedding model is configured in `Program.cs` as `mxbai-embed-large`.
+The free chat models (`qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`) are defined in `WebApp/Services/ChatAgentCatalog.cs`, the single source of truth for free-agent keys, labels, and model names — add a model there (plus a Docker pull entry) to introduce another free agent without touching controller or view code. Pick models that support native Ollama tool calling; the app attaches book-context and notes tools to every chat turn, and a model without tool support will error on send. The embedding model is configured in `Program.cs` as `mxbai-embed-large`.
 
 ### Database and Cache
 
@@ -297,7 +297,7 @@ Unsplash is optional. When `Unsplash:AccessKey` is configured, the app can fetch
 
 ### Azure OpenAI (Premium agent)
 
-The home page lets a signed-in user pick between the **Free** agent (local Ollama `qwen3.5:4b`, no setup required) and the **Premium** agent (Azure OpenAI). Premium requires three values in `.env`:
+The home page lets a signed-in user pick between four **Free** local agents (Qwen 3.5, Llama 3.2, Phi-4 Mini, Granite 4 — all via Ollama, no setup required) and the **Premium** agent (Azure OpenAI). Premium requires three values in `.env`:
 
 ```env
 AZURE_OPENAI_ENDPOINT=https://<your-resource-name>.openai.azure.com/
@@ -318,7 +318,7 @@ make docker-down
 make docker-run
 ```
 
-If `AZURE_OPENAI_ENDPOINT`/`AZURE_LLM_DEPLOYMENT_NAME`/`AZURE_OPENAI_API_KEY` are left empty, only the Free agent is usable; selecting Premium will surface an error in chat instead of silently falling back to Ollama.
+If `AZURE_OPENAI_ENDPOINT`/`AZURE_LLM_DEPLOYMENT_NAME`/`AZURE_OPENAI_API_KEY` are left empty, only the Free agents are usable; selecting Premium will surface an error in chat instead of silently falling back to Ollama.
 
 ## Troubleshooting
 
@@ -399,7 +399,7 @@ docker logs webapp
 
 **`HTTP 400 invalid_request_error: unsupported_value` for `temperature`** — some models (reasoning-family models like `gpt-5.x`/`o1`/`o3`) only support the default `temperature=1` and reject any explicit override. `Program.cs`'s Azure `IChatClient` registration does not set `Temperature` for this reason; if you see this error after modifying that registration, remove the `Temperature` override again.
 
-In all three cases, the Free/Ollama agent is unaffected — Premium failures do not silently fall back to Ollama, they surface as an error message in the chat UI.
+In all three cases, the Free local agents are unaffected — Premium failures do not silently fall back to Ollama, they surface as an error message in the chat UI.
 
 ### Rebuild everything clean
 

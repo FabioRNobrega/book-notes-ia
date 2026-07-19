@@ -109,6 +109,32 @@ public class ChatControllerTests
     }
 
     [Theory]
+    [InlineData("free-llama3", "Llama 3.2 answer")]
+    [InlineData("free-phi4", "Phi-4 Mini answer")]
+    [InlineData("free-granite4", "Granite 4 answer")]
+    public async Task Send_WhenActiveAgentIsOtherFreeModel_UsesMatchingAgentAndPersistsAgentType(string agentKey, string responseText)
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", agentKey, TimeSpan.FromMinutes(5));
+        var agent = new FakeChatOrchestratorAgent { ResponseText = responseText };
+        var bookContextTool = new FakeBookContextAgentTool();
+        var db = CreateDbContext();
+        var controller = CreateController(agent, cache, bookContextTool, userId, db);
+
+        var result = await controller.Send(new ChatSendRequest { Message = "Hello" }, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var model = Assert.IsType<BotMessageViewModel>(partial.Model);
+        Assert.Equal(agentKey, model.AgentType);
+        Assert.Same(FakeChatAgentProvider.Agents[agentKey], agent.LastAgent);
+        Assert.Equal(agentKey, bookContextTool.LastAgentKey);
+
+        var assistant = await db.ChatMessages.SingleAsync(x => x.Role == "assistant");
+        Assert.Equal(agentKey, assistant.AgentType);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("bad")]
     public async Task Send_WhenActiveAgentMissingOrInvalid_DefaultsToFree(string? cachedAgent)
@@ -138,7 +164,7 @@ public class ChatControllerTests
         await controller.Send(new ChatSendRequest { Message = "Hello", AgentKey = "free" }, CancellationToken.None);
 
         Assert.Same(FakeChatAgentProvider.FreeAgent, agent.LastAgent);
-        Assert.Equal("free", await cache.GetAsync($"activeagent:{userId}"));
+        Assert.Equal("free-qwen", await cache.GetAsync($"activeagent:{userId}"));
     }
 
     [Fact]
@@ -263,7 +289,7 @@ public class ChatControllerTests
                 Assert.Contains("Leviathan Wakes context.", entry.Content);
                 Assert.Equal(24000, entry.ResponseTimeMs);
                 Assert.Equal("free", entry.AgentType);
-                Assert.Equal("Free", entry.AgentLabel);
+                Assert.Equal("Free · Qwen 3.5", entry.AgentLabel);
             });
     }
 
@@ -468,15 +494,22 @@ public class ChatControllerTests
 
     private sealed class FakeChatAgentProvider : IChatAgentProvider
     {
-        public static readonly AIAgent FreeAgent = new ChatClientAgent(new FakeChatClient(), name: "FreeAgent");
-        public static readonly AIAgent PremiumAgent = new ChatClientAgent(new FakeChatClient(), name: "PremiumAgent");
-
-        public AIAgent GetAgent(string agentKey) => agentKey switch
+        public static readonly IReadOnlyDictionary<string, AIAgent> Agents = new Dictionary<string, AIAgent>
         {
-            "premium" => PremiumAgent,
-            "free" => FreeAgent,
-            _ => throw new InvalidOperationException($"Unknown chat agent key '{agentKey}'.")
+            ["premium"] = new ChatClientAgent(new FakeChatClient(), name: "PremiumAgent"),
+            ["free-qwen"] = new ChatClientAgent(new FakeChatClient(), name: "FreeQwenAgent"),
+            ["free-llama3"] = new ChatClientAgent(new FakeChatClient(), name: "FreeLlama3Agent"),
+            ["free-phi4"] = new ChatClientAgent(new FakeChatClient(), name: "FreePhi4Agent"),
+            ["free-granite4"] = new ChatClientAgent(new FakeChatClient(), name: "FreeGranite4Agent"),
         };
+
+        public static AIAgent FreeAgent => Agents["free-qwen"];
+        public static AIAgent PremiumAgent => Agents["premium"];
+
+        public AIAgent GetAgent(string agentKey) =>
+            Agents.TryGetValue(agentKey, out var agent)
+                ? agent
+                : throw new InvalidOperationException($"Unknown chat agent key '{agentKey}'.");
     }
 
     private sealed class FakeBookContextAgentTool : IBookContextAgentTool

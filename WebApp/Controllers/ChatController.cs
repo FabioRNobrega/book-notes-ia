@@ -425,15 +425,9 @@ public class ChatController : Controller
 
     private static string BuildActiveAgentKey(string userId) => $"activeagent:{userId}";
 
-    public static string NormalizeAgentKey(string? value) =>
-        string.Equals(value, "premium", StringComparison.OrdinalIgnoreCase) ? "premium" : "free";
+    public static string NormalizeAgentKey(string? value) => ChatAgentCatalog.Normalize(value);
 
-    public static string? GetAgentLabel(string? agentType) => agentType switch
-    {
-        "premium" => "Premium",
-        "free" => "Free",
-        _ => null
-    };
+    public static string? GetAgentLabel(string? agentType) => ChatAgentCatalog.GetLabel(agentType);
 
     private static void AddPart(List<string> parts, string? value, string prefix = "", string suffix = "")
     {

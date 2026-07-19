@@ -9,16 +9,25 @@ public class ChatClientProviderTests
     [Fact]
     public void GetChatClient_ResolvesKeyedClient()
     {
-        var free = new FakeChatClient("free");
+        var qwen = new FakeChatClient("free-qwen");
+        var llama3 = new FakeChatClient("free-llama3");
+        var phi4 = new FakeChatClient("free-phi4");
+        var granite4 = new FakeChatClient("free-granite4");
         var premium = new FakeChatClient("premium");
         var services = new ServiceCollection()
-            .AddKeyedSingleton<IChatClient>("free", free)
+            .AddKeyedSingleton<IChatClient>("free-qwen", qwen)
+            .AddKeyedSingleton<IChatClient>("free-llama3", llama3)
+            .AddKeyedSingleton<IChatClient>("free-phi4", phi4)
+            .AddKeyedSingleton<IChatClient>("free-granite4", granite4)
             .AddKeyedSingleton<IChatClient>("premium", premium)
             .BuildServiceProvider();
 
         var provider = new ChatClientProvider(services);
 
-        Assert.Same(free, provider.GetChatClient("free"));
+        Assert.Same(qwen, provider.GetChatClient("free-qwen"));
+        Assert.Same(llama3, provider.GetChatClient("free-llama3"));
+        Assert.Same(phi4, provider.GetChatClient("free-phi4"));
+        Assert.Same(granite4, provider.GetChatClient("free-granite4"));
         Assert.Same(premium, provider.GetChatClient("premium"));
     }
 

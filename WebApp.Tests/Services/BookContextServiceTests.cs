@@ -60,12 +60,12 @@ public class BookContextServiceTests
         var openLibrary = new FakeOpenLibraryService(synopsis);
         var service = new BookContextService(db, completion, openLibrary);
 
-        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free", CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free-qwen", CancellationToken.None);
 
         Assert.Equal("Generated Dune context.", result);
         Assert.Contains(synopsis, completion.LastPrompt);
         Assert.Equal(1, completion.CallCount);
-        Assert.Equal("free", completion.LastAgentKey);
+        Assert.Equal("free-qwen", completion.LastAgentKey);
         Assert.Equal(1, openLibrary.CallCount);
 
         var savedBook = await db.Books.SingleAsync();
@@ -108,11 +108,12 @@ public class BookContextServiceTests
         var openLibrary = new FakeOpenLibraryService(null);
         var service = new BookContextService(db, completion, openLibrary);
 
-        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free", CancellationToken.None);
+        var result = await service.GenerateAndSaveAsync(book.Id, userId, "free-llama3", CancellationToken.None);
 
         Assert.Equal("Generated fallback context.", result);
         Assert.Equal(1, completion.CallCount);
         Assert.Equal(1, openLibrary.CallCount);
+        Assert.Equal("free-llama3", completion.LastAgentKey);
 
         var savedBook = await db.Books.SingleAsync();
         Assert.Null(savedBook.Synopsis);
