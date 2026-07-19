@@ -36,8 +36,11 @@
         setActiveModeButton(mode);
     }
 
+    const SUPPORTED_AGENT_KEYS = ["premium", "free-qwen", "free-llama3", "free-phi4", "free-granite4"];
+    const DEFAULT_AGENT_KEY = "free-qwen";
+
     function normalizeAgentKey(value) {
-        return value === "premium" ? "premium" : "free";
+        return SUPPORTED_AGENT_KEYS.includes(value) ? value : DEFAULT_AGENT_KEY;
     }
 
     function syncAgentInputs(agentKey) {

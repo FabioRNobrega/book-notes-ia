@@ -42,6 +42,31 @@ public class AgentToolsPostgresTests
     }
 
     [Fact]
+    public async Task GenerateBookContext_WithFreeLlama3Selected_PassesExactKeyThroughToChatClientProvider()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync();
+        await using var db = database.CreateDbContext();
+        var userId = "user-e2e-llama3";
+        var book = await SeedUserBookAndNoteAsync(db, userId, "Leviathan Wakes", "James S. A. Corey");
+        db.BookEmbeddings.Add(CreateBookEmbedding(book, SameVector()));
+        await db.SaveChangesAsync();
+
+        var completion = new FakeChatCompletionService("Generated Expanse context via Llama 3.2.");
+        var service = new BookContextService(db, completion, new FakeOpenLibraryService());
+        var tool = CreateBookContextTool(db, service, new FakeEmbeddingService(SameVector()), userId, "free-llama3");
+
+        var result = await tool.InvokeAsync(
+            new AIFunctionArguments { ["bookTitle"] = "Leviathan Wakes by James S. A. Corey" },
+            CancellationToken.None);
+
+        Assert.Equal("<book-context>\nGenerated Expanse context via Llama 3.2.\n</book-context>", result?.ToString());
+        Assert.Equal("free-llama3", completion.LastAgentKey);
+
+        var savedBook = await db.Books.SingleAsync(b => b.UserId == userId);
+        Assert.Equal("Generated Expanse context via Llama 3.2.", savedBook.Context);
+    }
+
+    [Fact]
     public async Task GenerateBookContext_WithPostgresImportedAuthorDashTitle_ResolvesShortTitleAndPersistsContext()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
@@ -177,7 +202,7 @@ public class AgentToolsPostgresTests
                 Assert.Equal(500, assistantMessage.MaxPromptTokens);
                 Assert.Equal(2, assistantMessage.ModelCallCount);
                 Assert.Equal(38000, assistantMessage.ResponseTimeMs);
-                Assert.Equal("free", assistantMessage.AgentType);
+                Assert.Equal("free-qwen", assistantMessage.AgentType);
             });
     }
 
@@ -614,10 +639,11 @@ public class AgentToolsPostgresTests
         AppDbContext db,
         IBookContextService bookContextService,
         IEmbeddingService embeddingService,
-        string userId)
+        string userId,
+        string agentKey = "free-qwen")
     {
         var lookup = new BookLookupService(db, embeddingService, NullLogger<BookLookupService>.Instance);
-        return new BookContextAgentTool(bookContextService, lookup).Create(userId, "free");
+        return new BookContextAgentTool(bookContextService, lookup).Create(userId, agentKey);
     }
 
     private static BookNotesAnalysisService MakeAnalysisService(AppDbContext db) =>

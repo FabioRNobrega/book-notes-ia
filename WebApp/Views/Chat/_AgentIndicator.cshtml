@@ -1,8 +1,10 @@
 @model string
+@using WebApp.Services
 
 @{
     var agentKey = WebApp.Controllers.ChatController.NormalizeAgentKey(Model);
-    var isPremium = agentKey == "premium";
+    var selectedEntry = ChatAgentCatalog.Get(agentKey);
+    var isPremium = selectedEntry.Category == ChatAgentCategory.Premium;
 }
 
 <sl-dropdown id="active-agent-indicator"
@@ -21,23 +23,20 @@
 
     <sl-menu id="agent-menu"
              style="background-color: var(--background-transparency-default); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--book-radius); min-width: 240px;">
-        <sl-menu-item type="checkbox" value="premium" checked="@isPremium">
-            <span slot="prefix" class="flex items-center justify-center size-7 rounded-md bg-black/45 text-amber-300 mr-2">
-                <sl-icon name="stars" style="font-size:0.9rem;"></sl-icon>
-            </span>
-            <div class="flex flex-col gap-0.5 py-1">
-                <span class="agent-menu-item-title text-sm text-white/90">Premium — ChatGPT</span>
-                <span class="agent-menu-item-subtitle text-xs text-white/45">Azure OpenAI &middot; cloud</span>
-            </div>
-        </sl-menu-item>
-        <sl-menu-item type="checkbox" value="free" checked="@(!isPremium)">
-            <span slot="prefix" class="flex items-center justify-center size-7 rounded-md bg-black/45 text-emerald-400 mr-2">
-                <sl-icon name="cpu" style="font-size:0.9rem;"></sl-icon>
-            </span>
-            <div class="flex flex-col gap-0.5 py-1">
-                <span class="agent-menu-item-title text-sm text-white/90">Free — Qwen 3.5</span>
-                <span class="agent-menu-item-subtitle text-xs text-white/45">Local Ollama &middot; private</span>
-            </div>
-        </sl-menu-item>
+        @foreach (var entry in ChatAgentCatalog.Entries)
+        {
+            var isEntryPremium = entry.Category == ChatAgentCategory.Premium;
+            var iconName = isEntryPremium ? "stars" : "cpu";
+            var iconColorClass = isEntryPremium ? "text-amber-300" : "text-emerald-400";
+            <sl-menu-item type="checkbox" value="@entry.Key" checked="@(entry.Key == agentKey)">
+                <span slot="prefix" class="flex items-center justify-center size-7 rounded-md bg-black/45 @iconColorClass mr-2">
+                    <sl-icon name="@iconName" style="font-size:0.9rem;"></sl-icon>
+                </span>
+                <div class="flex flex-col gap-0.5 py-1">
+                    <span class="agent-menu-item-title text-sm text-white/90">@entry.MenuTitle</span>
+                    <span class="agent-menu-item-subtitle text-xs text-white/45">@entry.Subtitle</span>
+                </div>
+            </sl-menu-item>
+        }
     </sl-menu>
 </sl-dropdown>

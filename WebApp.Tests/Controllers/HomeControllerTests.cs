@@ -31,7 +31,35 @@ public class HomeControllerTests
         var result = await controller.Index();
 
         Assert.IsType<ViewResult>(result);
-        Assert.Equal("free", controller.ViewData["ActiveAgent"]);
+        Assert.Equal("free-qwen", controller.ViewData["ActiveAgent"]);
+    }
+
+    [Fact]
+    public async Task Index_WhenActiveAgentIsLegacyFree_NormalizesToFreeQwen()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "free", TimeSpan.FromMinutes(5));
+        var controller = CreateController(cache, userId);
+
+        var result = await controller.Index();
+
+        Assert.IsType<ViewResult>(result);
+        Assert.Equal("free-qwen", controller.ViewData["ActiveAgent"]);
+    }
+
+    [Fact]
+    public async Task Index_WhenActiveAgentIsFreeLlama3_KeepsExactKey()
+    {
+        var userId = "user-1";
+        var cache = new FakeCacheHandler();
+        await cache.SetAsync($"activeagent:{userId}", "free-llama3", TimeSpan.FromMinutes(5));
+        var controller = CreateController(cache, userId);
+
+        var result = await controller.Index();
+
+        Assert.IsType<ViewResult>(result);
+        Assert.Equal("free-llama3", controller.ViewData["ActiveAgent"]);
     }
 
     private static HomeController CreateController(ICacheHandler cache, string userId)

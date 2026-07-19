@@ -8,7 +8,7 @@ namespace WebApp.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/books/{bookId:guid}/context")]
-public class BookContextController(IBookContextService bookContextService) : ControllerBase
+public class BookContextController(IBookContextService bookContextService, ICacheHandler cache) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Get(Guid bookId)
@@ -29,7 +29,8 @@ public class BookContextController(IBookContextService bookContextService) : Con
 
         try
         {
-            var context = await bookContextService.GenerateAndSaveAsync(bookId, userId, "free", ct);
+            var agentKey = ChatController.NormalizeAgentKey(await cache.GetAsync($"activeagent:{userId}", ct));
+            var context = await bookContextService.GenerateAndSaveAsync(bookId, userId, agentKey, ct);
             return Ok(new { context });
         }
         catch (KeyNotFoundException ex)

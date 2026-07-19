@@ -25,7 +25,7 @@
 | AI abstraction | Microsoft.Extensions.AI | `10.5.0` | `IChatClient` is the app-wide chat abstraction. | https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai |
 | Agent framework | Microsoft Agent Framework | `Microsoft.Agents.AI` `1.3.0` | `ChatClientAgent`, `AIAgent`, `AgentSession`, and agent serialization power chat sessions. | https://learn.microsoft.com/agent-framework/ |
 | Local LLM client | OllamaSharp | `5.4.16` | `OllamaApiClient` connects the app to local Ollama chat and embedding models. | https://github.com/awaescher/OllamaSharp |
-| Local LLM runtime | Ollama | `ollama/ollama:latest`; chat model `qwen3.5:4b`; embedding model `mxbai-embed-large` | Compose starts Ollama and pulls the chat and embedding models used by `Program.cs`. | https://ollama.com/ |
+| Local LLM runtime | Ollama | `ollama/ollama:latest`; chat models `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`; embedding model `mxbai-embed-large` | Compose starts Ollama and pulls the free chat models (defined in `ChatAgentCatalog`) plus the embedding model. All four chat models are tool-calling capable, required for `GenerateBookContext`/notes tools. | https://ollama.com/ |
 | Vector extension | Pgvector.EntityFrameworkCore | `0.3.0` | EF Core model maps `BookEmbedding.Embedding` as `vector(1024)` and configures the HNSW cosine index. | https://github.com/pgvector/pgvector-dotnet |
 | Markdown rendering | Markdig | `0.43.0` | Chat assistant responses are rendered to HTML with Markdig advanced extensions. | https://github.com/xoofx/markdig |
 | Sass compilation | AspNetCore.SassCompiler | `1.93.2` | `WebApp/appsettings.json` maps `Styles` to generated CSS under `wwwroot/css`. | https://github.com/koenvzeijl/AspNetCore.SassCompiler |
@@ -44,7 +44,7 @@
 | Service | Compose file(s) | Image / Build | Purpose |
 | --- | --- | --- | --- |
 | `webapp` | `docker-compose.yml` | Builds `./WebApp/Dockerfile` (final stage: `mcr.microsoft.com/dotnet/sdk:9.0`) | Runs the ASP.NET Core MVC app on `http://localhost:8080`; the full .NET SDK is available inside — exec with `docker compose exec webapp bash` to run `dotnet` commands against the live stack. |
-| `ollama` | `docker-compose.yml`, `docker-compose.linux.yml`, `docker-compose.mac.yml`, `docker-compose.windows.yml` | `ollama/ollama:latest` | Runs local model inference and pulls `qwen3.5:4b` plus `mxbai-embed-large`. |
+| `ollama` | `docker-compose.yml`, `docker-compose.linux.yml`, `docker-compose.mac.yml`, `docker-compose.windows.yml` | `ollama/ollama:latest` | Runs local model inference and pulls `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`, plus `mxbai-embed-large`. |
 | `postgres` | `docker-compose.yml` | `pgvector/pgvector:0.8.2-pg18-trixie` | Stores Identity, profile, book, note, context, and vector embedding data. |
 | `redis` | `docker-compose.yml` | `redis:7-alpine` | Stores chat session/context/profile cache entries. |
 | `tests` | `docker-compose.test.yml` | `mcr.microsoft.com/dotnet/sdk:9.0` | Restores and runs `WebApp.Tests`. |

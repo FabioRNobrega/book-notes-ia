@@ -46,31 +46,33 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 .AddEntityFrameworkStores<AppDbContext>();
 
 
-// Build with Ollama
-builder.Services.AddKeyedSingleton<IChatClient>("free", (_, _) =>
+// Build with Ollama - one keyed IChatClient per free local catalog entry
+foreach (var freeEntry in ChatAgentCatalog.FreeLocalEntries)
 {
-    var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
-    var ollamaModel = builder.Configuration["Ollama:OllamaModel"] ?? "qwen3.5:4b";
-    var ollamaTimeoutSeconds = builder.Configuration.GetValue<int?>("Ollama:TimeoutSeconds") ?? 300;
-    var httpClient = new HttpClient
+    builder.Services.AddKeyedSingleton<IChatClient>(freeEntry.Key, (_, _) =>
     {
-        BaseAddress = new Uri(ollamaUrl),
-        Timeout = TimeSpan.FromSeconds(ollamaTimeoutSeconds)
-    };
-
-    var numCtx = builder.Configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
-
-    return ((IChatClient)new TokenCountingChatClient(new OllamaApiClient(httpClient, ollamaModel)))
-        .AsBuilder()
-        .ConfigureOptions(options =>
+        var ollamaUrl = builder.Configuration["Ollama:OllamaURL"] ?? "http://ollama:11434";
+        var ollamaTimeoutSeconds = builder.Configuration.GetValue<int?>("Ollama:TimeoutSeconds") ?? 300;
+        var httpClient = new HttpClient
         {
-            options.Temperature = 0; // sets the temperature 0 to 1 [higher is more creative, lower is more coherent]
-            options.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-            options.AdditionalProperties["think"] = false; // This disable think mode on qwen to faster responses
-            options.AdditionalProperties["num_ctx"] = numCtx;
-        })
-        .Build();
-});
+            BaseAddress = new Uri(ollamaUrl),
+            Timeout = TimeSpan.FromSeconds(ollamaTimeoutSeconds)
+        };
+
+        var numCtx = builder.Configuration.GetValue<int?>("Ollama:NumCtx") ?? 8192;
+
+        return ((IChatClient)new TokenCountingChatClient(new OllamaApiClient(httpClient, freeEntry.OllamaModel!)))
+            .AsBuilder()
+            .ConfigureOptions(options =>
+            {
+                options.Temperature = 0; // sets the temperature 0 to 1 [higher is more creative, lower is more coherent]
+                options.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                options.AdditionalProperties["think"] = false; // This disables think/reasoning mode for faster responses
+                options.AdditionalProperties["num_ctx"] = numCtx;
+            })
+            .Build();
+    });
+}
 
 builder.Services.AddKeyedSingleton<IChatClient>("premium", (_, _) =>
 {
@@ -108,21 +110,24 @@ builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =
     return (IEmbeddingGenerator<string, Embedding<float>>)new OllamaApiClient(httpClient, "mxbai-embed-large");
 });
 
-builder.Services.AddKeyedSingleton<AIAgent>("free", (sp, _) =>
+foreach (var freeEntry in ChatAgentCatalog.FreeLocalEntries)
 {
-    var chatClient = sp.GetRequiredKeyedService<IChatClient>("free");
+    builder.Services.AddKeyedSingleton<AIAgent>(freeEntry.Key, (sp, _) =>
+    {
+        var chatClient = sp.GetRequiredKeyedService<IChatClient>(freeEntry.Key);
 
-    return new ChatClientAgent(
-        chatClient,
-        name: "LocalOllamaAgent",
-        instructions: 
-            """
-            You are a helpful assistant.
-            Be concise and practical.
-            When giving recommendations, explain briefly why they match the user's preferences.
-            """
-    );
-});
+        return new ChatClientAgent(
+            chatClient,
+            name: "LocalOllamaAgent",
+            instructions:
+                """
+                You are a helpful assistant.
+                Be concise and practical.
+                When giving recommendations, explain briefly why they match the user's preferences.
+                """
+        );
+    });
+}
 builder.Services.AddKeyedSingleton<AIAgent>("premium", (sp, _) =>
 {
     var chatClient = sp.GetRequiredKeyedService<IChatClient>("premium");
