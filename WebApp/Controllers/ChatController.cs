@@ -284,6 +284,16 @@ public class ChatController : Controller
             (true, "Chat session history has been deleted"));
     }
 
+    [HttpPost("/chat/copy-notification")]
+    public IActionResult CopyNotification([FromForm] bool success)
+    {
+        return PartialView(
+            "~/Views/Shared/Components/_Alert.cshtml",
+            success
+                ? (true, "Copied to clipboard")
+                : (false, "Could not copy to clipboard"));
+    }
+
     private static string BuildOrchestratorInstructions(string? profileInstructions, string? preferredLanguage)
     {
         var sections = new List<string>();

@@ -564,6 +564,65 @@
         }
     }
 
+    function getMessageBubble(btn) {
+        return btn.closest(".agent-message-bubble");
+    }
+
+    async function writeTextToClipboard(text) {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.style.pointerEvents = "none";
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        try {
+            if (!document.execCommand("copy")) {
+                throw new Error("The browser rejected the fallback copy command");
+            }
+        } finally {
+            textarea.remove();
+        }
+    }
+
+    async function handleCopyClick(btn) {
+        const bubble = getMessageBubble(btn);
+        const prose = bubble?.querySelector(".prose");
+        if (!prose) return;
+
+        const text = prose.innerText;
+
+        let success = true;
+        try {
+            await writeTextToClipboard(text);
+        } catch {
+            success = false;
+        }
+
+        try {
+            const response = await fetch("/chat/copy-notification", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ success: String(success) })
+            });
+
+            if (!response.ok) return;
+
+            const html = await response.text();
+            const alertContainer = document.getElementById("alert");
+            if (!alertContainer) return;
+
+            alertContainer.insertAdjacentHTML("beforeend", html);
+        } catch {}
+    }
+
     function handleSeekInput(seek) {
         if (!(seek instanceof HTMLInputElement) || seek.disabled) return;
 
@@ -589,6 +648,12 @@
         if (!btn) return;
         const widget = btn.closest(".tts-widget");
         if (widget) void handleDownloadClick(widget);
+    });
+
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest(".copy-response-btn");
+        if (!btn) return;
+        void handleCopyClick(btn);
     });
 
     document.body.addEventListener("input", (event) => {

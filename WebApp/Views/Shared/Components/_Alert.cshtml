@@ -3,7 +3,7 @@
 <sl-alert 
   variant="@(Model.ok ? "success" : "danger")" 
   closable
-  _="on load call me.show()"
+  open
 >
   <sl-icon slot="icon" name="@(Model.ok ? "check2-circle" : "exclamation-octagon")"></sl-icon>
   <strong class="font-title">@(Model.ok ? "Saved" : "Not saved")</strong><br />

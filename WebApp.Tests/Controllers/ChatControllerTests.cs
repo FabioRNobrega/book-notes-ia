@@ -348,6 +348,38 @@ public class ChatControllerTests
     }
 
     [Fact]
+    public void CopyNotification_WhenSuccessful_ReturnsSuccessAlert()
+    {
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            new FakeCacheHandler(),
+            new FakeBookContextAgentTool(),
+            "user-1");
+
+        var result = controller.CopyNotification(true);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Shared/Components/_Alert.cshtml", partial.ViewName);
+        Assert.Equal((true, "Copied to clipboard"), Assert.IsType<(bool, string)>(partial.Model));
+    }
+
+    [Fact]
+    public void CopyNotification_WhenUnsuccessful_ReturnsDangerAlert()
+    {
+        var controller = CreateController(
+            new FakeChatOrchestratorAgent(),
+            new FakeCacheHandler(),
+            new FakeBookContextAgentTool(),
+            "user-1");
+
+        var result = controller.CopyNotification(false);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        Assert.Equal("~/Views/Shared/Components/_Alert.cshtml", partial.ViewName);
+        Assert.Equal((false, "Could not copy to clipboard"), Assert.IsType<(bool, string)>(partial.Model));
+    }
+
+    [Fact]
     public async Task Send_WhenMessageIsEmpty_ReturnsEmptyContent()
     {
         var controller = CreateController(

@@ -1,6 +1,6 @@
 @model BotMessageViewModel
 
-<div id="agent-response" hx-swap-oob="outerHTML" class="flex flex-col max-w-[75%]">
+<div id="agent-response" hx-swap-oob="outerHTML" class="agent-message-bubble flex flex-col max-w-[75%]">
     <div class="text-white/90 px-4 py-3 text-lg break-words" style="background-color: var(--background-transparency-default); border-radius: var(--book-radius);">
         <div class="prose prose-invert max-w-none prose-sm">
             @Html.Raw(Model.HtmlContent)
@@ -10,6 +10,13 @@
             {
                 @await Html.PartialAsync("_TtsAudioPlayer", Model.MessageId.Value)
             }
+            <sl-tooltip content="Copy to clipboard">
+                <sl-icon-button class="copy-response-btn text-white/40"
+                                name="copy"
+                                label="Copy to clipboard"
+                                style="font-size:16px; --sl-color-primary-600:rgba(255,255,255,0.85); --sl-color-primary-700:rgba(255,255,255,1);">
+                </sl-icon-button>
+            </sl-tooltip>
             @if (!string.IsNullOrWhiteSpace(Model.AgentLabel))
             {
                 <span class="text-xs text-white/45 shrink-0">@Model.AgentLabel</span>
