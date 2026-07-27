@@ -656,6 +656,23 @@
         void handleCopyClick(btn);
     });
 
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest(".book-context-fullscreen-btn");
+        if (!btn) return;
+
+        const dialogId = btn.getAttribute("data-dialog-id");
+        const dialog = dialogId ? document.getElementById(dialogId) : null;
+        if (dialog) dialog.open = true;
+    });
+
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest(".book-context-dialog-close-btn");
+        if (!btn) return;
+
+        const dialog = btn.closest("sl-dialog");
+        if (dialog) dialog.open = false;
+    });
+
     document.body.addEventListener("input", (event) => {
         const seek = event.target.closest(".tts-seek");
         if (seek) handleSeekInput(seek);

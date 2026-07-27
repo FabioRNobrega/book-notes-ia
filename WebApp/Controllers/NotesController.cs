@@ -249,7 +249,19 @@ public class NotesController : Controller
         {
             var agentKey = ChatController.NormalizeAgentKey(await _cache.GetAsync($"activeagent:{userId}", ct));
             var context = await _bookContextService.GenerateAndSaveAsync(id, userId, agentKey, ct);
-            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = context });
+            var book = await _db.Books
+                .AsNoTracking()
+                .Where(x => x.Id == id && x.UserId == userId)
+                .Select(x => new { x.Title, x.Author })
+                .FirstOrDefaultAsync(ct);
+
+            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel
+            {
+                BookId = id,
+                Title = book?.Title ?? string.Empty,
+                Author = book?.Author ?? string.Empty,
+                Context = context
+            });
         }
         catch (KeyNotFoundException)
         {
@@ -258,7 +270,19 @@ public class NotesController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Context generation failed for book {BookId}", id);
-            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel { BookId = id, Context = null });
+            var book = await _db.Books
+                .AsNoTracking()
+                .Where(x => x.Id == id && x.UserId == userId)
+                .Select(x => new { x.Title, x.Author })
+                .FirstOrDefaultAsync(ct);
+
+            return PartialView("~/Views/Notes/_BookContext.cshtml", new BookContextViewModel
+            {
+                BookId = id,
+                Title = book?.Title ?? string.Empty,
+                Author = book?.Author ?? string.Empty,
+                Context = null
+            });
         }
     }
 

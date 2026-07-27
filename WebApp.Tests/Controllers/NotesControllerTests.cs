@@ -245,6 +245,44 @@ public class NotesControllerTests
         Assert.Equal("free-qwen", bookContextService.LastAgentKey);
     }
 
+    [Fact]
+    public async Task GenerateContext_ReturnsBookTitleAndAuthorOnSuccess()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "test-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(
+            db: db,
+            bookContextService: new FakeBookContextService("A desert planet."));
+
+        var result = await controller.GenerateContext(book.Id, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var model = Assert.IsType<BookContextViewModel>(partial.Model);
+        Assert.Equal("Dune", model.Title);
+        Assert.Equal("Frank Herbert", model.Author);
+        Assert.Equal("A desert planet.", model.Context);
+    }
+
+    [Fact]
+    public async Task GenerateContext_ReturnsBookTitleAndAuthorWhenGenerationFails()
+    {
+        await using var db = CreateDbContext();
+        var book = AddBook(db, "test-user", "Dune", "Frank Herbert");
+        await db.SaveChangesAsync();
+        var controller = CreateController(
+            db: db,
+            bookContextService: new FakeBookContextService(exception: new InvalidOperationException("Generation failed")));
+
+        var result = await controller.GenerateContext(book.Id, CancellationToken.None);
+
+        var partial = Assert.IsType<PartialViewResult>(result);
+        var model = Assert.IsType<BookContextViewModel>(partial.Model);
+        Assert.Equal("Dune", model.Title);
+        Assert.Equal("Frank Herbert", model.Author);
+        Assert.Null(model.Context);
+    }
+
     private static NotesController CreateController(
         bool authenticated = true,
         AppDbContext? db = null,
@@ -328,7 +366,9 @@ public class NotesControllerTests
             Task.FromResult(new KindleImportSummary(0, 0, 0, 0));
     }
 
-    private sealed class FakeBookContextService : IBookContextService
+    private sealed class FakeBookContextService(
+        string generatedContext = "",
+        Exception? exception = null) : IBookContextService
     {
         public string? LastAgentKey { get; private set; }
 
@@ -338,7 +378,9 @@ public class NotesControllerTests
         public Task<string> GenerateAndSaveAsync(Guid bookId, string userId, string agentKey, CancellationToken ct = default)
         {
             LastAgentKey = agentKey;
-            return Task.FromResult(string.Empty);
+            return exception is null
+                ? Task.FromResult(generatedContext)
+                : Task.FromException<string>(exception);
         }
 
         public Task<string> SaveManualAsync(Guid bookId, string userId, string context) => Task.FromResult(context);
