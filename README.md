@@ -322,6 +322,30 @@ If `AZURE_OPENAI_ENDPOINT`/`AZURE_LLM_DEPLOYMENT_NAME`/`AZURE_OPENAI_API_KEY` ar
 
 ## Troubleshooting
 
+### Cleaning Docker or Podman resources
+
+`make docker-down` works with the Docker or Podman runtime detected by the project and removes its Compose containers, networks, and volumes. It does **not** remove downloaded images.
+
+Use it first when you want to reset only BOOK-NOTES-IA:
+
+```bash
+make docker-down
+```
+
+If you are using Podman and want to remove unused images, containers, networks, and volumes globally:
+
+```bash
+podman system prune -a --volumes -f
+```
+
+If you are using native Docker, use:
+
+```bash
+docker system prune -a --volumes -f
+```
+
+These global commands affect other projects on the machine. Use them only when you intentionally want a complete runtime cleanup.
+
 ### PostgreSQL 18 volume layout error
 
 If Postgres says there is old data under `/var/lib/postgresql/data`, recreate the stack with the current volume config:
