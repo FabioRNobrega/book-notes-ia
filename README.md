@@ -1,18 +1,18 @@
 # Book Notes IA
 
-Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 9. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, answers book questions through a local Ollama model, and reads assistant responses aloud using a local Supertonic 3 TTS sidecar.
+Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 10. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, answers book questions through a local Ollama model, and reads assistant responses aloud using a local Supertonic 3 TTS sidecar.
 
 The project is also a study project for modern .NET AI application patterns: Microsoft Agent Framework orchestration, native agent tools, `Microsoft.Extensions.AI`, local embeddings, PostgreSQL pgvector search, EF Core migrations, ONNX Runtime inference, Docker-first development, and regression tests that run against a real Postgres container.
 
 ## Stack
 
-- .NET 9 MVC and Razor views
+- .NET 10 MVC and Razor views
 - Microsoft Agent Framework + `Microsoft.Extensions.AI`
 - Ollama via OllamaSharp
 - Free chat models: `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`
 - Embedding model: `mxbai-embed-large`
 - PostgreSQL 18 with pgvector
-- EF Core 9 and Npgsql
+- EF Core 10 and Npgsql
 - Redis distributed cache
 - ASP.NET Core Identity
 - HTMX + Hyperscript + Shoelace

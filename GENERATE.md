@@ -1,4 +1,4 @@
-# Scaffolding / Generate Guide (.NET 9 MVC + EF Core + Identity) — Docker-first
+# Scaffolding / Generate Guide (.NET 10 MVC + EF Core + Identity) — Docker-first
 
 This project runs **inside Docker**. All `dotnet` commands below are executed **inside the `webapp` container**.
 
@@ -24,10 +24,10 @@ cd /app
 dotnet new tool-manifest
 ```
 
-### 2) Install tools (pin major to 9.*)
+### 2) Install tools (pin major to 10.*)
 ```bash
-dotnet tool install dotnet-ef --version 9.*
-dotnet tool install dotnet-aspnet-codegenerator --version 9.*
+dotnet tool install dotnet-ef --version 10.*
+dotnet tool install dotnet-aspnet-codegenerator --version 10.*
 dotnet tool restore
 ```
 
@@ -40,8 +40,8 @@ dotnet aspnet-codegenerator --help
 
 ### 3) Update tools later
 ```bash
-dotnet tool update dotnet-ef --version 9.*
-dotnet tool update dotnet-aspnet-codegenerator --version 9.*
+dotnet tool update dotnet-ef --version 10.*
+dotnet tool update dotnet-aspnet-codegenerator --version 10.*
 dotnet tool restore
 ```
 
@@ -175,7 +175,7 @@ dotnet tool restore
 Update tools:
 
 ```bash
-dotnet tool update dotnet-ef --version 9.*
+dotnet tool update dotnet-ef --version 10.*
 dotnet tool restore
 ```
 
