@@ -38,7 +38,11 @@ public sealed class PostgresTestDatabase : IAsyncDisposable
     public AppDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(DataSource, npgsql => npgsql.UseVector())
+            .UseNpgsql(DataSource, npgsql =>
+            {
+                npgsql.UseVector();
+                npgsql.EnableRetryOnFailure();
+            })
             .ConfigureWarnings(warnings => warnings.Ignore(
                 RelationalEventId.PendingModelChangesWarning,
                 CoreEventId.ManyServiceProvidersCreatedWarning))
