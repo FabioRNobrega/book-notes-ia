@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using WebApp.Models;
 
@@ -13,6 +14,8 @@ public record KindleImportSummary(int BooksTouched, int NotesImported, int Dupli
 public interface IKindleClippingsImportService
 {
     Task<KindleImportSummary> ImportAsync(string userId, Stream stream, CancellationToken ct = default);
+
+    Task EmbedPendingAsync(string userId, CancellationToken ct = default);
 }
 
 internal sealed record ParsedClipping(
@@ -34,15 +37,18 @@ public class KindleClippingsImportService : IKindleClippingsImportService
 
     private readonly AppDbContext _db;
     private readonly IEmbeddingService _embeddingService;
+    private readonly IBackgroundTaskQueue _backgroundTaskQueue;
     private readonly ILogger<KindleClippingsImportService> _logger;
 
     public KindleClippingsImportService(
         AppDbContext db,
         IEmbeddingService embeddingService,
+        IBackgroundTaskQueue backgroundTaskQueue,
         ILogger<KindleClippingsImportService> logger)
     {
         _db = db;
         _embeddingService = embeddingService;
+        _backgroundTaskQueue = backgroundTaskQueue;
         _logger = logger;
     }
 
@@ -72,132 +78,154 @@ public class KindleClippingsImportService : IKindleClippingsImportService
             .Distinct()
             .ToList();
 
-        var existingBooks = await _db.Books
-            .Where(x => x.UserId == userId)
-            .ToListAsync(ct);
+        var dedupeKeys = parsedEntries.Select(x => x.DedupeKey).Distinct().ToList();
 
-        var bookMap = existingBooks.ToDictionary(
-            x => BuildBookLookupKey(NormalizeSourceTitle(x.SourceBookTitle), x.NormalizedAuthor),
-            x => x);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-
-        foreach (var parsedBook in normalizedBooks)
+        var summary = await strategy.ExecuteAsync(async () =>
         {
-            var lookupKey = BuildBookLookupKey(parsedBook.NormalizedSourceBookTitle, parsedBook.NormalizedAuthor);
-            if (bookMap.ContainsKey(lookupKey))
+            var existingBooks = await _db.Books
+                .Where(x => x.UserId == userId)
+                .ToListAsync(ct);
+
+            var bookMap = existingBooks.ToDictionary(
+                x => BuildBookLookupKey(NormalizeSourceTitle(x.SourceBookTitle), x.NormalizedAuthor),
+                x => x);
+
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+            foreach (var parsedBook in normalizedBooks)
             {
-                continue;
+                var lookupKey = BuildBookLookupKey(parsedBook.NormalizedSourceBookTitle, parsedBook.NormalizedAuthor);
+                if (bookMap.ContainsKey(lookupKey))
+                {
+                    continue;
+                }
+
+                var book = new Book
+                {
+                    UserId = userId,
+                    Title = parsedBook.Title,
+                    SourceBookTitle = parsedBook.SourceBookTitle,
+                    Author = parsedBook.Author,
+                    NormalizedTitle = parsedBook.NormalizedTitle,
+                    NormalizedAuthor = parsedBook.NormalizedAuthor,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _db.Books.Add(book);
+                bookMap[lookupKey] = book;
             }
 
-            var book = new Book
-            {
-                UserId = userId,
-                Title = parsedBook.Title,
-                SourceBookTitle = parsedBook.SourceBookTitle,
-                Author = parsedBook.Author,
-                NormalizedTitle = parsedBook.NormalizedTitle,
-                NormalizedAuthor = parsedBook.NormalizedAuthor,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _db.Books.Add(book);
-            bookMap[lookupKey] = book;
-        }
-
-        await _db.SaveChangesAsync(ct);
-
-        var importedBookIds = normalizedBooks
-            .Select(parsedBook => bookMap[BuildBookLookupKey(parsedBook.NormalizedSourceBookTitle, parsedBook.NormalizedAuthor)].Id)
-            .ToList();
-
-        var embeddedBookIds = await _db.BookEmbeddings
-            .Where(e => e.UserId == userId && importedBookIds.Contains(e.BookId))
-            .Select(e => e.BookId)
-            .ToListAsync(ct);
-
-        foreach (var bookId in importedBookIds.Except(embeddedBookIds))
-        {
-            var book = bookMap.Values.Single(b => b.Id == bookId);
-            var embedding = await _embeddingService.EmbedAsync($"{book.Title} by {book.Author}", ct);
-            _db.BookEmbeddings.Add(new BookEmbedding
-            {
-                UserId = userId,
-                BookId = book.Id,
-                Title = book.Title,
-                Author = book.Author,
-                Embedding = new Pgvector.Vector(embedding)
-            });
-        }
-
-        if (importedBookIds.Count != embeddedBookIds.Count)
             await _db.SaveChangesAsync(ct);
 
-        var dedupeKeys = parsedEntries.Select(x => x.DedupeKey).Distinct().ToList();
-        var existingNotes = await _db.BookNotes
-            .Where(x => x.UserId == userId && dedupeKeys.Contains(x.DedupeKey))
-            .ToDictionaryAsync(x => x.DedupeKey, x => x, ct);
+            var existingNotes = await _db.BookNotes
+                .Where(x => x.UserId == userId && dedupeKeys.Contains(x.DedupeKey))
+                .ToDictionaryAsync(x => x.DedupeKey, x => x, ct);
 
-        var knownDedupeKeys = existingNotes.Keys.ToHashSet();
-        var touchedBooks = new HashSet<Guid>();
-        var importedCount = 0;
-        var duplicateCount = 0;
+            var knownDedupeKeys = existingNotes.Keys.ToHashSet();
+            var touchedBooks = new HashSet<Guid>();
+            var importedCount = 0;
+            var duplicateCount = 0;
 
-        foreach (var entry in parsedEntries)
-        {
-            var bookKey = BuildBookLookupKey(NormalizeSourceTitle(entry.SourceBookTitle), NormalizeKey(entry.Author));
-            var book = bookMap[bookKey];
-            touchedBooks.Add(book.Id);
-
-            if (existingNotes.TryGetValue(entry.DedupeKey, out var existingNote))
+            foreach (var entry in parsedEntries)
             {
-                existingNote.EntryType = entry.EntryType;
-                existingNote.LocationText = entry.LocationText;
-                existingNote.Content = entry.Content;
-                existingNote.ClippedAtUtc = entry.ClippedAtUtc;
-                existingNote.BookId = book.Id;
-                existingNote.UpdatedAt = DateTime.UtcNow;
-                duplicateCount++;
-                continue;
+                var bookKey = BuildBookLookupKey(NormalizeSourceTitle(entry.SourceBookTitle), NormalizeKey(entry.Author));
+                var book = bookMap[bookKey];
+                touchedBooks.Add(book.Id);
+
+                if (existingNotes.TryGetValue(entry.DedupeKey, out var existingNote))
+                {
+                    existingNote.EntryType = entry.EntryType;
+                    existingNote.LocationText = entry.LocationText;
+                    existingNote.Content = entry.Content;
+                    existingNote.ClippedAtUtc = entry.ClippedAtUtc;
+                    existingNote.BookId = book.Id;
+                    existingNote.UpdatedAt = DateTime.UtcNow;
+                    duplicateCount++;
+                    continue;
+                }
+
+                if (knownDedupeKeys.Contains(entry.DedupeKey))
+                {
+                    duplicateCount++;
+                    continue;
+                }
+
+                _db.BookNotes.Add(new BookNote
+                {
+                    UserId = userId,
+                    BookId = book.Id,
+                    EntryType = entry.EntryType,
+                    LocationText = entry.LocationText,
+                    Content = entry.Content,
+                    ClippedAtUtc = entry.ClippedAtUtc,
+                    DedupeKey = entry.DedupeKey,
+                    UpdatedAt = DateTime.UtcNow
+                });
+
+                knownDedupeKeys.Add(entry.DedupeKey);
+                importedCount++;
             }
 
-            if (knownDedupeKeys.Contains(entry.DedupeKey))
+            foreach (var book in bookMap.Values.Where(x => touchedBooks.Contains(x.Id)))
             {
-                duplicateCount++;
-                continue;
+                book.UpdatedAt = DateTime.UtcNow;
             }
 
-            _db.BookNotes.Add(new BookNote
-            {
-                UserId = userId,
-                BookId = book.Id,
-                EntryType = entry.EntryType,
-                LocationText = entry.LocationText,
-                Content = entry.Content,
-                ClippedAtUtc = entry.ClippedAtUtc,
-                DedupeKey = entry.DedupeKey,
-                UpdatedAt = DateTime.UtcNow
-            });
+            await _db.SaveChangesAsync(ct);
 
-            knownDedupeKeys.Add(entry.DedupeKey);
-            importedCount++;
-        }
+            await transaction.CommitAsync(ct);
 
-        foreach (var book in bookMap.Values.Where(x => touchedBooks.Contains(x.Id)))
+            return new KindleImportSummary(touchedBooks.Count, importedCount, duplicateCount, parsedImport.InvalidEntriesSkipped);
+        });
+
+        await _backgroundTaskQueue.QueueBackgroundWorkItemAsync(async (services, backgroundCt) =>
         {
-            book.UpdatedAt = DateTime.UtcNow;
-        }
+            var scopedImportService = services.GetRequiredService<IKindleClippingsImportService>();
+            await scopedImportService.EmbedPendingAsync(userId, backgroundCt);
+        });
 
-        await _db.SaveChangesAsync(ct);
-
-        await EmbedNewNotesAsync(userId, ct);
-
-        await transaction.CommitAsync(ct);
-
-        return new KindleImportSummary(touchedBooks.Count, importedCount, duplicateCount, parsedImport.InvalidEntriesSkipped);
+        return summary;
     }
 
-    private async Task EmbedNewNotesAsync(string userId, CancellationToken ct)
+    public async Task EmbedPendingAsync(string userId, CancellationToken ct = default)
+    {
+        await EmbedPendingBooksAsync(userId, ct);
+        await EmbedPendingNotesAsync(userId, ct);
+    }
+
+    private async Task EmbedPendingBooksAsync(string userId, CancellationToken ct)
+    {
+        var booksToEmbed = await _db.Books
+            .Where(b => b.UserId == userId && !_db.BookEmbeddings.Any(e => e.UserId == userId && e.BookId == b.Id))
+            .ToListAsync(ct);
+
+        foreach (var book in booksToEmbed)
+        {
+            try
+            {
+                var embedding = await _embeddingService.EmbedAsync($"{book.Title} by {book.Author}", ct);
+                _db.BookEmbeddings.Add(new BookEmbedding
+                {
+                    UserId = userId,
+                    BookId = book.Id,
+                    Title = book.Title,
+                    Author = book.Author,
+                    Embedding = new Pgvector.Vector(embedding)
+                });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to embed book {BookId} for user {UserId}; skipping.", book.Id, userId);
+            }
+        }
+
+        if (booksToEmbed.Count > 0)
+            await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task EmbedPendingNotesAsync(string userId, CancellationToken ct)
     {
         var embeddedNoteIds = await _db.BookNoteEmbeddings
             .Where(e => e.UserId == userId)

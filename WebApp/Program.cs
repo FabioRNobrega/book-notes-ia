@@ -176,6 +176,8 @@ builder.Services.AddHttpClient("Unsplash", client =>
 });
 builder.Services.AddScoped<IUnsplashService, UnsplashService>();
 builder.Services.AddScoped<IKindleClippingsImportService, KindleClippingsImportService>();
+builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+builder.Services.AddHostedService<QueuedHostedService>();
 builder.Services.AddScoped<IChatCompletionService, ChatCompletionService>();
 builder.Services.AddHttpClient<IOpenLibraryService, OpenLibraryService>();
 builder.Services.AddScoped<IBookContextService, BookContextService>();

@@ -364,6 +364,9 @@ public class NotesControllerTests
     {
         public Task<KindleImportSummary> ImportAsync(string userId, Stream stream, CancellationToken ct = default) =>
             Task.FromResult(new KindleImportSummary(0, 0, 0, 0));
+
+        public Task EmbedPendingAsync(string userId, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeBookContextService(

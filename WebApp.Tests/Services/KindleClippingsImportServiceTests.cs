@@ -12,24 +12,29 @@ namespace WebApp.Tests.Services;
 public class KindleClippingsImportServiceTests
 {
     [Fact]
-    public async Task ImportAsync_WhenNewBooksImported_InsertsBookEmbeddingForEachNewBook()
+    public async Task ImportAsync_WhenNewBooksImported_DoesNotEmbedSynchronously()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
         var userId = "user-import-1";
         await SeedUserAsync(db, userId);
         var embeddingService = new FakeEmbeddingService();
-        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, embeddingService, new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
         var summary = await service.ImportAsync(userId, ToStream(TwoBookClippings()), CancellationToken.None);
 
         Assert.Equal(2, summary.BooksTouched);
+        Assert.Equal(0, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
+        Assert.Equal(0, embeddingService.EmbedCallCount);
+
+        await service.EmbedPendingAsync(userId, CancellationToken.None);
+
         Assert.Equal(2, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
         Assert.Equal(4, embeddingService.EmbedCallCount);
     }
 
     [Fact]
-    public async Task ImportAsync_WhenBookAlreadyExists_DoesNotInsertDuplicateEmbedding()
+    public async Task EmbedPendingAsync_WhenBookAlreadyEmbedded_DoesNotInsertDuplicateEmbedding()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
@@ -57,40 +62,45 @@ public class KindleClippingsImportServiceTests
         await db.SaveChangesAsync();
 
         var embeddingService = new FakeEmbeddingService();
-        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, embeddingService, new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
         await service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None);
+        await service.EmbedPendingAsync(userId, CancellationToken.None);
 
         Assert.Equal(1, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
         Assert.Equal(1, embeddingService.EmbedCallCount);
     }
 
     [Fact]
-    public async Task ImportAsync_WhenEmbeddingFails_DoesNotPersistPartialImport()
+    public async Task ImportAsync_WhenEmbeddingWouldFail_StillPersistsImportSynchronously()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
         var userId = "user-import-3";
         await SeedUserAsync(db, userId);
-        var service = new KindleClippingsImportService(db, new ThrowingEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, new ThrowingEmbeddingService(), new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None));
+        var summary = await service.ImportAsync(userId, ToStream(DuneClipping()), CancellationToken.None);
 
-        db.ChangeTracker.Clear();
-        Assert.Equal(0, await db.Books.CountAsync(b => b.UserId == userId));
-        Assert.Equal(0, await db.BookNotes.CountAsync(n => n.UserId == userId));
+        Assert.Equal(1, summary.BooksTouched);
+        Assert.Equal(1, summary.NotesImported);
+        Assert.Equal(1, await db.Books.CountAsync(b => b.UserId == userId));
+        Assert.Equal(1, await db.BookNotes.CountAsync(n => n.UserId == userId));
+
+        await service.EmbedPendingAsync(userId, CancellationToken.None);
+
         Assert.Equal(0, await db.BookEmbeddings.CountAsync(e => e.UserId == userId));
+        Assert.Equal(0, await db.BookNoteEmbeddings.CountAsync(e => e.UserId == userId));
     }
 
     [Fact]
-    public async Task ImportAsync_WithAuthorPrefixedTitle_PersistsSourceTitleCleanTitleAndEmbeddingTitle()
+    public async Task EmbedPendingAsync_WithAuthorPrefixedTitle_PersistsEmbeddingTitle()
     {
         await using var database = await PostgresTestDatabase.CreateAsync();
         await using var db = database.CreateDbContext();
         var userId = "user-import-4";
         await SeedUserAsync(db, userId);
-        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
         await service.ImportAsync(userId, ToStream(PrefixedGalacticPotHealerClipping()), CancellationToken.None);
 
@@ -98,6 +108,8 @@ public class KindleClippingsImportServiceTests
         Assert.Equal("Dick, Philip K - Galactic Pot-Healer", book.SourceBookTitle);
         Assert.Equal("Galactic Pot-Healer", book.Title);
         Assert.Equal(NormalizeKey("Galactic Pot-Healer"), book.NormalizedTitle);
+
+        await service.EmbedPendingAsync(userId, CancellationToken.None);
 
         var embedding = await db.BookEmbeddings.SingleAsync(e => e.UserId == userId);
         Assert.Equal("Galactic Pot-Healer", embedding.Title);
@@ -110,7 +122,7 @@ public class KindleClippingsImportServiceTests
         await using var db = database.CreateDbContext();
         var userId = "user-import-5";
         await SeedUserAsync(db, userId);
-        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, new FakeEmbeddingService(), new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
         await service.ImportAsync(userId, ToStream(CleanGalacticPotHealerClipping()), CancellationToken.None);
         var book = await db.Books.SingleAsync(b => b.UserId == userId);
@@ -138,7 +150,7 @@ public class KindleClippingsImportServiceTests
         var userId = "user-import-6";
         await SeedUserAsync(db, userId);
         var embeddingService = new FakeEmbeddingService();
-        var service = new KindleClippingsImportService(db, embeddingService, NullLogger<KindleClippingsImportService>.Instance);
+        var service = new KindleClippingsImportService(db, embeddingService, new NoOpBackgroundTaskQueue(), NullLogger<KindleClippingsImportService>.Instance);
 
         await service.ImportAsync(userId, ToStream(CleanGalacticPotHealerClipping()), CancellationToken.None);
         db.ChangeTracker.Clear();
@@ -235,5 +247,14 @@ public class KindleClippingsImportServiceTests
     {
         public Task<float[]> EmbedAsync(string text, CancellationToken ct = default) =>
             throw new InvalidOperationException("Embedding endpoint unavailable.");
+    }
+
+    private sealed class NoOpBackgroundTaskQueue : IBackgroundTaskQueue
+    {
+        public ValueTask QueueBackgroundWorkItemAsync(Func<IServiceProvider, CancellationToken, Task> workItem) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask<Func<IServiceProvider, CancellationToken, Task>> DequeueAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
     }
 }
