@@ -9,6 +9,7 @@
   - [Docker Strategy](#docker-strategy)
   - [OS-Aware Environment](#os-aware-environment)
   - [Coding Conventions](#coding-conventions)
+  - [Microsoft Learn MCP Server](#microsoft-learn-mcp-server)
   - [Constraints](#constraints)
   - [Make Commands](#make-commands)
   - [Spec-Kit Workflow](#spec-kit-workflow)
@@ -112,6 +113,19 @@ Do not ask the user which OS they are on — use the appropriate `make` target b
 - Book lookup and embedding queries must always be scoped by `UserId`.
 - New pgvector queries should preserve the existing fallback string-match behavior unless a spec explicitly removes it.
 - Sass source lives in `WebApp/Styles`; generated CSS under `WebApp/wwwroot/css` is ignored by Git.
+
+## Microsoft Learn MCP Server
+
+Use the Microsoft Learn MCP Server as the required first-party documentation source for decisions involving Microsoft technologies in this repository, including .NET, ASP.NET Core, Entity Framework Core, ASP.NET Core Identity, `Microsoft.Extensions.AI`, and Microsoft Agent Framework.
+
+- Start with `microsoft_docs_search` to locate current official guidance.
+- Use `microsoft_code_sample_search` when a decision depends on API usage or implementation examples.
+- Use `microsoft_docs_fetch` after search when complete prerequisites, version notes, procedures, security guidance, or other page context is needed.
+- Cite the relevant Microsoft Learn URLs and summarize the evidence in feature plans, reviews, or explanations where the evidence affects a technical decision.
+- Reconcile Learn guidance with the versions and constraints documented in `Specs/TechStak.md` and the codebase. If they differ, preserve explicit repository constraints unless the user approves a change, and document the discrepancy and rationale.
+- Do not rely only on model memory for Microsoft-specific architecture, API, security, compatibility, or version decisions. If the MCP server is unavailable, state that verification is pending rather than presenting the decision as verified.
+
+For non-Microsoft technologies, continue to use the relevant first-party project or vendor documentation.
 
 ## Constraints
 

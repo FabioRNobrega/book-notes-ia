@@ -6,6 +6,7 @@
   - [Technology Inventory](#technology-inventory)
   - [Docker Compose Services](#docker-compose-services)
   - [Architecture](#architecture)
+  - [Microsoft Learn Decision Policy](#microsoft-learn-decision-policy)
   - [Key Design Decisions](#key-design-decisions)
   - [SOLID Design Guide](#solid-design-guide)
   - [Version Gaps](#version-gaps)
@@ -74,6 +75,20 @@ flowchart TD
     Tests[WebApp.Tests xUnit] --> Controllers
     Tests --> Services
 ```
+
+## Microsoft Learn Decision Policy
+
+The Microsoft Learn MCP Server is the required documentation source for technical decisions involving the Microsoft portions of this stack: .NET, ASP.NET Core MVC, Identity, Entity Framework Core, Microsoft.Extensions packages, Microsoft Agent Framework, Microsoft testing tooling, and Microsoft container or SDK guidance.
+
+Agents must use the following workflow before settling a Microsoft-specific requirement, design, API, security, compatibility, migration, or validation decision:
+
+1. Run `microsoft_docs_search` to find the current official guidance.
+2. Run `microsoft_code_sample_search` when official API or implementation examples are relevant.
+3. Run `microsoft_docs_fetch` for selected pages when full prerequisites, procedures, version notes, caveats, or troubleshooting details are needed.
+4. Record the supporting Microsoft Learn URLs and the decision they informed in the feature's `Plan.md` under `Microsoft Learn Evidence`.
+5. Compare the guidance with the versions and established constraints in this document and the repository. Document any discrepancy; do not silently change pinned versions or existing architecture.
+
+The MCP server informs decisions but does not override explicit project requirements. If it is unavailable, mark Microsoft-specific verification as pending. For PostgreSQL, pgvector, Redis, Ollama, Npgsql, and other non-Microsoft technologies, use their official first-party documentation.
 
 ## Key Design Decisions
 
