@@ -6,6 +6,7 @@
   - [Technology Inventory](#technology-inventory)
   - [Docker Compose Services](#docker-compose-services)
   - [Architecture](#architecture)
+  - [Microsoft Learn Decision Policy](#microsoft-learn-decision-policy)
   - [Key Design Decisions](#key-design-decisions)
   - [SOLID Design Guide](#solid-design-guide)
   - [Version Gaps](#version-gaps)
@@ -14,40 +15,40 @@
 
 | Layer | Technology | Version | Justification | Official Docs URL |
 | --- | --- | --- | --- | --- |
-| Runtime | .NET / ASP.NET Core | `net9.0`, SDK image `mcr.microsoft.com/dotnet/sdk:9.0` | Web MVC app and test project both target .NET 9; Dockerfile and test compose use the 9.0 SDK image. | https://learn.microsoft.com/aspnet/core/ |
-| Web framework | ASP.NET Core MVC | `net9.0` | `WebApp` uses `Microsoft.NET.Sdk.Web`, MVC controllers, Razor views, and Identity Razor Pages. | https://learn.microsoft.com/aspnet/core/mvc/overview |
-| Authentication | ASP.NET Core Identity | `9.0.0` | Identity packages, Identity UI area, and `AddDefaultIdentity<IdentityUser>()` provide login/registration. | https://learn.microsoft.com/aspnet/core/security/authentication/identity |
-| Database ORM | Entity Framework Core Tools | `9.0.0` | EF migrations exist under `WebApp/Migrations`; startup runs `db.Database.Migrate()`. | https://learn.microsoft.com/ef/core/ |
-| Database provider | Npgsql EF Core Provider | `9.0.4` | `UseNpgsql` configures PostgreSQL access for `AppDbContext`. | https://www.npgsql.org/efcore/ |
+| Runtime | .NET / ASP.NET Core | `net10.0`, SDK image `mcr.microsoft.com/dotnet/sdk:10.0` | Web MVC app and test projects target .NET 10; Dockerfiles and test compose use the 10.0 SDK image. | https://learn.microsoft.com/aspnet/core/ |
+| Web framework | ASP.NET Core MVC | `net10.0` | `WebApp` uses `Microsoft.NET.Sdk.Web`, MVC controllers, Razor views, and Identity Razor Pages. | https://learn.microsoft.com/aspnet/core/mvc/overview |
+| Authentication | ASP.NET Core Identity | `10.0.0` | Identity packages, Identity UI area, and `AddDefaultIdentity<IdentityUser>()` provide login/registration. | https://learn.microsoft.com/aspnet/core/security/authentication/identity |
+| Database ORM | Entity Framework Core Tools | `10.0.0` | EF migrations exist under `WebApp/Migrations`; startup runs `db.Database.Migrate()`. | https://learn.microsoft.com/ef/core/ |
+| Database provider | Npgsql EF Core Provider | `10.0.0` | `UseNpgsql` configures PostgreSQL access for `AppDbContext`. | https://www.npgsql.org/efcore/ |
 | Database service | PostgreSQL + pgvector | `pgvector/pgvector:0.8.2-pg18-trixie` | Base compose defines the `postgres` service for `booknotes`; pgvector stores semantic book embeddings. | https://github.com/pgvector/pgvector |
 | Cache service | Redis | `redis:7-alpine` | Base compose defines Redis; app registers `AddStackExchangeRedisCache`. | https://redis.io/docs/latest/ |
-| Distributed cache package | Microsoft.Extensions.Caching.StackExchangeRedis | `9.0.*` | `CacheHandler` uses the registered distributed cache for chat/session keys. | https://learn.microsoft.com/aspnet/core/performance/caching/distributed |
-| AI abstraction | Microsoft.Extensions.AI | `10.5.0` | `IChatClient` is the app-wide chat abstraction. | https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai |
+| Distributed cache package | Microsoft.Extensions.Caching.StackExchangeRedis | `10.0.0` | `CacheHandler` uses the registered distributed cache for chat/session keys. | https://learn.microsoft.com/aspnet/core/performance/caching/distributed |
+| AI abstraction | Microsoft.Extensions.AI | `10.5.1` | `IChatClient` is the app-wide chat abstraction. | https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai |
 | Agent framework | Microsoft Agent Framework | `Microsoft.Agents.AI` `1.3.0` | `ChatClientAgent`, `AIAgent`, `AgentSession`, and agent serialization power chat sessions. | https://learn.microsoft.com/agent-framework/ |
 | Local LLM client | OllamaSharp | `5.4.16` | `OllamaApiClient` connects the app to local Ollama chat and embedding models. | https://github.com/awaescher/OllamaSharp |
 | Local LLM runtime | Ollama | `ollama/ollama:latest`; chat models `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`; embedding model `mxbai-embed-large` | Compose starts Ollama and pulls the free chat models (defined in `ChatAgentCatalog`) plus the embedding model. All four chat models are tool-calling capable, required for `GenerateBookContext`/notes tools. | https://ollama.com/ |
 | Vector extension | Pgvector.EntityFrameworkCore | `0.3.0` | EF Core model maps `BookEmbedding.Embedding` as `vector(1024)` and configures the HNSW cosine index. | https://github.com/pgvector/pgvector-dotnet |
 | Markdown rendering | Markdig | `0.43.0` | Chat assistant responses are rendered to HTML with Markdig advanced extensions. | https://github.com/xoofx/markdig |
 | Sass compilation | AspNetCore.SassCompiler | `1.93.2` | `WebApp/appsettings.json` maps `Styles` to generated CSS under `wwwroot/css`. | https://github.com/koenvzeijl/AspNetCore.SassCompiler |
-| MVC scaffolding | Microsoft.VisualStudio.Web.CodeGeneration.Design | `9.0.0` | `GENERATE.md` documents controller/view scaffolding inside the Docker container. | https://learn.microsoft.com/aspnet/core/fundamentals/tools/dotnet-aspnet-codegenerator |
-| TTS microservice | ASP.NET Core (minimal API) | `net9.0` | `services/TtsService.Api/` exposes `POST /tts` and synthesizes audio from assistant text using Supertonic 3 ONNX models. | https://learn.microsoft.com/aspnet/core/ |
+| MVC scaffolding | Microsoft.VisualStudio.Web.CodeGeneration.Design | `10.0.2` | `GENERATE.md` documents controller/view scaffolding inside the Docker container. | https://learn.microsoft.com/aspnet/core/fundamentals/tools/dotnet-aspnet-codegenerator |
+| TTS microservice | ASP.NET Core (minimal API) | `net10.0` | `services/TtsService.Api/` exposes `POST /tts` and synthesizes audio from assistant text using Supertonic 3 ONNX models. | https://learn.microsoft.com/aspnet/core/ |
 | ONNX inference | Microsoft.ML.OnnxRuntime | `1.22.0` | `SupertonicTtsService` runs duration predictor, text encoder, vector estimator, and vocoder ONNX sessions to produce WAV audio. | https://onnxruntime.ai/ |
 | Audio storage | `FileSystemAudioStorage` / `IAudioStorage` | — | Generated WAV bytes are stored on disk and served by `ChatController.GetMessageAudio`. `ChatMessageAudio` EF entity tracks per-message audio metadata. | — |
 | Unit testing | xUnit | `2.9.2` | `WebApp.Tests` and `TtsService.Tests` both use `[Fact]`/`[Theory]` tests; both projects run in CI. | https://xunit.net/ |
 | Test runner | xUnit runner for Visual Studio | `2.8.2` | Test project references the Visual Studio xUnit runner. | https://xunit.net/docs/getting-started/netcore/cmdline |
-| Test SDK | Microsoft.NET.Test.Sdk | `17.12.0` | Enables `dotnet test` in `docker-compose.test.yml`. | https://learn.microsoft.com/dotnet/core/testing/ |
+| Test SDK | Microsoft.NET.Test.Sdk | `18.8.1` | Enables `dotnet test` in `docker-compose.test.yml`. | https://learn.microsoft.com/dotnet/core/testing/ |
 | Coverage collector | coverlet.collector | `6.0.2` | Present in the test project for coverage collection support. | https://github.com/coverlet-coverage/coverlet |
-| EF test provider | Microsoft.EntityFrameworkCore.InMemory | `9.0.4` | `BookContextServiceTests` creates an in-memory `AppDbContext`. | https://learn.microsoft.com/ef/core/providers/in-memory/ |
+| EF test provider | Microsoft.EntityFrameworkCore.InMemory | `10.0.0` | `BookContextServiceTests` creates an in-memory `AppDbContext`. | https://learn.microsoft.com/ef/core/providers/in-memory/ |
 
 ## Docker Compose Services
 
 | Service | Compose file(s) | Image / Build | Purpose |
 | --- | --- | --- | --- |
-| `webapp` | `docker-compose.yml` | Builds `./WebApp/Dockerfile` (final stage: `mcr.microsoft.com/dotnet/sdk:9.0`) | Runs the ASP.NET Core MVC app on `http://localhost:8080`; the full .NET SDK is available inside — exec with `docker compose exec webapp bash` to run `dotnet` commands against the live stack. |
+| `webapp` | `docker-compose.yml` | Builds `./WebApp/Dockerfile` (final stage: `mcr.microsoft.com/dotnet/sdk:10.0`) | Runs the ASP.NET Core MVC app on `http://localhost:8080`; the full .NET SDK is available inside — exec with `docker compose exec webapp bash` to run `dotnet` commands against the live stack. |
 | `ollama` | `docker-compose.yml`, `docker-compose.linux.yml`, `docker-compose.mac.yml`, `docker-compose.windows.yml` | `ollama/ollama:latest` | Runs local model inference and pulls `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`, plus `mxbai-embed-large`. |
 | `postgres` | `docker-compose.yml` | `pgvector/pgvector:0.8.2-pg18-trixie` | Stores Identity, profile, book, note, context, and vector embedding data. |
 | `redis` | `docker-compose.yml` | `redis:7-alpine` | Stores chat session/context/profile cache entries. |
-| `tests` | `docker-compose.test.yml` | `mcr.microsoft.com/dotnet/sdk:9.0` | Restores and runs `WebApp.Tests`. |
+| `tests` | `docker-compose.test.yml` | `mcr.microsoft.com/dotnet/sdk:10.0` | Restores and runs `WebApp.Tests` and `TtsService.Tests`. |
 
 The base file is `docker-compose.yml`. Linux, macOS, and Windows files are overrides for the `ollama` service: Linux maps `/dev/dri` and `/dev/kfd` with `OLLAMA_VULKAN=1`, macOS sets `platform: linux/arm64`, and Windows enables `gpus: all` plus NVIDIA environment variables.
 
@@ -75,6 +76,20 @@ flowchart TD
     Tests --> Services
 ```
 
+## Microsoft Learn Decision Policy
+
+The Microsoft Learn MCP Server is the required documentation source for technical decisions involving the Microsoft portions of this stack: .NET, ASP.NET Core MVC, Identity, Entity Framework Core, Microsoft.Extensions packages, Microsoft Agent Framework, Microsoft testing tooling, and Microsoft container or SDK guidance.
+
+Agents must use the following workflow before settling a Microsoft-specific requirement, design, API, security, compatibility, migration, or validation decision:
+
+1. Run `microsoft_docs_search` to find the current official guidance.
+2. Run `microsoft_code_sample_search` when official API or implementation examples are relevant.
+3. Run `microsoft_docs_fetch` for selected pages when full prerequisites, procedures, version notes, caveats, or troubleshooting details are needed.
+4. Record the supporting Microsoft Learn URLs and the decision they informed in the feature's `Plan.md` under `Microsoft Learn Evidence`.
+5. Compare the guidance with the versions and established constraints in this document and the repository. Document any discrepancy; do not silently change pinned versions or existing architecture.
+
+The MCP server informs decisions but does not override explicit project requirements. If it is unavailable, mark Microsoft-specific verification as pending. For PostgreSQL, pgvector, Redis, Ollama, Npgsql, and other non-Microsoft technologies, use their official first-party documentation.
+
 ## Key Design Decisions
 
 - The app uses local Ollama inference because the checked-in configuration creates `OllamaApiClient` instances, starts an `ollama` container, and has no cloud LLM configuration.
@@ -99,5 +114,4 @@ flowchart TD
 ## Version Gaps
 
 - `ollama/ollama:latest` does not pin an immutable Ollama version.
-- `Microsoft.Extensions.Caching.StackExchangeRedis` uses the floating package version `9.0.*`.
-- `dotnet-ef` and `dotnet-aspnet-codegenerator` are installed with `9.*` in the Dockerfile and documented with `9.*` in [../GENERATE.md](../GENERATE.md).
+- `dotnet-ef` and `dotnet-aspnet-codegenerator` are installed with `10.*` in the Dockerfile and documented with `10.*` in [../GENERATE.md](../GENERATE.md).

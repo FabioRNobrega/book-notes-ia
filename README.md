@@ -1,18 +1,18 @@
 # Book Notes IA
 
-Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 9. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, answers book questions through a local Ollama model, and reads assistant responses aloud using a local Supertonic 3 TTS sidecar.
+Book Notes IA is a local-first AI reading assistant built with ASP.NET Core MVC on .NET 10. It imports Kindle clipping `.txt` files into a private per-user reading library, stores books and notes in PostgreSQL, uses Redis for Microsoft Agent Framework session cache, answers book questions through a local Ollama model, and reads assistant responses aloud using a local Supertonic 3 TTS sidecar.
 
 The project is also a study project for modern .NET AI application patterns: Microsoft Agent Framework orchestration, native agent tools, `Microsoft.Extensions.AI`, local embeddings, PostgreSQL pgvector search, EF Core migrations, ONNX Runtime inference, Docker-first development, and regression tests that run against a real Postgres container.
 
 ## Stack
 
-- .NET 9 MVC and Razor views
+- .NET 10 MVC and Razor views
 - Microsoft Agent Framework + `Microsoft.Extensions.AI`
 - Ollama via OllamaSharp
 - Free chat models: `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`
 - Embedding model: `mxbai-embed-large`
 - PostgreSQL 18 with pgvector
-- EF Core 9 and Npgsql
+- EF Core 10 and Npgsql
 - Redis distributed cache
 - ASP.NET Core Identity
 - HTMX + Hyperscript + Shoelace
@@ -321,6 +321,30 @@ make docker-run
 If `AZURE_OPENAI_ENDPOINT`/`AZURE_LLM_DEPLOYMENT_NAME`/`AZURE_OPENAI_API_KEY` are left empty, only the Free agents are usable; selecting Premium will surface an error in chat instead of silently falling back to Ollama.
 
 ## Troubleshooting
+
+### Cleaning Docker or Podman resources
+
+`make docker-down` works with the Docker or Podman runtime detected by the project and removes its Compose containers, networks, and volumes. It does **not** remove downloaded images.
+
+Use it first when you want to reset only BOOK-NOTES-IA:
+
+```bash
+make docker-down
+```
+
+If you are using Podman and want to remove unused images, containers, networks, and volumes globally:
+
+```bash
+podman system prune -a --volumes -f
+```
+
+If you are using native Docker, use:
+
+```bash
+docker system prune -a --volumes -f
+```
+
+These global commands affect other projects on the machine. Use them only when you intentionally want a complete runtime cleanup.
 
 ### PostgreSQL 18 volume layout error
 

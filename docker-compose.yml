@@ -13,6 +13,7 @@ services:
       - audio_storage:/audio-storage
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER=true
       - OLLAMA_URL=http://ollama:11434
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=booknotes;Username=postgres;Password=postgres
       - ConnectionStrings__Redis=redis:6379

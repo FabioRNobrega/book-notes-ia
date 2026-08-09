@@ -28,9 +28,10 @@ Before writing anything, read the following to ground the spec in reality:
 2. Read `Specs/Roadmap.md` to understand current state and existing gaps.
 3. Read `Specs/TechStak.md` to understand the technology constraints, SOLID design guide, EF Core patterns, and service-boundary expectations.
 4. Read `AGENTS.md` for critical rules that affect implementation.
-5. Explore the codebase areas relevant to `$ARGUMENTS` — find the files that will actually change. Use `find` and `grep` to locate controllers, services, Razor views, Sass files, EF Core models/migrations, Dockerfiles, or templates involved.
-6. Identify the existing service boundaries and EF Core access patterns so the spec can preserve SOLID design instead of placing unrelated responsibilities into controllers, agent tools, or broad services.
-7. If the feature touches UI, inspect nearby Razor views, partials, layout files, Sass source in `WebApp/Styles`, and any existing HTMX-style interaction patterns before proposing new frontend structure.
+5. For every decision involving Microsoft technology, use the Microsoft Learn MCP Server to verify the current official guidance before choosing an approach. Start with `microsoft_docs_search`; use `microsoft_code_sample_search` when code or API usage informs the decision; then use `microsoft_docs_fetch` for any high-value page whose complete prerequisites, constraints, or version details are needed. Record the relevant Learn URLs and the conclusions they support for use in `Plan.md`.
+6. Explore the codebase areas relevant to `$ARGUMENTS` — find the files that will actually change. Use `rg` and `rg --files` to locate controllers, services, Razor views, Sass files, EF Core models/migrations, Dockerfiles, or templates involved.
+7. Identify the existing service boundaries and EF Core access patterns so the spec can preserve SOLID design instead of placing unrelated responsibilities into controllers, agent tools, or broad services.
+8. If the feature touches UI, inspect nearby Razor views, partials, layout files, Sass source in `WebApp/Styles`, and any existing HTMX-style interaction patterns before proposing new frontend structure.
 
 If `$ARGUMENTS` is empty, ask the user: "What feature or task should this spec cover?" and wait for the answer before proceeding.
 
@@ -63,6 +64,8 @@ Rules for discovery:
 Use these rules when shaping the requirements, plan, validation strategy, and future implementation tasks:
 
 - Treat `Specs/TechStak.md` as the source of truth for architecture, SOLID boundaries, EF Core patterns, Microsoft Agent Framework usage, Docker execution, and version constraints.
+- Ground decisions about .NET, ASP.NET Core, Entity Framework Core, Microsoft.Extensions.AI, Microsoft Agent Framework, Identity, and other Microsoft technologies in current official guidance retrieved through the Microsoft Learn MCP Server. Do not rely on memory alone when the guidance can affect requirements, architecture, APIs, security, compatibility, or validation.
+- When repository constraints intentionally differ from Microsoft Learn guidance, preserve the repository constraint and document the difference and rationale in `Plan.md`; do not silently replace established project decisions.
 - Prefer the existing ASP.NET Core MVC structure: controllers coordinate HTTP flow, services own business behavior, Razor views/partials render UI, and EF Core access stays in focused services or `AppDbContext` patterns.
 - Keep user-owned data scoped by `UserId` / `ClaimTypes.NameIdentifier`; book lookup, note access, embeddings, generated context, and cache/session behavior must not cross users.
 - Preserve the existing Microsoft Agent Framework vocabulary and architecture for AI work. Do not describe it as a generic bot framework or move agent-tool responsibilities into controllers.
@@ -190,6 +193,12 @@ Also explain how the design follows the general implementation guidance:
 - List real runtime, infrastructure, or service dependencies (e.g. a running SQL Server,
   a specific env var, another service being reachable).
 
+## Microsoft Learn Evidence
+
+- For each decision involving Microsoft technology, link the official Microsoft Learn page retrieved through the Microsoft Learn MCP Server and summarize the guidance that informed the decision.
+- State "Not applicable" only when the feature makes no decision involving Microsoft technology.
+- If the Microsoft Learn MCP Server was unavailable, state that verification is pending; do not present an unverified Microsoft-specific decision as settled.
+
 ## Flow
 
 Include a Mermaid sequence or flowchart diagram showing the main happy-path data flow.
@@ -245,6 +254,7 @@ Start from a clean state using the appropriate Make target, e.g. `make docker-ru
 - New behaviour has test coverage matching the pattern in `AGENTS.md`.
 - If UI changed: Razor views/partials and Sass source are updated consistently, with responsive, empty, loading, error, and accessibility states covered in the plan.
 - If AI behavior changed: Microsoft Agent Framework prompts, tools, services, and session/cache effects are documented and validated.
+- Microsoft-specific design and API decisions are supported by current Microsoft Learn evidence in `Plan.md`, or explicitly marked as pending when the MCP server was unavailable.
 - If Docker, migrations, or infrastructure changed: the Make/Docker workflow is documented and verified.
 
 ## Rollback Plan
