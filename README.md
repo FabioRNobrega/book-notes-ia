@@ -18,6 +18,7 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - HTMX + Hyperscript + Shoelace
 - Sass compilation with `AspNetCore.SassCompiler`
 - Supertonic 3 TTS via ONNX Runtime (local voice synthesis sidecar)
+- Optional Chatterbox Multilingual V3 custom-voice proof of concept (isolated CPU container)
 - Docker Compose
 
 ## Current Services
@@ -290,6 +291,36 @@ The TTS sidecar is configured in `docker-compose.yml` and `WebApp/appsettings.js
 The Supertonic 3 model assets must be placed at `services/TtsService.Api/assets/supertonic-3/` before running the stack. The assets directory is mounted read-only into the `tts` container.
 
 - `AudioStorage:BasePath` — filesystem path inside the `webapp` container where generated WAV files are stored (default `/audio-storage`)
+
+#### Chatterbox custom-voice proof of concept
+
+Chatterbox is an isolated developer experiment and is not connected to the WebApp, user profiles, premium access, or chat audio routing. Supertonic remains the application's configured TTS provider.
+
+The POC uses Chatterbox Multilingual V3 on CPU with English text. Its source package reports version `0.1.7` and is pinned to official Chatterbox commit `5de7a54aa4e5e2baadb0182dde554908b48b85c2`, because the PyPI wheel with the same version does not yet contain the V3 loading API. The complete Linux/Python 3.11 dependency graph is recorded in `requirements.lock.txt`, the image explicitly installs PyTorch's CPU-only wheels, and model files are downloaded from the pinned Hugging Face snapshot `5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18`. The model cache and all personal/generated audio remain local and ignored by Git.
+
+Generate the preview:
+
+```bash
+make chatterbox-preview
+```
+
+The command reads `services/ChatterboxTtsService/data/reference.wav` and writes `services/ChatterboxTtsService/data/synthetic-preview.wav`. The first run builds a large PyTorch image and downloads several gigabytes of model and tokenizer files, so it can take a long time. Later runs reuse `services/ChatterboxTtsService/models/`, which is also configured as the container home/cache root so secondary tokenizer assets persist for offline operation.
+
+To verify cached operation after one successful online run:
+
+```bash
+HF_HUB_OFFLINE=1 make chatterbox-preview
+```
+
+Focused POC commands:
+
+```bash
+make chatterbox-logs  # Follow model-loading and synthesis diagnostics
+make chatterbox-test  # Run fake-engine tests without loading/downloading model weights
+make chatterbox-down  # Stop only the isolated Chatterbox service
+```
+
+The Legion Go/SteamOS target uses CPU inference intentionally. Its AMD Radeon/Vulkan setup is not assumed to provide PyTorch acceleration, and preview generation may be considerably slower than real time. If readiness fails, use `make chatterbox-logs`; common causes are an interrupted first download, insufficient free memory while Ollama is running, or unavailable network access before the model cache exists.
 
 ### Unsplash
 

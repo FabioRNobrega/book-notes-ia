@@ -16,8 +16,11 @@ MAC_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.mac.yml
 WINDOWS_COMPOSE_FILES := -f docker-compose.yml -f docker-compose.windows.yml
 TEST_COMPOSE_FILES := -f docker-compose.test.yml
 TEST_COMPOSE_PROJECT ?= book-notes-ia-test
+CHATTERBOX_COMPOSE_FILES := -f docker-compose.chatterbox.yml
+CHATTERBOX_COMPOSE_PROJECT ?= book-notes-ia-chatterbox
+CHATTERBOX_OUTPUT := services/ChatterboxTtsService/data/synthetic-preview.wav
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-logs chatterbox-test chatterbox-down
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -91,3 +94,22 @@ presentation-bundle:
 #   TTS_TEXT="Olá, mundo" TTS_LANGUAGE=pt TTS_VOICE=male make debug-tts
 debug-tts:
 	@TTS_URL=http://localhost:5080 bash Scripts/debug-tts.sh
+
+# Build/start the isolated Chatterbox POC, wait for its pinned model to load,
+# and generate data/synthetic-preview.wav from data/reference.wav.
+chatterbox-preview:
+	@test -f services/ChatterboxTtsService/data/reference.wav || (echo "Missing services/ChatterboxTtsService/data/reference.wav" && exit 1)
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) up -d --build chatterbox-tts
+	@$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) exec -T chatterbox-tts python -m app.wait_for_ready
+	@$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) exec -T chatterbox-tts python -c "import json,urllib.request; request=urllib.request.Request('http://localhost:5081/preview', method='POST'); print(json.dumps(json.load(urllib.request.urlopen(request, timeout=7200)), indent=2))"
+	@echo "Preview written to $(CHATTERBOX_OUTPUT)"
+
+chatterbox-logs:
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) logs -f chatterbox-tts
+
+chatterbox-test:
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) build chatterbox-tts
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) run --rm --no-deps chatterbox-tts python -m pytest -q
+
+chatterbox-down:
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) down --remove-orphans

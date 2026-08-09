@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import logging
+from pathlib import Path
+import threading
+from typing import Protocol
+
+from .chunking import TextChunk
+
+
+LOGGER = logging.getLogger(__name__)
+MODEL_REPOSITORY = "ResembleAI/chatterbox"
+MODEL_FILES = [
+    "ve.pt",
+    "t3_mtl23ls_v3.safetensors",
+    "s3gen.pt",
+    "grapheme_mtl_merged_expanded_v1.json",
+    "conds.pt",
+    "Cangjie5_TC.json",
+]
+
+
+class SynthesisError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class SynthesisResult:
+    sample_rate: int
+    duration_seconds: float
+    chunk_count: int
+
+
+class SynthesisEngine(Protocol):
+    device: str
+    model_name: str
+    model_revision: str
+
+    @property
+    def ready(self) -> bool: ...
+
+    @property
+    def load_error(self) -> str | None: ...
+
+    def load(self) -> None: ...
+
+    def synthesize(
+        self,
+        chunks: list[TextChunk],
+        reference_path: Path,
+        output_path: Path,
+        language_id: str,
+        sentence_silence_ms: int,
+        paragraph_silence_ms: int,
+    ) -> SynthesisResult: ...
+
+
+class ChatterboxEngine:
+    device = "cpu"
+    model_name = "multilingual-v3"
+
+    def __init__(self, model_revision: str) -> None:
+        self.model_revision = model_revision
+        self._model = None
+        self._load_error: str | None = None
+        self._load_lock = threading.Lock()
+
+    @property
+    def ready(self) -> bool:
+        return self._model is not None
+
+    @property
+    def load_error(self) -> str | None:
+        return self._load_error
+
+    def load(self) -> None:
+        if self.ready:
+            return
+
+        with self._load_lock:
+            if self.ready:
+                return
+            try:
+                from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+                from huggingface_hub import snapshot_download
+
+                LOGGER.info(
+                    "Loading %s on %s from model revision %s",
+                    self.model_name,
+                    self.device,
+                    self.model_revision,
+                )
+                checkpoint_dir = snapshot_download(
+                    repo_id=MODEL_REPOSITORY,
+                    repo_type="model",
+                    revision=self.model_revision,
+                    allow_patterns=MODEL_FILES,
+                )
+                self._model = ChatterboxMultilingualTTS.from_local(
+                    checkpoint_dir,
+                    device=self.device,
+                    t3_model="v3",
+                )
+                self._load_error = None
+                LOGGER.info("Chatterbox model is ready")
+            except Exception as error:
+                self._load_error = _concise_error(error)
+                LOGGER.exception("Chatterbox model failed to load: %s", self._load_error)
+
+    def synthesize(
+        self,
+        chunks: list[TextChunk],
+        reference_path: Path,
+        output_path: Path,
+        language_id: str,
+        sentence_silence_ms: int,
+        paragraph_silence_ms: int,
+    ) -> SynthesisResult:
+        if not self.ready:
+            raise SynthesisError(self.load_error or "Chatterbox model is still loading")
+
+        try:
+            import torch
+            import soundfile
+
+            waveforms = []
+            for index, chunk in enumerate(chunks):
+                waveform = self._model.generate(
+                    chunk.text,
+                    language_id=language_id,
+                    audio_prompt_path=str(reference_path) if index == 0 else None,
+                )
+                waveforms.append(waveform.cpu())
+                if index < len(chunks) - 1:
+                    silence_ms = (
+                        paragraph_silence_ms
+                        if chunk.paragraph_break_after
+                        else sentence_silence_ms
+                    )
+                    silence_samples = int(self._model.sr * silence_ms / 1000)
+                    waveforms.append(torch.zeros((1, silence_samples)))
+
+            combined = torch.cat(waveforms, dim=-1)
+            soundfile.write(
+                str(output_path),
+                combined.squeeze(0).numpy(),
+                self._model.sr,
+                subtype="PCM_16",
+            )
+            return SynthesisResult(
+                sample_rate=self._model.sr,
+                duration_seconds=combined.shape[-1] / self._model.sr,
+                chunk_count=len(chunks),
+            )
+        except SynthesisError:
+            raise
+        except Exception as error:
+            raise SynthesisError(_concise_error(error)) from error
+
+
+def _concise_error(error: Exception) -> str:
+    message = " ".join(str(error).split())
+    return message[:500] or error.__class__.__name__
