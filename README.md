@@ -296,6 +296,8 @@ The Supertonic 3 model assets must be placed at `services/TtsService.Api/assets/
 
 Chatterbox is an isolated developer experiment and is not connected to the WebApp, user profiles, premium access, or chat audio routing. Supertonic remains the application's configured TTS provider.
 
+See [ChatterboxTtsService Architecture](services/ChatterboxTtsService/README.md) for a beginner-friendly explanation of the Python service, Mermaid diagrams, request lifecycle, voice conditioning, `.pt` artifacts, caching, safety behavior, and future custom-voice design.
+
 The POC uses Chatterbox Multilingual V3 on CPU with English text. Its source package reports version `0.1.7` and is pinned to official Chatterbox commit `5de7a54aa4e5e2baadb0182dde554908b48b85c2`, because the PyPI wheel with the same version does not yet contain the V3 loading API. The complete Linux/Python 3.11 dependency graph is recorded in `requirements.lock.txt`, the image explicitly installs PyTorch's CPU-only wheels, and model files are downloaded from the pinned Hugging Face snapshot `5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18`. The model cache and all personal/generated audio remain local and ignored by Git.
 
 Generate the preview:
