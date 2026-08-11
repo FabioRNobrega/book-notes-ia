@@ -5,85 +5,80 @@ from pathlib import Path
 
 import pytest
 
-from app.engine import SynthesisResult
 from app.main import OutputWriteError, PreviewService, _validate_output
-from app.settings import PINNED_MODEL_REVISION, Settings
+from app.settings import Settings
 from conftest import write_wav
 from test_api import FakeEngine
 
 
-def test_success_atomically_replaces_output_and_preserves_reference(settings) -> None:
-    write_wav(settings.reference_path)
-    reference_checksum = hashlib.sha256(settings.reference_path.read_bytes()).hexdigest()
-    settings.output_path.write_bytes(b"old-preview")
+@pytest.mark.parametrize("language_id", ["en", "pt"])
+def test_success_writes_per_voice_output_and_preserves_reference(
+    settings: Settings, language_id: str
+) -> None:
+    profile = settings.profile(language_id)
+    write_wav(profile.reference_path)
+    reference_checksum = hashlib.sha256(profile.reference_path.read_bytes()).hexdigest()
 
-    PreviewService(settings, FakeEngine()).generate()
+    response = PreviewService(settings, FakeEngine()).generate(language_id)
+    output_path = Path(response["output_path"])
 
-    assert _validate_output(settings.output_path) > 0
-    assert hashlib.sha256(settings.reference_path.read_bytes()).hexdigest() == reference_checksum
-    assert settings.output_path.read_bytes() != b"old-preview"
+    assert _validate_output(output_path) > 0
+    assert output_path == (
+        settings.outputs_dir / response["voice_id"] / f"preview-{language_id}.wav"
+    )
+    assert hashlib.sha256(profile.reference_path.read_bytes()).hexdigest() == reference_checksum
 
 
 def test_invalid_engine_output_does_not_replace_previous_preview(settings) -> None:
-    class InvalidOutputEngine(FakeEngine):
-        def synthesize(self, **kwargs):
-            kwargs["output_path"].write_bytes(b"not-wave")
-            return SynthesisResult(16_000, 0, 1)
-
-    write_wav(settings.reference_path)
-    settings.output_path.write_bytes(b"known-good")
+    profile = settings.profile("en")
+    write_wav(profile.reference_path)
+    created = PreviewService(settings, FakeEngine()).generate("en")
+    output_path = Path(created["output_path"])
+    previous = output_path.read_bytes()
 
     with pytest.raises(OutputWriteError):
-        PreviewService(settings, InvalidOutputEngine()).generate()
+        PreviewService(settings, FakeEngine(invalid_output=True)).generate("en")
 
-    assert settings.output_path.read_bytes() == b"known-good"
+    assert output_path.read_bytes() == previous
+    assert not list(output_path.parent.glob(".preview-*.wav"))
 
 
-def test_settings_reject_audio_path_outside_data_directory(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    preview_path = tmp_path / "preview.txt"
-    preview_path.write_text("Preview text.", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="direct children"):
+def test_settings_reject_storage_paths_outside_data_directory(
+    settings, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match="Voices directory"):
         Settings(
-            data_dir=data_dir,
-            preview_text_path=preview_path,
-            reference_path=tmp_path / "reference.wav",
-            output_path=data_dir / "synthetic-preview.wav",
-            model_revision=PINNED_MODEL_REVISION,
+            data_dir=settings.data_dir,
+            config_dir=settings.config_dir,
+            voices_dir=tmp_path / "voices",
+            outputs_dir=settings.outputs_dir,
+            model_revision=settings.model_revision,
+            source_revision=settings.source_revision,
         ).validated()
 
 
-def test_settings_reject_missing_preview_text(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
+def test_settings_reject_missing_portuguese_preview(settings) -> None:
+    (settings.config_dir / "pt-preview.txt").unlink()
 
     with pytest.raises(ValueError, match="Preview text is missing"):
-        Settings(
-            data_dir=data_dir,
-            preview_text_path=tmp_path / "missing.txt",
-            reference_path=data_dir / "reference.wav",
-            output_path=data_dir / "synthetic-preview.wav",
-            model_revision=PINNED_MODEL_REVISION,
-        ).validated()
+        settings.validated()
 
 
 @pytest.mark.parametrize(
-    ("device", "language_id", "model"),
-    [("cuda", "en", "v3"), ("cpu", "pt", "v3"), ("cpu", "en", "v2")],
+    ("device", "model"),
+    [("cuda", "v3"), ("cpu", "v2")],
 )
 def test_settings_reject_unsupported_runtime_options(
-    settings, device: str, language_id: str, model: str
+    settings, device: str, model: str
 ) -> None:
     with pytest.raises(ValueError):
         Settings(
             data_dir=settings.data_dir,
-            preview_text_path=settings.preview_text_path,
-            reference_path=settings.reference_path,
-            output_path=settings.output_path,
+            config_dir=settings.config_dir,
+            voices_dir=settings.voices_dir,
+            outputs_dir=settings.outputs_dir,
             device=device,
-            language_id=language_id,
             model=model,
-            model_revision=PINNED_MODEL_REVISION,
+            model_revision=settings.model_revision,
+            source_revision=settings.source_revision,
         ).validated()

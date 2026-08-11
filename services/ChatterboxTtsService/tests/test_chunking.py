@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import pytest
+
 from app.chunking import chunk_text
-from conftest import PREVIEW_TEXT
+from conftest import EN_PREVIEW_TEXT, PT_PREVIEW_TEXT
 
 
-def test_configured_preview_text_is_exact() -> None:
-    configured = open("config/preview.txt", encoding="utf-8").read().strip()
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [("config/preview.txt", EN_PREVIEW_TEXT), ("config/pt-preview.txt", PT_PREVIEW_TEXT)],
+)
+def test_configured_preview_text_is_exact(path: str, expected: str) -> None:
+    configured = open(path, encoding="utf-8").read().strip()
 
-    assert configured == PREVIEW_TEXT
+    assert configured == expected
 
 
-def test_chunking_preserves_text_order_and_paragraph_boundaries() -> None:
-    chunks = chunk_text(PREVIEW_TEXT, max_chars=280)
-    paragraphs = PREVIEW_TEXT.split("\n\n")
+@pytest.mark.parametrize("text", [EN_PREVIEW_TEXT, PT_PREVIEW_TEXT])
+def test_chunking_preserves_text_order_and_paragraph_boundaries(text: str) -> None:
+    chunks = chunk_text(text, max_chars=280)
+    paragraphs = text.split("\n\n")
     reconstructed_paragraphs = []
     current = []
 
@@ -35,4 +42,3 @@ def test_oversized_sentence_splits_without_losing_words() -> None:
 
     assert " ".join(chunk.text for chunk in chunks) == text
     assert all(len(chunk.text) <= 80 for chunk in chunks)
-

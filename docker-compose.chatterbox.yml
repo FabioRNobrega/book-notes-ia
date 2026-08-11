@@ -11,11 +11,11 @@ services:
       - ./services/ChatterboxTtsService/models:/models
     environment:
       CHATTERBOX_DATA_DIR: /data
-      CHATTERBOX_PREVIEW_TEXT_PATH: /app/config/preview.txt
+      CHATTERBOX_CONFIG_DIR: /app/config
       CHATTERBOX_DEVICE: cpu
-      CHATTERBOX_LANGUAGE_ID: en
       CHATTERBOX_MODEL: v3
       CHATTERBOX_MODEL_REVISION: 5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18
+      CHATTERBOX_SOURCE_REVISION: 5de7a54aa4e5e2baadb0182dde554908b48b85c2
       HF_HOME: /models/huggingface
       HF_HUB_CACHE: /models/huggingface/hub
       HF_HUB_DISABLE_TELEMETRY: "1"

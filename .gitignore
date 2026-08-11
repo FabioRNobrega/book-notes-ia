@@ -67,7 +67,7 @@ audio-storage/
 # TTS debug output
 debug-output/
 
-# Chatterbox custom-voice POC local artifacts
+# Chatterbox custom-voice POC private references, conditioning, outputs, and models
 services/ChatterboxTtsService/data/
 services/ChatterboxTtsService/models/
 services/ChatterboxTtsService/**/__pycache__/

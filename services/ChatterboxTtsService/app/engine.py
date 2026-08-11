@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 import threading
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .chunking import TextChunk
 
@@ -45,14 +45,20 @@ class SynthesisEngine(Protocol):
 
     def load(self) -> None: ...
 
+    def prepare_conditioning(self, reference_path: Path) -> None: ...
+
+    def save_conditioning(self, path: Path) -> None: ...
+
+    def load_conditioning(self, path: Path) -> None: ...
+
     def synthesize(
         self,
         chunks: list[TextChunk],
-        reference_path: Path,
         output_path: Path,
         language_id: str,
         sentence_silence_ms: int,
         paragraph_silence_ms: int,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> SynthesisResult: ...
 
 
@@ -108,30 +114,60 @@ class ChatterboxEngine:
                 self._load_error = _concise_error(error)
                 LOGGER.exception("Chatterbox model failed to load: %s", self._load_error)
 
+    def prepare_conditioning(self, reference_path: Path) -> None:
+        self._require_ready()
+        try:
+            self._model.prepare_conditionals(str(reference_path))
+        except Exception as error:
+            raise SynthesisError(_concise_error(error)) from error
+
+    def save_conditioning(self, path: Path) -> None:
+        self._require_ready()
+        try:
+            if self._model.conds is None:
+                raise RuntimeError("Voice conditioning has not been prepared")
+            self._model.conds.save(path)
+        except Exception as error:
+            raise SynthesisError(_concise_error(error)) from error
+
+    def load_conditioning(self, path: Path) -> None:
+        self._require_ready()
+        try:
+            from chatterbox.mtl_tts import Conditionals
+
+            self._model.conds = Conditionals.load(
+                path, map_location=self.device
+            ).to(self.device)
+        except Exception as error:
+            raise SynthesisError(_concise_error(error)) from error
+
     def synthesize(
         self,
         chunks: list[TextChunk],
-        reference_path: Path,
         output_path: Path,
         language_id: str,
         sentence_silence_ms: int,
         paragraph_silence_ms: int,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> SynthesisResult:
-        if not self.ready:
-            raise SynthesisError(self.load_error or "Chatterbox model is still loading")
+        self._require_ready()
 
         try:
             import torch
             import soundfile
 
+            if self._model.conds is None:
+                raise RuntimeError("Voice conditioning has not been selected")
             waveforms = []
             for index, chunk in enumerate(chunks):
                 waveform = self._model.generate(
                     chunk.text,
                     language_id=language_id,
-                    audio_prompt_path=str(reference_path) if index == 0 else None,
+                    audio_prompt_path=None,
                 )
                 waveforms.append(waveform.cpu())
+                if progress_callback is not None:
+                    progress_callback(index + 1, len(chunks))
                 if index < len(chunks) - 1:
                     silence_ms = (
                         paragraph_silence_ms
@@ -157,6 +193,10 @@ class ChatterboxEngine:
             raise
         except Exception as error:
             raise SynthesisError(_concise_error(error)) from error
+
+    def _require_ready(self) -> None:
+        if not self.ready:
+            raise SynthesisError(self.load_error or "Chatterbox model is still loading")
 
 
 def _concise_error(error: Exception) -> str:
