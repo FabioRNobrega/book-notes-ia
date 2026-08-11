@@ -29,7 +29,8 @@ services:
       - |
         dotnet restore book-notes-ia.sln &&
         dotnet test WebApp.Tests/WebApp.Tests.csproj --no-restore --logger "console;verbosity=minimal" &&
-        dotnet test services/TtsService.Tests/TtsService.Tests.csproj --no-restore --logger "console;verbosity=minimal"
+        dotnet test services/TtsService.Tests/TtsService.Tests.csproj --no-restore --logger "console;verbosity=minimal" &&
+        dotnet test services/EbookParseService.Tests/EbookParseService.Tests.csproj --no-restore --logger "console;verbosity=minimal"
 
 volumes:
   nuget_cache:

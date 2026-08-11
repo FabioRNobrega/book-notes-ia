@@ -10,6 +10,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TtsService.Api", "services\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TtsService.Tests", "services\TtsService.Tests\TtsService.Tests.csproj", "{FB0BA932-9C1B-446D-ADDE-4259BA91AD2C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EbookParseService.Api", "services\EbookParseService.Api\EbookParseService.Api.csproj", "{8D62C521-F6E5-4A54-8F9E-0E127BF92764}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EbookParseService.Tests", "services\EbookParseService.Tests\EbookParseService.Tests.csproj", "{3465F98D-FCEA-49D3-A37F-6E17C37529C9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +36,14 @@ Global
 		{FB0BA932-9C1B-446D-ADDE-4259BA91AD2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FB0BA932-9C1B-446D-ADDE-4259BA91AD2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FB0BA932-9C1B-446D-ADDE-4259BA91AD2C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8D62C521-F6E5-4A54-8F9E-0E127BF92764}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8D62C521-F6E5-4A54-8F9E-0E127BF92764}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8D62C521-F6E5-4A54-8F9E-0E127BF92764}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8D62C521-F6E5-4A54-8F9E-0E127BF92764}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3465F98D-FCEA-49D3-A37F-6E17C37529C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3465F98D-FCEA-49D3-A37F-6E17C37529C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3465F98D-FCEA-49D3-A37F-6E17C37529C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3465F98D-FCEA-49D3-A37F-6E17C37529C9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

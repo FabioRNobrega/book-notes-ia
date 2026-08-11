@@ -19,6 +19,7 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - Sass compilation with `AspNetCore.SassCompiler`
 - Supertonic 3 TTS via ONNX Runtime (local voice synthesis sidecar)
 - Optional Chatterbox Multilingual V3 custom-voice proof of concept (isolated CPU container)
+- Optional .NET 10 EPUB 3 chapter-text parser proof of concept (isolated container)
 - Docker Compose
 
 ## Current Services
@@ -32,6 +33,14 @@ The project is also a study project for modern .NET AI application patterns: Mic
 - `redis` on port `6379`
 
 The Ollama container pulls `qwen3.5:4b`, `llama3.2:3b`, `phi4-mini:3.8b`, `granite4:3b`, and `mxbai-embed-large` on first start — this makes the first startup heavier and slower than before. All four chat models support native tool calling, which the app relies on for book-context and notes lookup. The TTS sidecar mounts Supertonic 3 ONNX model assets from `services/TtsService.Api/assets/supertonic-3/` (not included in the repository — see Setup).
+
+The EPUB parser is a separate POC and is not part of the normal application stack. Place a legally obtained EPUB 3 file under `services/EbookParseService.Api/data/input/`, then run:
+
+```bash
+make ebook-parse BOOK=book.epub
+```
+
+It follows EPUB container, package, and navigation metadata and writes one navigation-derived chapter per file under the ignored `data/output/<book-slug>/` folder. Reruns stage a complete set before replacing the prior output. Ambiguous structures and encrypted content are rejected rather than guessed. The source book and extracted text stay local and must not be committed. This POC does not call Chatterbox, Supertonic, WebApp, or a database. See [the parser service README](services/EbookParseService.Api/README.md) for supported EPUB structures, limits, tests, and privacy details.
 
 ## Features
 
@@ -172,6 +181,8 @@ book-notes-ia/
 │   └── wwwroot/              # Static assets
 ├── WebApp.Tests/             # xUnit tests, including Docker-backed Postgres tests
 ├── services/
+│   ├── EbookParseService.Api/   # Isolated EPUB 3 chapter-text parser POC
+│   ├── EbookParseService.Tests/ # Synthetic EPUB parser tests
 │   ├── TtsService.Api/       # Supertonic 3 TTS sidecar (ASP.NET Core, ONNX Runtime)
 │   └── TtsService.Tests/     # xUnit unit tests for the TTS service
 ├── docker-compose.yml

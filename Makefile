@@ -20,8 +20,12 @@ CHATTERBOX_COMPOSE_FILES := -f docker-compose.chatterbox.yml
 CHATTERBOX_COMPOSE_PROJECT ?= book-notes-ia-chatterbox
 CHATTERBOX_LANGUAGE = $(if $(strip $(LANGUAGE)),$(LANGUAGE),en)
 VOICE_ID ?=
+EBOOK_PARSER_COMPOSE_FILES := -f docker-compose.ebook-parser.yml
+EBOOK_PARSER_COMPOSE_PROJECT ?= book-notes-ia-ebook-parser
+EBOOK_PARSER_PORT ?= 5082
+BOOK ?=
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down ebook-parse ebook-parser-test ebook-parser-logs ebook-parser-down
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -120,3 +124,24 @@ chatterbox-test:
 
 chatterbox-down:
 	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) down --remove-orphans
+
+# Parse one private EPUB from services/EbookParseService.Api/data/input.
+# BOOK is intentionally restricted to a plain local filename.
+ebook-parse:
+	@if [ -z "$(BOOK)" ]; then echo "Usage: make ebook-parse BOOK=book.epub"; exit 1; fi
+	@case "$(BOOK)" in *[!A-Za-z0-9._\ -]*|.*) echo "BOOK must be a safe base filename"; exit 1 ;; esac
+	@case "$(BOOK)" in *.epub|*.EPUB) ;; *) echo "BOOK must end in .epub"; exit 1 ;; esac
+	@test -f "services/EbookParseService.Api/data/input/$(BOOK)" || (echo "Missing services/EbookParseService.Api/data/input/$(BOOK)" && exit 1)
+	$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) up -d --build ebook-parser
+	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) exec -T ebook-parser sh -c 'until curl --fail --silent http://localhost:5082/health >/dev/null; do sleep 1; done'
+	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) exec -T ebook-parser curl --fail-with-body --silent --show-error -H "Content-Type: application/json" -d '{"fileName":"$(BOOK)"}' http://localhost:5082/api/epubs/parse
+	@echo
+
+ebook-parser-test:
+	$(COMPOSE) -p $(TEST_COMPOSE_PROJECT) $(TEST_COMPOSE_FILES) run --rm --no-deps tests dotnet test services/EbookParseService.Tests/EbookParseService.Tests.csproj --logger "console;verbosity=minimal"
+
+ebook-parser-logs:
+	$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) logs -f ebook-parser
+
+ebook-parser-down:
+	$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) down --remove-orphans
