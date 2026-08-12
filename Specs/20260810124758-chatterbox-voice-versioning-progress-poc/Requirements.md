@@ -29,6 +29,7 @@ The persistent-conditioning POC currently treats one language as one logical voi
 14. FR14 — Existing voice folders created by the previous POC shall remain valid. If their metadata checksum matches the current fixed reference, the service shall atomically backfill the archived `reference.wav`; it shall never guess or reconstruct an already overwritten historical voice.
 15. FR15 — API responses, progress, logs, Make output, tests, and documentation shall clearly distinguish creating a new voice from rebuilding an existing voice and shall never expose audio/tensor contents.
 16. FR16 — Automated tests shall cover multi-voice preservation, selection, listing, migration/backfill, progress monotonicity, client output, short/silent audio, near-silent output rollback, path containment, and existing persistence behavior without loading the real model.
+17. FR17 — The preview client's blocking synthesis request shall default to a configurable seven-day timeout; `CHATTERBOX_PREVIEW_TIMEOUT_SECONDS=0` shall wait without a client deadline, while health and progress polling retain short request timeouts. Interrupting the client shall not claim that server-side synthesis was cancelled.
 
 ## Non-Functional Requirements
 

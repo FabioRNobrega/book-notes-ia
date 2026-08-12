@@ -19,6 +19,8 @@ TEST_COMPOSE_PROJECT ?= book-notes-ia-test
 CHATTERBOX_COMPOSE_FILES := -f docker-compose.chatterbox.yml
 CHATTERBOX_COMPOSE_PROJECT ?= book-notes-ia-chatterbox
 CHATTERBOX_LANGUAGE = $(if $(strip $(LANGUAGE)),$(LANGUAGE),en)
+CHATTERBOX_PREVIEW_TIMEOUT_SECONDS ?= 604800
+export CHATTERBOX_PREVIEW_TIMEOUT_SECONDS
 VOICE_ID ?=
 EBOOK_PARSER_COMPOSE_FILES := -f docker-compose.ebook-parser.yml
 EBOOK_PARSER_COMPOSE_PROJECT ?= book-notes-ia-ebook-parser

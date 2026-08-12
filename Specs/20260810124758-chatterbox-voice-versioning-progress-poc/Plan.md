@@ -16,6 +16,8 @@ Change voice identity from “one voice per language” to “one voice per lang
 
 **Progress.** Add a small thread-safe `ProgressTracker` owned by `PreviewService`. Update it at orchestration stages and pass a callback into `ChatterboxEngine.synthesize()` so each chunk reports a monotonic percentage. `GET /progress` returns snapshots. A new `app/preview_client.py` starts the blocking POST in a worker thread, polls progress, prints only changed snapshots with `flush=True`, then prints the final response. Make invokes this client rather than a one-line blocking `urllib` request.
 
+**Long-running previews.** Configure only the blocking preview POST with `CHATTERBOX_PREVIEW_TIMEOUT_SECONDS`, defaulting to 604800 seconds (seven days), and interpret zero as no client deadline. Keep bounded timeouts on readiness and progress probes so an unavailable API cannot freeze monitoring. A local interrupt exits the terminal client with an explicit warning that the already accepted server operation can continue.
+
 **Audio validation.** Extend PCM WAV validation to calculate duration and absolute sample peak. References must be at least three seconds and exceed a conservative near-silence threshold. Generated output must also exceed the threshold before atomic replacement. This catches genuinely empty output but does not classify pronunciation or playback-device problems as silence.
 
 **Boundaries.** FastAPI maps routes; `PreviewService` orchestrates; `LocalVoiceStore` owns identity/artifacts; `ProgressTracker` owns state; `ChatterboxEngine` owns model callbacks. Tests continue using `FakeEngine` and temporary directories.

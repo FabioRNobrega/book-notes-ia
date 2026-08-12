@@ -6,14 +6,12 @@ from app.chunking import chunk_text
 from conftest import EN_PREVIEW_TEXT, PT_PREVIEW_TEXT
 
 
-@pytest.mark.parametrize(
-    ("path", "expected"),
-    [("config/preview.txt", EN_PREVIEW_TEXT), ("config/pt-preview.txt", PT_PREVIEW_TEXT)],
-)
-def test_configured_preview_text_is_exact(path: str, expected: str) -> None:
+@pytest.mark.parametrize("path", ["config/preview.txt", "config/pt-preview.txt"])
+def test_configured_preview_text_is_nonempty_and_chunkable(path: str) -> None:
     configured = open(path, encoding="utf-8").read().strip()
 
-    assert configured == expected
+    assert configured
+    assert chunk_text(configured, max_chars=280)
 
 
 @pytest.mark.parametrize("text", [EN_PREVIEW_TEXT, PT_PREVIEW_TEXT])

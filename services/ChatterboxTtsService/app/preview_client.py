@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import threading
 import urllib.error
 import urllib.parse
@@ -9,15 +10,40 @@ import urllib.request
 
 
 BASE_URL = "http://localhost:5081"
+DEFAULT_PREVIEW_TIMEOUT_SECONDS = 7 * 24 * 60 * 60
 
 
-def _read_json(url: str, *, method: str = "GET", timeout: int = 10) -> dict:
+def _read_json(
+    url: str, *, method: str = "GET", timeout: int | None = 10
+) -> dict:
     request = urllib.request.Request(url, method=method)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
 
-def run_preview(language: str, voice_id: str | None = None) -> dict:
+def configured_preview_timeout() -> int | None:
+    raw_value = os.environ.get(
+        "CHATTERBOX_PREVIEW_TIMEOUT_SECONDS",
+        str(DEFAULT_PREVIEW_TIMEOUT_SECONDS),
+    )
+    try:
+        timeout_seconds = int(raw_value)
+    except ValueError as error:
+        raise RuntimeError(
+            "CHATTERBOX_PREVIEW_TIMEOUT_SECONDS must be a non-negative integer"
+        ) from error
+    if timeout_seconds < 0:
+        raise RuntimeError(
+            "CHATTERBOX_PREVIEW_TIMEOUT_SECONDS must be a non-negative integer"
+        )
+    return None if timeout_seconds == 0 else timeout_seconds
+
+
+def run_preview(
+    language: str,
+    voice_id: str | None = None,
+    timeout_seconds: int | None = DEFAULT_PREVIEW_TIMEOUT_SECONDS,
+) -> dict:
     query = {"language": language}
     if voice_id:
         query["voice_id"] = voice_id
@@ -27,7 +53,7 @@ def run_preview(language: str, voice_id: str | None = None) -> dict:
 
     def request_preview() -> None:
         try:
-            result.update(_read_json(url, method="POST", timeout=7_200))
+            result.update(_read_json(url, method="POST", timeout=timeout_seconds))
         except BaseException as error:
             failure.append(error)
 
@@ -79,7 +105,18 @@ def main() -> int:
     parser.add_argument("--voice-id")
     args = parser.parse_args()
     try:
-        result = run_preview(args.language, args.voice_id)
+        result = run_preview(
+            args.language,
+            args.voice_id,
+            timeout_seconds=configured_preview_timeout(),
+        )
+    except KeyboardInterrupt:
+        print(
+            "Preview client interrupted; server-side synthesis may still be running. "
+            "Use make chatterbox-logs to follow it.",
+            flush=True,
+        )
+        return 130
     except RuntimeError as error:
         print(f"Preview failed: {error}", flush=True)
         return 1

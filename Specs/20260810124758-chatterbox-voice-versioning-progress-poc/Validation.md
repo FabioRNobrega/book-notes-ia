@@ -20,6 +20,7 @@
 | FR14 | A previous-format matching voice receives an archive without changing its UUID/conditioning; a nonmatching missing archive fails safely. |
 | FR15 | Logs and docs distinguish created, loaded, and regenerated voices without sensitive contents. |
 | FR16 | Focused tests pass without loading/downloading the model. |
+| FR17 | The preview POST uses 604800 seconds by default, an environment override is honored, zero passes no socket deadline, progress polling stays bounded, and interruption warns that server synthesis may continue. |
 
 ## Test Cases
 
@@ -28,6 +29,7 @@
 - Extend `test_voice_store.py` for two same-language voices, checksum selection, exact UUID selection, archived reference checksums, backfill, duplicate detection, and atomic rollback.
 - Extend `test_api.py` for new-reference UUID creation, old-voice selection, voice listing/filtering, progress success/failure, short/silent reference rejection, and near-silent output preservation.
 - Add `test_progress.py` for monotonic snapshots, chunk percentages, client polling/rendering, and failure output.
+- Cover the default, custom, unlimited, and invalid preview-client timeout configurations without making network requests.
 - Retain exact preview, chunking, persistence, path containment, and English/Portuguese isolation tests.
 
 **Integration/manual:**

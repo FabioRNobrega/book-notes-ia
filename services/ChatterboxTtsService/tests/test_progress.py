@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from app import preview_client
 from app.progress import ProgressTracker
 
@@ -39,8 +41,13 @@ def test_preview_client_prints_progress_before_returning_result(
 ) -> None:
     allow_post_to_finish = threading.Event()
 
-    def fake_read_json(url: str, *, method: str = "GET", timeout: int = 10) -> dict:
+    observed_timeouts: list[int | None] = []
+
+    def fake_read_json(
+        url: str, *, method: str = "GET", timeout: int | None = 10
+    ) -> dict:
         if method == "POST":
+            observed_timeouts.append(timeout)
             assert allow_post_to_finish.wait(timeout=2)
             return {"voice_id": "voice-id", "output_path": "/data/output.wav"}
         allow_post_to_finish.set()
@@ -59,4 +66,52 @@ def test_preview_client_prints_progress_before_returning_result(
     result = preview_client.run_preview("pt")
 
     assert result["voice_id"] == "voice-id"
+    assert observed_timeouts == [preview_client.DEFAULT_PREVIEW_TIMEOUT_SECONDS]
     assert "[ 45%] synthesizing" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (None, 604_800),
+        ("86400", 86_400),
+        ("0", None),
+    ],
+)
+def test_preview_timeout_configuration(
+    monkeypatch, configured: str | None, expected: int | None
+) -> None:
+    if configured is None:
+        monkeypatch.delenv("CHATTERBOX_PREVIEW_TIMEOUT_SECONDS", raising=False)
+    else:
+        monkeypatch.setenv("CHATTERBOX_PREVIEW_TIMEOUT_SECONDS", configured)
+
+    assert preview_client.configured_preview_timeout() == expected
+
+
+@pytest.mark.parametrize("configured", ["-1", "not-a-number", "1.5"])
+def test_preview_timeout_rejects_invalid_configuration(
+    monkeypatch, configured: str
+) -> None:
+    monkeypatch.setenv("CHATTERBOX_PREVIEW_TIMEOUT_SECONDS", configured)
+
+    with pytest.raises(RuntimeError, match="non-negative integer"):
+        preview_client.configured_preview_timeout()
+
+
+def test_preview_client_supports_unlimited_post_timeout(monkeypatch) -> None:
+    observed_timeouts: list[int | None] = []
+
+    def fake_read_json(
+        url: str, *, method: str = "GET", timeout: int | None = 10
+    ) -> dict:
+        if method == "POST":
+            observed_timeouts.append(timeout)
+            return {"voice_id": "voice-id", "output_path": "/data/output.wav"}
+        return {"status": "idle"}
+
+    monkeypatch.setattr(preview_client, "_read_json", fake_read_json)
+
+    preview_client.run_preview("en", timeout_seconds=None)
+
+    assert observed_timeouts == [None]

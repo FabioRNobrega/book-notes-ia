@@ -266,6 +266,15 @@ make chatterbox-preview LANGUAGE=pt VOICE_ID=<voice-id>
 
 The preview target validates the selected reference when creating/resolving by checksum, builds/starts the isolated service, prints periodic model-readiness messages, and prints changed stage/chunk percentages during generation. It finally prints the voice ID and output path. An explicit `VOICE_ID` uses that voice's archived reference and does not depend on the mutable root reference slot.
 
+The blocking preview request allows seven days by default, so large CPU jobs are not stopped by the former two-hour client deadline. Override it in seconds or use zero for no client deadline:
+
+```bash
+CHATTERBOX_PREVIEW_TIMEOUT_SECONDS=86400 make chatterbox-preview
+CHATTERBOX_PREVIEW_TIMEOUT_SECONDS=0 make chatterbox-preview
+```
+
+Health and progress probes retain short timeouts. Pressing `Ctrl+C` stops only the terminal client; an accepted server-side synthesis can continue. Follow it with `make chatterbox-logs` and do not start another preview until the current serialized operation completes.
+
 After one successful online model download, cached/offline operation can be checked with:
 
 ```bash
