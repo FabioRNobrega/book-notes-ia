@@ -78,6 +78,11 @@ class PreviewService:
             )
 
         profile = self.settings.profile(language_id)
+        if self.engine.model_name == "nano" and voice_id is None:
+            raise VoiceSelectionError(
+                "Chatterbox Nano requires an existing English voice ID"
+            )
+
         compatibility = VoiceCompatibility(
             source_revision=self.settings.source_revision,
             model_revision=self.engine.model_revision,
@@ -107,7 +112,7 @@ class PreviewService:
         )
         _validate_reference(
             decision.reference_path,
-            self.settings.minimum_reference_seconds,
+            self.settings.selected_minimum_reference_seconds,
             self.settings.minimum_pcm_peak,
         )
         chunks = chunk_text(profile.preview_text(), self.settings.max_chunk_chars)
@@ -115,11 +120,13 @@ class PreviewService:
         decision = self._select_conditioning(decision, compatibility)
 
         output_path = self.voice_store.output_path(
-            decision.voice_id, profile.language_id
+            decision.voice_id,
+            profile.language_id,
+            self.engine.model_name,
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".preview-{profile.language_id}-",
+            prefix=f".preview-{profile.language_id}-{self.engine.model_name}-",
             suffix=".wav",
             dir=output_path.parent,
         )
@@ -170,9 +177,11 @@ class PreviewService:
             temporary_path.unlink(missing_ok=True)
 
         elapsed = time.perf_counter() - started
+        real_time_factor = elapsed / validated_duration
         response = {
             "voice_id": decision.voice_id,
             "conditioning_status": decision.status,
+            "model_conditioning_status": decision.status,
             "conditioning_path": str(decision.conditioning_path),
             "output_path": str(output_path),
             "device": self.engine.device,
@@ -181,17 +190,20 @@ class PreviewService:
             "language_id": profile.language_id,
             "elapsed_seconds": round(elapsed, 3),
             "output_duration_seconds": round(validated_duration, 3),
+            "real_time_factor": round(real_time_factor, 3),
             "chunk_count": result.chunk_count,
             "peak_memory_mb": round(_peak_memory_mb(), 1),
         }
         self.progress_tracker.complete()
         LOGGER.info(
-            "Preview generated voice_id=%s language=%s conditioning=%s elapsed_seconds=%.3f duration_seconds=%.3f chunks=%d peak_memory_mb=%.1f",
+            "Preview generated voice_id=%s language=%s model=%s conditioning=%s elapsed_seconds=%.3f duration_seconds=%.3f rtf=%.3f chunks=%d peak_memory_mb=%.1f",
             decision.voice_id,
             profile.language_id,
+            self.engine.model_name,
             decision.status,
             elapsed,
             validated_duration,
+            real_time_factor,
             result.chunk_count,
             response["peak_memory_mb"],
         )
@@ -228,7 +240,8 @@ class PreviewService:
             voice_id=decision.voice_id,
         )
         temporary_path = self.voice_store.temporary_conditioning_path(
-            decision.voice_id
+            decision.voice_id,
+            self.engine.model_name,
         )
         try:
             self.engine.prepare_conditioning(decision.reference_path)
@@ -291,7 +304,10 @@ def create_app(
     auto_load: bool = True,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
-    resolved_engine = engine or ChatterboxEngine(resolved_settings.model_revision)
+    resolved_engine = engine or ChatterboxEngine(
+        resolved_settings.selected_model_revision,
+        resolved_settings.model_name,
+    )
     preview_service = PreviewService(resolved_settings, resolved_engine)
 
     for language_id in resolved_settings.supported_languages:

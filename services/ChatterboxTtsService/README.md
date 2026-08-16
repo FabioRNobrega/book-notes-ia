@@ -77,6 +77,8 @@ The API accepts only these internal profiles:
 
 Chatterbox Multilingual V3 calls the general Portuguese language `pt`. The API therefore does not accept `pt-br`. A Brazilian Portuguese reference can still influence the generated accent and voice style, but the model language ID remains `pt`.
 
+Multilingual V3 remains the default. Chatterbox Nano is an opt-in English-only CPU benchmark and requires an existing English voice ID. The Nano run reuses that voice's archived reference; it does not create another identity.
+
 The language profiles never share conditioning. A recording checksum identifies a voice within its language: replacing a reference slot with a different recording creates another UUID and preserves earlier voices. Changing a preview text file changes what a selected voice says; it does not create a new voice or rebuild conditioning.
 
 ## Voice and Preview Lifecycle
@@ -133,6 +135,15 @@ conditioning.pt
 metadata.json
 ```
 
+After that English voice is tested with Nano, it also contains:
+
+```text
+conditioning-nano.pt
+conditioning-nano.json
+```
+
+Nano's sidecar records its own pinned model revision and conditioning checksum. The original `conditioning.pt` and `metadata.json` continue representing Multilingual V3 and are never replaced by Nano.
+
 The service calls Chatterbox's own `Conditionals.save()` and `Conditionals.load()` methods. The pinned Chatterbox loader uses:
 
 ```python
@@ -173,13 +184,17 @@ data/
 │   ├── <english-voice-id>/
 │   │   ├── reference.wav
 │   │   ├── conditioning.pt
+│   │   ├── conditioning-nano.pt
+│   │   ├── conditioning-nano.json
 │   │   └── metadata.json
 │   └── <portuguese-voice-id>/
 │       ├── reference.wav
 │       ├── conditioning.pt
 │       └── metadata.json
 └── outputs/
-    ├── <english-voice-id>/preview-en.wav
+    ├── <english-voice-id>/
+    │   ├── preview-en.wav
+    │   └── preview-en-nano.wav
     └── <portuguese-voice-id>/preview-pt.wav
 ```
 
@@ -262,9 +277,12 @@ make chatterbox-preview LANGUAGE=pt
 make chatterbox-voices
 make chatterbox-voices LANGUAGE=pt
 make chatterbox-preview LANGUAGE=pt VOICE_ID=<voice-id>
+make chatterbox-preview LANGUAGE=en VOICE_ID=<voice-id> CHATTERBOX_MODEL=nano
 ```
 
 The preview target validates the selected reference when creating/resolving by checksum, builds/starts the isolated service, prints periodic model-readiness messages, and prints changed stage/chunk percentages during generation. It finally prints the voice ID and output path. An explicit `VOICE_ID` uses that voice's archived reference and does not depend on the mutable root reference slot.
+
+`CHATTERBOX_MODEL` defaults to `v3`. Nano accepts only `en` plus an existing voice ID. Its first run creates `conditioning-nano.pt`; later runs load it. The response includes `real_time_factor` (`elapsed_seconds / output_duration_seconds`) for comparison with the existing Multilingual benchmark. The official Nano model requires a reference longer than five seconds.
 
 The blocking preview request allows seven days by default, so large CPU jobs are not stopped by the former two-hour client deadline. Override it in seconds or use zero for no client deadline:
 

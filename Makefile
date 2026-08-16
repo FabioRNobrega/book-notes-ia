@@ -19,6 +19,8 @@ TEST_COMPOSE_PROJECT ?= book-notes-ia-test
 CHATTERBOX_COMPOSE_FILES := -f docker-compose.chatterbox.yml
 CHATTERBOX_COMPOSE_PROJECT ?= book-notes-ia-chatterbox
 CHATTERBOX_LANGUAGE = $(if $(strip $(LANGUAGE)),$(LANGUAGE),en)
+CHATTERBOX_MODEL ?= v3
+export CHATTERBOX_MODEL
 CHATTERBOX_PREVIEW_TIMEOUT_SECONDS ?= 604800
 export CHATTERBOX_PREVIEW_TIMEOUT_SECONDS
 VOICE_ID ?=
@@ -105,6 +107,9 @@ debug-tts:
 # Build/start the isolated Chatterbox POC, persist/reuse the selected voice,
 # and generate a language-specific preview. LANGUAGE defaults to en; pt is supported.
 chatterbox-preview:
+	@case "$(CHATTERBOX_MODEL)" in v3|multilingual-v3|nano) ;; *) echo "Unsupported CHATTERBOX_MODEL=$(CHATTERBOX_MODEL). Use v3 or nano"; exit 1 ;; esac
+	@if [ "$(CHATTERBOX_MODEL)" = "nano" ] && [ "$(CHATTERBOX_LANGUAGE)" != "en" ]; then echo "Chatterbox Nano supports only LANGUAGE=en"; exit 1; fi
+	@if [ "$(CHATTERBOX_MODEL)" = "nano" ] && [ -z "$(VOICE_ID)" ]; then echo "Chatterbox Nano requires an existing English VOICE_ID"; exit 1; fi
 	@case "$(CHATTERBOX_LANGUAGE)" in en) reference="reference.wav" ;; pt) reference="pt-reference.wav" ;; *) echo "Unsupported LANGUAGE=$(CHATTERBOX_LANGUAGE). Use en or pt"; exit 1 ;; esac; \
 		if [ -z "$(VOICE_ID)" ]; then test -f "services/ChatterboxTtsService/data/$$reference" || (echo "Missing services/ChatterboxTtsService/data/$$reference" && exit 1); fi
 	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) up -d --build chatterbox-tts

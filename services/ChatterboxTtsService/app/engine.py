@@ -11,6 +11,7 @@ from .chunking import TextChunk
 
 LOGGER = logging.getLogger(__name__)
 MODEL_REPOSITORY = "ResembleAI/chatterbox"
+NANO_MODEL_REPOSITORY = "ResembleAI/chatterbox-nano"
 MODEL_FILES = [
     "ve.pt",
     "t3_mtl23ls_v3.safetensors",
@@ -64,10 +65,16 @@ class SynthesisEngine(Protocol):
 
 class ChatterboxEngine:
     device = "cpu"
-    model_name = "multilingual-v3"
 
-    def __init__(self, model_revision: str) -> None:
+    def __init__(
+        self,
+        model_revision: str,
+        model_name: str = "multilingual-v3",
+    ) -> None:
+        if model_name not in ("multilingual-v3", "nano"):
+            raise ValueError("Unsupported Chatterbox engine model")
         self.model_revision = model_revision
+        self.model_name = model_name
         self._model = None
         self._load_error: str | None = None
         self._load_lock = threading.Lock()
@@ -88,7 +95,6 @@ class ChatterboxEngine:
             if self.ready:
                 return
             try:
-                from chatterbox.mtl_tts import ChatterboxMultilingualTTS
                 from huggingface_hub import snapshot_download
 
                 LOGGER.info(
@@ -97,17 +103,36 @@ class ChatterboxEngine:
                     self.device,
                     self.model_revision,
                 )
-                checkpoint_dir = snapshot_download(
-                    repo_id=MODEL_REPOSITORY,
-                    repo_type="model",
-                    revision=self.model_revision,
-                    allow_patterns=MODEL_FILES,
-                )
-                self._model = ChatterboxMultilingualTTS.from_local(
-                    checkpoint_dir,
-                    device=self.device,
-                    t3_model="v3",
-                )
+                if self.model_name == "nano":
+                    from chatterbox.tts_turbo import ChatterboxTurboTTS
+
+                    checkpoint_dir = snapshot_download(
+                        repo_id=NANO_MODEL_REPOSITORY,
+                        repo_type="model",
+                        revision=self.model_revision,
+                        allow_patterns=[
+                            "*.safetensors", "*.json", "*.txt", "*.pt", "*.model"
+                        ],
+                    )
+                    self._model = ChatterboxTurboTTS.from_local(
+                        checkpoint_dir,
+                        device=self.device,
+                        nano=True,
+                    )
+                else:
+                    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+                    checkpoint_dir = snapshot_download(
+                        repo_id=MODEL_REPOSITORY,
+                        repo_type="model",
+                        revision=self.model_revision,
+                        allow_patterns=MODEL_FILES,
+                    )
+                    self._model = ChatterboxMultilingualTTS.from_local(
+                        checkpoint_dir,
+                        device=self.device,
+                        t3_model="v3",
+                    )
                 self._load_error = None
                 LOGGER.info("Chatterbox model is ready")
             except Exception as error:
@@ -133,7 +158,10 @@ class ChatterboxEngine:
     def load_conditioning(self, path: Path) -> None:
         self._require_ready()
         try:
-            from chatterbox.mtl_tts import Conditionals
+            if self.model_name == "nano":
+                from chatterbox.tts_turbo import Conditionals
+            else:
+                from chatterbox.mtl_tts import Conditionals
 
             self._model.conds = Conditionals.load(
                 path, map_location=self.device
@@ -160,11 +188,19 @@ class ChatterboxEngine:
                 raise RuntimeError("Voice conditioning has not been selected")
             waveforms = []
             for index, chunk in enumerate(chunks):
-                waveform = self._model.generate(
-                    chunk.text,
-                    language_id=language_id,
-                    audio_prompt_path=None,
-                )
+                if self.model_name == "nano":
+                    if language_id != "en":
+                        raise SynthesisError("Chatterbox Nano supports only English")
+                    waveform = self._model.generate(
+                        chunk.text,
+                        audio_prompt_path=None,
+                    )
+                else:
+                    waveform = self._model.generate(
+                        chunk.text,
+                        language_id=language_id,
+                        audio_prompt_path=None,
+                    )
                 waveforms.append(waveform.cpu())
                 if progress_callback is not None:
                     progress_callback(index + 1, len(chunks))

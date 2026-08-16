@@ -39,7 +39,9 @@ def publish_fake_conditioning(
     compatibility: VoiceCompatibility,
     content: bytes = b"fake-conditioning:valid",
 ):
-    temporary = store.temporary_conditioning_path(decision.voice_id)
+    temporary = store.temporary_conditioning_path(
+        decision.voice_id, compatibility.model_name
+    )
     temporary.write_bytes(content)
     return store.publish(decision, temporary, compatibility)
 
@@ -118,7 +120,6 @@ def test_startup_backfill_archives_only_an_exact_legacy_match(
     [
         {"source_revision": "a" * 40},
         {"model_revision": "b" * 40},
-        {"model_name": "different-model"},
         {"format_version": 2},
     ],
 )
@@ -134,6 +135,43 @@ def test_compatibility_change_regenerates_same_voice(
 
     assert decision.voice_id == created.voice_id
     assert decision.status == "regenerated"
+
+
+def test_nano_conditioning_reuses_voice_without_replacing_multilingual_artifacts(
+    store, compatibility, tmp_path
+) -> None:
+    reference = tmp_path / "reference.wav"
+    write_wav(reference, duration_seconds=6.1)
+    created = store.resolve("en", reference, compatibility)
+    publish_fake_conditioning(
+        store, created, compatibility, b"fake-conditioning:multilingual"
+    )
+    legacy_conditioning = store.conditioning_path(created.voice_id).read_bytes()
+    legacy_metadata = store.metadata_path(created.voice_id).read_bytes()
+    nano_compatibility = replace(
+        compatibility,
+        model_name="nano",
+        model_revision="7" * 40,
+    )
+
+    nano = store.resolve(
+        "en", reference, nano_compatibility, voice_id=created.voice_id
+    )
+    publish_fake_conditioning(
+        store, nano, nano_compatibility, b"fake-conditioning:nano"
+    )
+    loaded = store.resolve(
+        "en", reference, nano_compatibility, voice_id=created.voice_id
+    )
+
+    assert nano.voice_id == created.voice_id
+    assert nano.status == "created"
+    assert loaded.status == "loaded"
+    assert store.conditioning_path(created.voice_id).read_bytes() == legacy_conditioning
+    assert store.metadata_path(created.voice_id).read_bytes() == legacy_metadata
+    assert store.conditioning_path(created.voice_id, "nano").read_bytes() == b"fake-conditioning:nano"
+    assert store.conditioning_metadata_path(created.voice_id, "nano").is_file()
+    assert store.output_path(created.voice_id, "en", "nano").name == "preview-en-nano.wav"
 
 
 def test_reference_change_creates_new_voice_and_preserves_first(store, compatibility, tmp_path) -> None:

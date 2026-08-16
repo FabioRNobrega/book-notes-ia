@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 PINNED_MODEL_REVISION = "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+PINNED_NANO_MODEL_REVISION = "71ccd1d0081b430592cea481f4307e764e07bc64"
 PINNED_CHATTERBOX_SOURCE_REVISION = "5de7a54aa4e5e2baadb0182dde554908b48b85c2"
 CONDITIONING_FORMAT_VERSION = 2
 SUPPORTED_LANGUAGES = ("en", "pt")
@@ -34,6 +35,7 @@ class Settings:
     device: str = "cpu"
     model: str = "v3"
     model_revision: str = PINNED_MODEL_REVISION
+    nano_model_revision: str = PINNED_NANO_MODEL_REVISION
     source_revision: str = PINNED_CHATTERBOX_SOURCE_REVISION
     conditioning_format_version: int = CONDITIONING_FORMAT_VERSION
     max_chunk_chars: int = 280
@@ -56,6 +58,9 @@ class Settings:
             model_revision=os.getenv(
                 "CHATTERBOX_MODEL_REVISION", PINNED_MODEL_REVISION
             ),
+            nano_model_revision=os.getenv(
+                "CHATTERBOX_NANO_MODEL_REVISION", PINNED_NANO_MODEL_REVISION
+            ),
             source_revision=os.getenv(
                 "CHATTERBOX_SOURCE_REVISION", PINNED_CHATTERBOX_SOURCE_REVISION
             ),
@@ -63,10 +68,34 @@ class Settings:
 
     @property
     def supported_languages(self) -> tuple[str, ...]:
-        return SUPPORTED_LANGUAGES
+        return ("en",) if self.model_name == "nano" else SUPPORTED_LANGUAGES
+
+    @property
+    def model_name(self) -> str:
+        return "nano" if self.model == "nano" else "multilingual-v3"
+
+    @property
+    def selected_model_revision(self) -> str:
+        return (
+            self.nano_model_revision
+            if self.model_name == "nano"
+            else self.model_revision
+        )
+
+    @property
+    def selected_minimum_reference_seconds(self) -> float:
+        if self.model_name == "nano":
+            return max(self.minimum_reference_seconds, 5.01)
+        return self.minimum_reference_seconds
 
     def profile(self, language_id: str) -> VoiceProfile:
         normalized = language_id.lower()
+        if normalized not in self.supported_languages:
+            supported = ", ".join(self.supported_languages)
+            raise UnsupportedLanguageError(
+                f"Unsupported language '{language_id}' for model '{self.model_name}'. "
+                f"Supported languages: {supported}"
+            )
         if normalized == "en":
             return VoiceProfile(
                 language_id="en",
@@ -79,10 +108,7 @@ class Settings:
                 reference_path=self.data_dir / "pt-reference.wav",
                 preview_text_path=self.config_dir / "pt-preview.txt",
             )
-        supported = ", ".join(SUPPORTED_LANGUAGES)
-        raise UnsupportedLanguageError(
-            f"Unsupported language '{language_id}'. Supported languages: {supported}"
-        )
+        raise UnsupportedLanguageError(f"Unsupported language '{language_id}'")
 
     def validated(self) -> "Settings":
         data_dir = self.data_dir.resolve()
@@ -93,10 +119,11 @@ class Settings:
             raise ValueError("Outputs directory must be a direct child of the data directory")
         if self.device != "cpu":
             raise ValueError("This proof of concept supports only CPU inference")
-        if self.model != "v3":
-            raise ValueError("This proof of concept requires Chatterbox Multilingual V3")
+        if self.model not in ("v3", "multilingual-v3", "nano"):
+            raise ValueError("Supported Chatterbox models are v3 and nano")
         for revision, label in (
             (self.model_revision, "model"),
+            (self.nano_model_revision, "Nano model"),
             (self.source_revision, "source"),
         ):
             if len(revision) != 40 or any(
@@ -114,7 +141,7 @@ class Settings:
         if not 0 < self.minimum_pcm_peak <= 32767:
             raise ValueError("Minimum PCM peak must be between 1 and 32767")
 
-        for language_id in SUPPORTED_LANGUAGES:
+        for language_id in self.supported_languages:
             profile = self.profile(language_id)
             if profile.reference_path.resolve().parent != data_dir:
                 raise ValueError("Reference audio must be a direct child of the data directory")

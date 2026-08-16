@@ -309,7 +309,7 @@ Chatterbox is an isolated developer experiment and is not connected to the WebAp
 
 See [ChatterboxTtsService Architecture](services/ChatterboxTtsService/README.md) for a beginner-friendly explanation of the Python service, Mermaid diagrams, request lifecycle, voice conditioning, `.pt` artifacts, caching, safety behavior, and future custom-voice design.
 
-The POC uses Chatterbox Multilingual V3 on CPU with separate English (`en`) and Portuguese (`pt`) reference slots and supports multiple preserved voices per language. Its source package reports version `0.1.7` and is pinned to official Chatterbox commit `5de7a54aa4e5e2baadb0182dde554908b48b85c2`, because the PyPI wheel with the same version does not yet contain the V3 loading API. The complete Linux/Python 3.11 dependency graph is recorded in `requirements.lock.txt`, the image explicitly installs PyTorch's CPU-only wheels, and model files are downloaded from the pinned Hugging Face snapshot `5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18`. The model cache, archived references, generated UUID voice metadata, conditioning `.pt` files, and generated audio remain local and ignored by Git.
+The POC defaults to Chatterbox Multilingual V3 on CPU with separate English (`en`) and Portuguese (`pt`) reference slots and supports multiple preserved voices per language. An opt-in English-only Nano benchmark can reuse an existing voice ID without replacing its Multilingual artifacts. Its source package reports version `0.1.7` and is pinned to official Chatterbox commit `5de7a54aa4e5e2baadb0182dde554908b48b85c2`, because the PyPI wheel with the same version does not yet contain the required V3/Nano loading APIs. The complete Linux/Python 3.11 dependency graph is recorded in `requirements.lock.txt`, the image explicitly installs PyTorch's CPU-only wheels, and model files use immutable Hugging Face revisions. The model cache, archived references, generated UUID voice metadata, conditioning `.pt` files, and generated audio remain local and ignored by Git.
 
 Generate the preview:
 
@@ -326,7 +326,10 @@ List or explicitly reuse preserved voices:
 make chatterbox-voices
 make chatterbox-voices LANGUAGE=pt
 make chatterbox-preview LANGUAGE=pt VOICE_ID=<voice-id>
+make chatterbox-preview LANGUAGE=en VOICE_ID=<voice-id> CHATTERBOX_MODEL=nano
 ```
+
+Nano stores `conditioning-nano.pt`, its integrity sidecar, and `preview-en-nano.wav` beside—but independently from—the same voice's Multilingual artifacts. The response reports `real_time_factor` for CPU benchmark comparison.
 
 The first run builds a large PyTorch image and downloads several gigabytes of model and tokenizer files, so it can take a long time. Later runs reuse `services/ChatterboxTtsService/models/`, which is also configured as the container home/cache root so secondary tokenizer assets persist for offline operation.
 

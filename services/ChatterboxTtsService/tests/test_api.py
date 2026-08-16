@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 from pathlib import Path
 import threading
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.engine import SynthesisError, SynthesisResult
 from app.main import create_app
+from app.settings import PINNED_NANO_MODEL_REVISION
 from conftest import write_wav
 
 
@@ -24,7 +26,11 @@ class FakeEngine:
         prepare_failure: str | None = None,
         invalid_output: bool = False,
         silent_output: bool = False,
+        model_name: str = "multilingual-v3",
+        model_revision: str | None = None,
     ) -> None:
+        self.model_name = model_name
+        self.model_revision = model_revision or type(self).model_revision
         self._ready = ready
         self._synthesis_failure = synthesis_failure
         self._prepare_failure = prepare_failure
@@ -160,6 +166,78 @@ def test_restart_reuses_same_voice_without_preparing_reference(settings) -> None
     assert loaded["conditioning_status"] == "loaded"
     assert second_engine.prepare_calls == []
     assert len(second_engine.load_calls) == 1
+
+
+def test_nano_reuses_voice_id_and_preserves_multilingual_artifacts(settings) -> None:
+    write_wav(settings.profile("en").reference_path, duration_seconds=6.1)
+    multilingual = TestClient(
+        create_app(settings, FakeEngine(), auto_load=False)
+    ).post("/preview").json()
+    multilingual_conditioning = Path(multilingual["conditioning_path"]).read_bytes()
+    multilingual_output = Path(multilingual["output_path"]).read_bytes()
+    multilingual_metadata = (
+        settings.voices_dir / multilingual["voice_id"] / "metadata.json"
+    ).read_bytes()
+    nano_settings = replace(
+        settings,
+        model="nano",
+        nano_model_revision=PINNED_NANO_MODEL_REVISION,
+    ).validated()
+    nano_engine = FakeEngine(
+        model_name="nano",
+        model_revision=PINNED_NANO_MODEL_REVISION,
+    )
+    nano_client = TestClient(
+        create_app(nano_settings, nano_engine, auto_load=False)
+    )
+
+    created = nano_client.post(
+        f"/preview?language=en&voice_id={multilingual['voice_id']}"
+    )
+    loaded_engine = FakeEngine(
+        model_name="nano",
+        model_revision=PINNED_NANO_MODEL_REVISION,
+    )
+    loaded = TestClient(
+        create_app(nano_settings, loaded_engine, auto_load=False)
+    ).post(f"/preview?language=en&voice_id={multilingual['voice_id']}")
+
+    assert created.status_code == 200
+    assert loaded.status_code == 200
+    created_body = created.json()
+    assert created_body["voice_id"] == multilingual["voice_id"]
+    assert created_body["model"] == "nano"
+    assert created_body["model_conditioning_status"] == "created"
+    assert Path(created_body["conditioning_path"]).name == "conditioning-nano.pt"
+    assert Path(created_body["output_path"]).name == "preview-en-nano.wav"
+    assert created_body["real_time_factor"] > 0
+    assert loaded.json()["model_conditioning_status"] == "loaded"
+    assert loaded_engine.prepare_calls == []
+    assert Path(multilingual["conditioning_path"]).read_bytes() == multilingual_conditioning
+    assert Path(multilingual["output_path"]).read_bytes() == multilingual_output
+    assert (settings.voices_dir / multilingual["voice_id"] / "metadata.json").read_bytes() == multilingual_metadata
+
+
+def test_nano_requires_existing_english_voice(settings) -> None:
+    nano_settings = replace(settings, model="nano").validated()
+    client = TestClient(
+        create_app(
+            nano_settings,
+            FakeEngine(
+                model_name="nano",
+                model_revision=PINNED_NANO_MODEL_REVISION,
+            ),
+            auto_load=False,
+        )
+    )
+
+    missing_voice = client.post("/preview?language=en")
+    portuguese = client.post("/preview?language=pt")
+
+    assert missing_voice.status_code == 422
+    assert "existing English voice ID" in missing_voice.json()["detail"]
+    assert portuguese.status_code == 422
+    assert "supports only English" in portuguese.json()["detail"] or "Supported languages: en" in portuguese.json()["detail"]
 
 
 def test_changed_preview_text_reuses_conditioning(settings) -> None:

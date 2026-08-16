@@ -18,6 +18,8 @@ Change voice identity from “one voice per language” to “one voice per lang
 
 **Long-running previews.** Configure only the blocking preview POST with `CHATTERBOX_PREVIEW_TIMEOUT_SECONDS`, defaulting to 604800 seconds (seven days), and interpret zero as no client deadline. Keep bounded timeouts on readiness and progress probes so an unavailable API cannot freeze monitoring. A local interrupt exits the terminal client with an explicit warning that the already accepted server operation can continue.
 
+**Nano benchmark variant.** Keep Multilingual V3 as the default and allow `CHATTERBOX_MODEL=nano` only with `LANGUAGE=en` and an explicit existing `VOICE_ID`. The engine loads the pinned official Nano repository through `ChatterboxTurboTTS.from_local(..., nano=True)`. Voice identity continues to come from the archived reference checksum, while Nano receives its own conditioning tensor, integrity metadata, and output filename. The legacy Multilingual metadata and files remain untouched. Responses calculate `elapsed_seconds / output_duration_seconds` as `real_time_factor` for direct warm-run comparison.
+
 **Audio validation.** Extend PCM WAV validation to calculate duration and absolute sample peak. References must be at least three seconds and exceed a conservative near-silence threshold. Generated output must also exceed the threshold before atomic replacement. This catches genuinely empty output but does not classify pronunciation or playback-device problems as silence.
 
 **Boundaries.** FastAPI maps routes; `PreviewService` orchestrates; `LocalVoiceStore` owns identity/artifacts; `ProgressTracker` owns state; `ChatterboxEngine` owns model callbacks. Tests continue using `FakeEngine` and temporary directories.
@@ -29,7 +31,7 @@ Change voice identity from “one voice per language” to “one voice per lang
 - `Makefile` — progress client, optional `VOICE_ID`, voice-list target.
 - `services/ChatterboxTtsService/app/settings.py` — increment conditioning format and audio validation thresholds.
 - `services/ChatterboxTtsService/app/voice_store.py` — multiple voices, checksum matching, exact selection, archived references, backfill, and atomic set publication.
-- `services/ChatterboxTtsService/app/engine.py` — chunk progress callback.
+- `services/ChatterboxTtsService/app/engine.py` — chunk progress plus pinned Multilingual V3/English Nano selection and generation adapters.
 - `services/ChatterboxTtsService/app/main.py` — progress tracking/routes, voice selection/listing, audible validation, and orchestration.
 - `services/ChatterboxTtsService/tests/conftest.py` — audible references long enough for new validation.
 - `services/ChatterboxTtsService/tests/test_api.py` — multi-voice, selection/list, progress, silence, and rollback coverage.
@@ -92,3 +94,5 @@ sequenceDiagram
 | Archived reference publication partially fails. | Use temporary files, checksums, rollback, and metadata-last publication. |
 | Short fake test WAVs break tests. | Generate deterministic audible three-second fixtures. |
 | Silence threshold rejects very quiet valid recordings. | Use a conservative threshold and return the measured validation reason. |
+| Nano selection overwrites a working Multilingual voice. | Treat the UUID/reference as model-independent identity and atomically store Nano conditioning metadata/output under model-specific names. |
+| Nano is accidentally used for Portuguese. | Validate the model/language combination in Make and service settings before inference. |

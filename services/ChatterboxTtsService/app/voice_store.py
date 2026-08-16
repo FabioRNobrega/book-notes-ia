@@ -85,12 +85,62 @@ class VoiceMetadata:
 
 
 @dataclass(frozen=True)
+class ModelConditioningMetadata:
+    voice_id: str
+    conditioning_sha256: str
+    source_revision: str
+    model_revision: str
+    model_name: str
+    format_version: int
+    created_at_utc: str
+    updated_at_utc: str
+
+    @classmethod
+    def from_path(cls, path: Path) -> "ModelConditioningMetadata":
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict) or set(raw) != set(cls.__dataclass_fields__):
+                raise ValueError("Unexpected model metadata fields")
+            metadata = cls(**raw)
+            UUID(metadata.voice_id)
+            if metadata.model_name != "nano":
+                raise ValueError("Unsupported secondary model")
+            for digest, expected_length in (
+                (metadata.conditioning_sha256, 64),
+                (metadata.source_revision, 40),
+                (metadata.model_revision, 40),
+            ):
+                if len(digest) != expected_length or any(
+                    character not in "0123456789abcdef" for character in digest
+                ):
+                    raise ValueError("Model metadata checksum or revision is invalid")
+            if (
+                not isinstance(metadata.format_version, int)
+                or isinstance(metadata.format_version, bool)
+                or metadata.format_version < 1
+            ):
+                raise ValueError("Model metadata format version is invalid")
+            if not all(
+                isinstance(value, str)
+                for value in (
+                    metadata.created_at_utc,
+                    metadata.updated_at_utc,
+                )
+            ):
+                raise ValueError("Model metadata timestamps are invalid")
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+            raise VoiceStoreError("Stored model conditioning metadata is invalid") from error
+        return metadata
+
+
+@dataclass(frozen=True)
 class VoiceDecision:
     voice_id: str
     language_id: str
     reference_sha256: str
     status: str
     metadata: VoiceMetadata | None
+    conditioning_metadata: ModelConditioningMetadata | None
     conditioning_path: Path
     reference_path: Path
     archive_reference: bool
@@ -110,6 +160,11 @@ class LocalVoiceStore:
     ) -> VoiceDecision:
         metadata_records = self.list_metadata(language_id)
         self._reject_duplicate_references(metadata_records)
+
+        if voice_id is None and compatibility.model_name != "multilingual-v3":
+            raise VoiceSelectionError(
+                f"Model '{compatibility.model_name}' requires an existing voice ID"
+            )
 
         if voice_id is not None:
             canonical_id = str(_parse_voice_id(voice_id))
@@ -159,7 +214,10 @@ class LocalVoiceStore:
             reference_sha256=reference_sha256,
             status="created",
             metadata=None,
-            conditioning_path=self.conditioning_path(voice_id),
+            conditioning_metadata=None,
+            conditioning_path=self.conditioning_path(
+                voice_id, compatibility.model_name
+            ),
             reference_path=current_reference_path.resolve(),
             archive_reference=True,
         )
@@ -202,6 +260,9 @@ class LocalVoiceStore:
                 "updated_at_utc": item.updated_at_utc,
                 "reference_archived": self.reference_path(item.voice_id).is_file(),
                 "conditioning_ready": self.conditioning_path(item.voice_id).is_file(),
+                "nano_conditioning_ready": self.conditioning_path(
+                    item.voice_id, "nano"
+                ).is_file(),
             }
             for item in records
         ]
@@ -253,16 +314,21 @@ class LocalVoiceStore:
             reference_sha256=decision.reference_sha256,
             status="regenerated",
             metadata=decision.metadata,
+            conditioning_metadata=decision.conditioning_metadata,
             conditioning_path=decision.conditioning_path,
             reference_path=decision.reference_path,
             archive_reference=decision.archive_reference,
         )
 
-    def temporary_conditioning_path(self, voice_id: str) -> Path:
+    def temporary_conditioning_path(
+        self, voice_id: str, model_name: str = "multilingual-v3"
+    ) -> Path:
         voice_dir = self.voice_dir(voice_id)
         voice_dir.mkdir(parents=True, exist_ok=True)
         descriptor, name = tempfile.mkstemp(
-            prefix=".conditioning-", suffix=".pt", dir=voice_dir
+            prefix=f".{self._conditioning_stem(model_name)}-",
+            suffix=".pt",
+            dir=voice_dir,
         )
         os.close(descriptor)
         path = Path(name)
@@ -274,7 +340,12 @@ class LocalVoiceStore:
         decision: VoiceDecision,
         temporary_conditioning_path: Path,
         compatibility: VoiceCompatibility,
-    ) -> VoiceMetadata:
+    ) -> VoiceMetadata | ModelConditioningMetadata:
+        if compatibility.model_name != "multilingual-v3":
+            return self._publish_secondary_conditioning(
+                decision, temporary_conditioning_path, compatibility
+            )
+
         voice_dir = self.voice_dir(decision.voice_id)
         conditioning_temporary = temporary_conditioning_path.resolve()
         if conditioning_temporary.parent != voice_dir:
@@ -348,8 +419,15 @@ class LocalVoiceStore:
                 reference_temporary.unlink(missing_ok=True)
             self._remove_empty_voice_dir(voice_dir)
 
-    def conditioning_path(self, voice_id: str) -> Path:
-        return self.voice_dir(voice_id) / "conditioning.pt"
+    def conditioning_path(
+        self, voice_id: str, model_name: str = "multilingual-v3"
+    ) -> Path:
+        return self.voice_dir(voice_id) / f"{self._conditioning_stem(model_name)}.pt"
+
+    def conditioning_metadata_path(self, voice_id: str, model_name: str) -> Path:
+        if model_name == "multilingual-v3":
+            return self.metadata_path(voice_id)
+        return self.voice_dir(voice_id) / f"{self._conditioning_stem(model_name)}.json"
 
     def metadata_path(self, voice_id: str) -> Path:
         return self.voice_dir(voice_id) / "metadata.json"
@@ -357,14 +435,21 @@ class LocalVoiceStore:
     def reference_path(self, voice_id: str) -> Path:
         return self.voice_dir(voice_id) / "reference.wav"
 
-    def output_path(self, voice_id: str, language_id: str) -> Path:
+    def output_path(
+        self,
+        voice_id: str,
+        language_id: str,
+        model_name: str = "multilingual-v3",
+    ) -> Path:
         if language_id not in ("en", "pt"):
             raise VoiceStoreError("Unsupported output language")
         parsed = _parse_voice_id(voice_id)
         directory = (self.outputs_dir / str(parsed)).resolve()
         if directory.parent != self.outputs_dir:
             raise VoiceStoreError("Output path escaped the output root")
-        return directory / f"preview-{language_id}.wav"
+        suffix = "" if model_name == "multilingual-v3" else f"-{model_name}"
+        self._conditioning_stem(model_name)
+        return directory / f"preview-{language_id}{suffix}.wav"
 
     def voice_dir(self, voice_id: str) -> Path:
         parsed = _parse_voice_id(voice_id)
@@ -396,18 +481,55 @@ class LocalVoiceStore:
                 f"Voice '{metadata.voice_id}' has no archived reference and the current reference does not match it"
             )
 
-        conditioning_path = self.conditioning_path(metadata.voice_id)
-        compatible = (
-            metadata.source_revision == compatibility.source_revision
-            and metadata.model_revision == compatibility.model_revision
-            and metadata.model_name == compatibility.model_name
-            and metadata.format_version == compatibility.format_version
-            and conditioning_path.is_file()
-            and not archive_reference
+        conditioning_path = self.conditioning_path(
+            metadata.voice_id, compatibility.model_name
         )
+        conditioning_metadata: ModelConditioningMetadata | None = None
+        if compatibility.model_name == "multilingual-v3":
+            compatible = (
+                metadata.source_revision == compatibility.source_revision
+                and metadata.model_revision == compatibility.model_revision
+                and metadata.model_name == compatibility.model_name
+                and metadata.format_version == compatibility.format_version
+                and conditioning_path.is_file()
+                and not archive_reference
+            )
+            missing_status = "regenerated"
+            expected_conditioning_sha256 = metadata.conditioning_sha256
+        else:
+            sidecar_path = self.conditioning_metadata_path(
+                metadata.voice_id, compatibility.model_name
+            )
+            conditioning_metadata = (
+                ModelConditioningMetadata.from_path(sidecar_path)
+                if sidecar_path.is_file()
+                else None
+            )
+            compatible = (
+                conditioning_metadata is not None
+                and conditioning_metadata.voice_id == metadata.voice_id
+                and conditioning_metadata.source_revision == compatibility.source_revision
+                and conditioning_metadata.model_revision == compatibility.model_revision
+                and conditioning_metadata.model_name == compatibility.model_name
+                and conditioning_metadata.format_version == compatibility.format_version
+                and conditioning_path.is_file()
+                and not archive_reference
+            )
+            missing_status = (
+                "created"
+                if conditioning_metadata is None and not conditioning_path.exists()
+                else "regenerated"
+            )
+            expected_conditioning_sha256 = (
+                conditioning_metadata.conditioning_sha256
+                if conditioning_metadata is not None
+                else ""
+            )
         if compatible:
             try:
-                compatible = sha256_file(conditioning_path) == metadata.conditioning_sha256
+                compatible = (
+                    sha256_file(conditioning_path) == expected_conditioning_sha256
+                )
             except OSError:
                 compatible = False
 
@@ -415,12 +537,104 @@ class LocalVoiceStore:
             voice_id=metadata.voice_id,
             language_id=metadata.language_id,
             reference_sha256=metadata.reference_sha256,
-            status="loaded" if compatible else "regenerated",
+            status="loaded" if compatible else missing_status,
             metadata=metadata,
+            conditioning_metadata=conditioning_metadata,
             conditioning_path=conditioning_path,
             reference_path=selected_reference,
             archive_reference=archive_reference,
         )
+
+    def _publish_secondary_conditioning(
+        self,
+        decision: VoiceDecision,
+        temporary_conditioning_path: Path,
+        compatibility: VoiceCompatibility,
+    ) -> ModelConditioningMetadata:
+        if compatibility.model_name != "nano" or decision.metadata is None:
+            raise VoiceStoreError("Secondary conditioning requires an existing voice")
+        voice_dir = self.voice_dir(decision.voice_id)
+        conditioning_temporary = temporary_conditioning_path.resolve()
+        if conditioning_temporary.parent != voice_dir:
+            raise VoiceStoreError("Temporary conditioning path escaped its voice directory")
+        if not conditioning_temporary.is_file() or conditioning_temporary.stat().st_size == 0:
+            raise VoiceStoreError("Conditioning save did not produce a non-empty artifact")
+
+        reference_temporary: Path | None = None
+        if decision.archive_reference:
+            descriptor, reference_name = tempfile.mkstemp(
+                prefix=".reference-", suffix=".wav", dir=voice_dir
+            )
+            os.close(descriptor)
+            reference_temporary = Path(reference_name)
+            try:
+                shutil.copyfile(decision.reference_path, reference_temporary)
+                if sha256_file(reference_temporary) != decision.reference_sha256:
+                    raise VoiceStoreError(
+                        "Archived reference checksum validation failed"
+                    )
+            except Exception:
+                reference_temporary.unlink(missing_ok=True)
+                raise
+
+        now = _utc_now()
+        artifact_metadata = ModelConditioningMetadata(
+            voice_id=decision.voice_id,
+            conditioning_sha256=sha256_file(conditioning_temporary),
+            source_revision=compatibility.source_revision,
+            model_revision=compatibility.model_revision,
+            model_name=compatibility.model_name,
+            format_version=compatibility.format_version,
+            created_at_utc=(
+                decision.conditioning_metadata.created_at_utc
+                if decision.conditioning_metadata is not None
+                else now
+            ),
+            updated_at_utc=now,
+        )
+        metadata_path = self.conditioning_metadata_path(
+            decision.voice_id, compatibility.model_name
+        )
+        descriptor, metadata_name = tempfile.mkstemp(
+            prefix=f".{self._conditioning_stem(compatibility.model_name)}-metadata-",
+            suffix=".json",
+            dir=voice_dir,
+        )
+        metadata_temporary = Path(metadata_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                json.dump(asdict(artifact_metadata), stream, indent=2, sort_keys=True)
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            if ModelConditioningMetadata.from_path(metadata_temporary) != artifact_metadata:
+                raise VoiceStoreError("Model conditioning metadata validation failed")
+            replacements: list[tuple[Path, Path]] = []
+            if reference_temporary is not None:
+                replacements.append(
+                    (reference_temporary, self.reference_path(decision.voice_id))
+                )
+            replacements.extend(
+                [
+                    (conditioning_temporary, decision.conditioning_path),
+                    (metadata_temporary, metadata_path),
+                ]
+            )
+            self._replace_artifacts(replacements)
+            return artifact_metadata
+        finally:
+            conditioning_temporary.unlink(missing_ok=True)
+            metadata_temporary.unlink(missing_ok=True)
+            if reference_temporary is not None:
+                reference_temporary.unlink(missing_ok=True)
+
+    @staticmethod
+    def _conditioning_stem(model_name: str) -> str:
+        if model_name == "multilingual-v3":
+            return "conditioning"
+        if model_name == "nano":
+            return "conditioning-nano"
+        raise VoiceStoreError("Unsupported conditioning model")
 
     @staticmethod
     def _reject_duplicate_references(records: list[VoiceMetadata]) -> None:

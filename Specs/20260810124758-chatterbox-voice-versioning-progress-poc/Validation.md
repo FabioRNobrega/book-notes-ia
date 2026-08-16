@@ -21,6 +21,9 @@
 | FR15 | Logs and docs distinguish created, loaded, and regenerated voices without sensitive contents. |
 | FR16 | Focused tests pass without loading/downloading the model. |
 | FR17 | The preview POST uses 604800 seconds by default, an environment override is honored, zero passes no socket deadline, progress polling stays bounded, and interruption warns that server synthesis may continue. |
+| FR18 | Nano requires `LANGUAGE=en`, an existing canonical `VOICE_ID`, and its pinned model revision; no model argument continues loading Multilingual V3. |
+| FR19 | Nano creation/loading keeps the same UUID while its conditioning, sidecar, and WAV use Nano-specific names; hashes prove the three legacy Multilingual artifacts remain byte-for-byte unchanged. |
+| FR20 | Both variants return model diagnostics and a positive `real_time_factor` equal to elapsed time divided by validated audio duration within rounding tolerance. |
 
 ## Test Cases
 
@@ -30,6 +33,7 @@
 - Extend `test_api.py` for new-reference UUID creation, old-voice selection, voice listing/filtering, progress success/failure, short/silent reference rejection, and near-silent output preservation.
 - Add `test_progress.py` for monotonic snapshots, chunk percentages, client polling/rendering, and failure output.
 - Cover the default, custom, unlimited, and invalid preview-client timeout configurations without making network requests.
+- Cover Nano model/language/voice validation, first conditioning creation, warm reload, model-specific output, sidecar integrity, and preservation of Multilingual artifacts.
 - Retain exact preview, chunking, persistence, path containment, and English/Portuguese isolation tests.
 
 **Integration/manual:**
@@ -40,10 +44,11 @@
 4. Preserve the current Portuguese voice, replace the root reference with a different authorized recording, rerun, and confirm two Portuguese IDs exist.
 5. Run each ID explicitly and listen to both outputs.
 6. Confirm private artifacts remain ignored and no temporary files remain.
+7. Run the same English voice/text twice with `CHATTERBOX_MODEL=nano`, confirm the second status is `loaded`, and compare its RTF with the Multilingual baseline.
 
 ## Definition of Done
 
-- FR1–FR16 are implemented and tested.
+- FR1–FR20 are implemented and tested.
 - Existing successful voices are never overwritten merely because the root reference changes.
 - Multiple voices per language are discoverable and selectable.
 - Each new voice retains its reference, conditioning, metadata, and independent output.

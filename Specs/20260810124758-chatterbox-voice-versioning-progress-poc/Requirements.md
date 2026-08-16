@@ -30,6 +30,9 @@ The persistent-conditioning POC currently treats one language as one logical voi
 15. FR15 — API responses, progress, logs, Make output, tests, and documentation shall clearly distinguish creating a new voice from rebuilding an existing voice and shall never expose audio/tensor contents.
 16. FR16 — Automated tests shall cover multi-voice preservation, selection, listing, migration/backfill, progress monotonicity, client output, short/silent audio, near-silent output rollback, path containment, and existing persistence behavior without loading the real model.
 17. FR17 — The preview client's blocking synthesis request shall default to a configurable seven-day timeout; `CHATTERBOX_PREVIEW_TIMEOUT_SECONDS=0` shall wait without a client deadline, while health and progress polling retain short request timeouts. Interrupting the client shall not claim that server-side synthesis was cancelled.
+18. FR18 — `CHATTERBOX_MODEL=nano` shall opt an explicit existing English `VOICE_ID` into the pinned Chatterbox Nano CPU model; Multilingual V3 shall remain the default and Nano shall reject Portuguese or unqualified voice creation.
+19. FR19 — Nano shall reuse the selected voice's archived `reference.wav` and UUID while storing `conditioning-nano.pt`, `conditioning-nano.json`, and `preview-en-nano.wav` independently; it shall not modify legacy `conditioning.pt`, `metadata.json`, or `preview-en.wav`.
+20. FR20 — Preview responses shall report the selected model, model-conditioning status, elapsed/output duration, and calculated real-time factor so warm Nano and Multilingual runs can be compared.
 
 ## Non-Functional Requirements
 
@@ -38,13 +41,14 @@ The persistent-conditioning POC currently treats one language as one logical voi
 - Archived references must be copied and atomically published; successful voice creation must not depend on the mutable root reference afterward.
 - The implementation must not claim token-level percentages the Chatterbox API does not expose.
 - No new runtime package or infrastructure service is required.
+- Model repositories and source remain pinned to immutable full commit revisions.
 
 ## Out of Scope
 
 - Recovering the already overwritten Portuguese conditioning or previous reference without an external backup.
 - Arbitrary HTTP uploads, browser UI, authentication, user ownership, premium integration, database storage, or deletion APIs.
 - Multiple generated text-history versions for the same voice; rerunning one voice may replace that voice's preview WAV.
-- Streaming audio, token-level model progress, GPU acceleration, or a dedicated Brazilian Portuguese model.
+- Streaming audio, token-level model progress, GPU acceleration, Nano Portuguese support, or a dedicated Brazilian Portuguese model.
 - Updating `Specs/Roadmap.md`; this remains an isolated POC.
 
 ## Open Questions
