@@ -37,7 +37,8 @@ public sealed class TtsTextNormalizer : ITtsTextNormalizer
         return book with
         {
             Chapters = chapters,
-            ChapterLabel = options.Language == "pt" ? "Capítulo" : "Chapter"
+            ChapterLabel = options.Language == "pt" ? "Capítulo" : "Chapter",
+            ChapterNumberLanguage = options.Language
         };
     }
 

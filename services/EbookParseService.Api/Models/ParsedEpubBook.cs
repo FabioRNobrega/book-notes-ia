@@ -5,4 +5,5 @@ public sealed record ParsedEpubBook(
     string Title,
     string Language,
     IReadOnlyList<ParsedChapter> Chapters,
-    string ChapterLabel = "Chapter");
+    string ChapterLabel = "Chapter",
+    string? ChapterNumberLanguage = null);

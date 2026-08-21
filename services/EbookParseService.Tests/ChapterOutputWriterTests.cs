@@ -92,12 +92,61 @@ public sealed class ChapterOutputWriterTests
         Assert.StartsWith("Capítulo 1.\n\n", content, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(1, "en", "Chapter", "Chapter One.")]
+    [InlineData(24, "en", "Chapter", "Chapter Twenty-four.")]
+    [InlineData(100, "en", "Chapter", "Chapter One hundred.")]
+    [InlineData(101, "pt", "Capítulo", "Capítulo Cento e um.")]
+    [InlineData(999, "pt", "Capítulo", "Capítulo Novecentos e noventa e nove.")]
+    public async Task PublishAsync_RendersTtsChapterNumberInFull(
+        int number,
+        string language,
+        string label,
+        string expectedHeading)
+    {
+        using var temp = new TemporaryDirectory();
+        var writer = CreateWriter(temp.Path);
+        var book = Book(new ParsedChapter(number, ["Narration-ready prose."])) with
+        {
+            ChapterLabel = label,
+            ChapterNumberLanguage = language
+        };
+
+        var response = await writer.PublishAsync(book);
+        var expectedFileName = $"chapter-{number:000}.txt";
+        var content = await File.ReadAllTextAsync(
+            System.IO.Path.Combine(response.OutputDirectory, expectedFileName));
+
+        Assert.StartsWith($"{expectedHeading}\n\n", content, StringComparison.Ordinal);
+        Assert.Equal(number, response.Chapters[0].Number);
+        Assert.Equal(expectedFileName, response.Chapters[0].FileName);
+        Assert.Equal(content.Length, response.Chapters[0].CharacterCount);
+    }
+
+    [Fact]
+    public async Task PublishAsync_FallsBackToInvariantDigitsAboveWordRange()
+    {
+        using var temp = new TemporaryDirectory();
+        var writer = CreateWriter(temp.Path);
+        var book = Book(new ParsedChapter(1000, ["Future chapter."])) with
+        {
+            ChapterNumberLanguage = "en"
+        };
+
+        var response = await writer.PublishAsync(book);
+        var content = await File.ReadAllTextAsync(
+            System.IO.Path.Combine(response.OutputDirectory, "chapter-1000.txt"));
+
+        Assert.StartsWith("Chapter 1000.\n\n", content, StringComparison.Ordinal);
+        Assert.Equal("chapter-1000.txt", response.Chapters[0].FileName);
+    }
+
     private static ChapterOutputWriter CreateWriter(string output) =>
         new(Options.Create(new EpubParserOptions
         {
             InputDirectory = System.IO.Path.Combine(output, "input"),
             OutputDirectory = output
-        }), NullLogger<ChapterOutputWriter>.Instance);
+        }), NullLogger<ChapterOutputWriter>.Instance, new NumberToWordsConverter());
 
     private static ParsedEpubBook Book(params ParsedChapter[] chapters) =>
         new("fixture.epub", "Á Sample Book", "en-US", chapters);

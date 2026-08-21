@@ -8,7 +8,8 @@ namespace EbookParseService.Api.Services;
 
 public sealed class ChapterOutputWriter(
     IOptions<EpubParserOptions> options,
-    ILogger<ChapterOutputWriter> logger) : IChapterOutputWriter
+    ILogger<ChapterOutputWriter> logger,
+    INumberToWordsConverter numberToWordsConverter) : IChapterOutputWriter
 {
     private static readonly UTF8Encoding Utf8WithoutBom = new(false);
     private readonly EpubParserOptions _options = options.Value;
@@ -35,7 +36,7 @@ public sealed class ChapterOutputWriter(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fileName = $"chapter-{chapter.Number:000}.txt";
-                var content = Render(chapter, book.ChapterLabel);
+                var content = Render(chapter, book.ChapterLabel, book.ChapterNumberLanguage);
                 await File.WriteAllTextAsync(Path.Combine(staging, fileName), content, Utf8WithoutBom, cancellationToken);
                 summaries.Add(new ParsedChapterSummary(chapter.Number, fileName, content.Length));
             }
@@ -112,7 +113,7 @@ public sealed class ChapterOutputWriter(
         }
     }
 
-    private static string Render(ParsedChapter chapter, string chapterLabel)
+    private string Render(ParsedChapter chapter, string chapterLabel, string? chapterNumberLanguage)
     {
         var paragraphs = chapter.Paragraphs
             .Select(paragraph => paragraph.Trim())
@@ -125,7 +126,14 @@ public sealed class ChapterOutputWriter(
                 "The parsed chapter set contains an empty chapter.");
         }
 
-        return $"{chapterLabel} {chapter.Number}.\n\n{string.Join("\n\n", paragraphs)}\n";
+        var chapterNumber = chapter.Number.ToString(CultureInfo.InvariantCulture);
+        if (chapterNumberLanguage is not null
+            && numberToWordsConverter.TryConvert(chapter.Number, chapterNumberLanguage, out var chapterNumberWords))
+        {
+            chapterNumber = chapterNumberWords;
+        }
+
+        return $"{chapterLabel} {chapterNumber}.\n\n{string.Join("\n\n", paragraphs)}\n";
     }
 
     private static string CreateSlug(string title)

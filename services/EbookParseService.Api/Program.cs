@@ -17,6 +17,7 @@ builder.Services.AddOptions<EpubParserOptions>()
     .ValidateOnStart();
 builder.Services.AddSingleton<IEpubChapterParser, EpubChapterParser>();
 builder.Services.AddSingleton<ITtsTextNormalizer, TtsTextNormalizer>();
+builder.Services.AddSingleton<INumberToWordsConverter, NumberToWordsConverter>();
 builder.Services.AddSingleton<IChapterOutputWriter, ChapterOutputWriter>();
 
 var app = builder.Build();

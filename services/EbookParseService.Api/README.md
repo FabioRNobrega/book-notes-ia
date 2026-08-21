@@ -18,7 +18,9 @@ make ebook-parse BOOK=book.epub TTS=true TTS_LANG=pt
 make ebook-parse BOOK=book.epub TTS=true TTS_LANG=en
 ```
 
-`TTS_LANG` is mandatory when `TTS=true` and accepts only the exact Chatterbox identifiers `en` and `pt`. It intentionally does not fall back to EPUB language metadata. TTS mode removes standalone `***` scene-marker symbols while retaining the paragraph boundary, normalizes repeated periods and horizontal whitespace, and applies Portuguese dialogue-dash punctuation rules for `pt`. English dialogue dashes are preserved. Generated headings use `Chapter N.` for `en` and `Capítulo N.` for `pt`; decimal chapter numbers are retained.
+`TTS_LANG` is mandatory when `TTS=true` and accepts only the exact Chatterbox identifiers `en` and `pt`. It intentionally does not fall back to EPUB language metadata. TTS mode removes standalone `***` scene-marker symbols while retaining the paragraph boundary, normalizes repeated periods and horizontal whitespace, and applies Portuguese dialogue-dash punctuation rules for `pt`. English dialogue dashes are preserved.
+
+Generated TTS headings write chapter numbers in natural cardinal words from 0 through 999. English uses forms such as `Chapter One.`, `Chapter Twenty-four.`, and `Chapter One hundred twenty-four.`; Portuguese uses forms such as `Capítulo Um.`, `Capítulo Vinte e quatro.`, `Capítulo Cem.`, and `Capítulo Cento e um.`. A chapter number outside that range safely retains invariant decimal digits. The numeric chapter identity and zero-padded filename remain unchanged, so `Chapter Twenty-four.` or `Capítulo Vinte e quatro.` is still published as `chapter-024.txt`.
 
 TTS mode publishes only the normalized files to the same output directory, atomically replacing any previous chapter set. It does not create a raw copy or a `tts/` subdirectory. This step prepares plain text only; it does not call Chatterbox, choose a voice, split synthesis chunks, or generate audio.
 
@@ -56,7 +58,7 @@ Part headings, title pages, coda entries, filenames, resource size, spine member
 
 ## Output and replacement
 
-Each file starts with `Chapter N.`, a blank line, and normalized narrative paragraphs. Markup, duplicate numeric headings, scripts, styles, navigation controls, media-only content, and footnote controls are excluded. A complete result is written to a sibling staging directory and then replaces `data/output/<book-slug>/` as a unit. If parsing, optional TTS normalization, or staging fails, the last successful output remains available.
+Without TTS mode, each file starts with `Chapter N.`. With TTS mode, the generated label and supported number are written in the explicit requested language. A blank line and normalized narrative paragraphs follow the heading. Markup, duplicate numeric headings, scripts, styles, navigation controls, media-only content, and footnote controls are excluded. A complete result is written to a sibling staging directory and then replaces `data/output/<book-slug>/` as a unit. If parsing, optional TTS normalization, or staging fails, the last successful output remains available.
 
 ## Privacy, copyright, and security
 

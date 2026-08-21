@@ -39,15 +39,20 @@ public sealed class TtsTextNormalizerTests
 
         Assert.Equal("– Hello – she said.", result.Chapters[0].Paragraphs[0]);
         Assert.Equal("Chapter", result.ChapterLabel);
+        Assert.Equal("en", result.ChapterNumberLanguage);
     }
 
     [Fact]
     public void Normalize_UsesPortugueseChapterLabelFromExplicitTtsLanguage()
     {
-        var result = _normalizer.Normalize(Book(["Texto."]), new TtsTextOptions("pt"));
+        var book = Book(["Texto."]);
+
+        var result = _normalizer.Normalize(book, new TtsTextOptions("pt"));
 
         Assert.Equal("Capítulo", result.ChapterLabel);
+        Assert.Equal("pt", result.ChapterNumberLanguage);
         Assert.Equal("ignored-metadata", result.Language);
+        Assert.Null(book.ChapterNumberLanguage);
     }
 
     [Theory]
