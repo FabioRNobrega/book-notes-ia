@@ -8,8 +8,12 @@ internal sealed class SyntheticEpubBuilder
     private string _mimetype = "application/epub+zip";
     private bool _mimetypeFirst = true;
     private bool _encrypted;
-    private string _navigation = DefaultNavigation;
-    private string _content = DefaultContent;
+    private string _package = DefaultPackage;
+    private readonly Dictionary<string, string> _resources = new(StringComparer.Ordinal)
+    {
+        ["OPS/nav/toc.xhtml"] = DefaultNavigation,
+        ["OPS/text/book.xhtml"] = DefaultContent
+    };
 
     public SyntheticEpubBuilder WithWrongMimetype()
     {
@@ -31,13 +35,35 @@ internal sealed class SyntheticEpubBuilder
 
     public SyntheticEpubBuilder WithNavigation(string navigation)
     {
-        _navigation = navigation;
+        _resources["OPS/nav/toc.xhtml"] = navigation;
         return this;
     }
 
     public SyntheticEpubBuilder WithContent(string content)
     {
-        _content = content;
+        _resources["OPS/text/book.xhtml"] = content;
+        return this;
+    }
+
+    public SyntheticEpubBuilder AsEpub2Ncx()
+    {
+        _package = Epub2Package;
+        _resources.Clear();
+        _resources["OPS/toc.ncx"] = DefaultNcx;
+        _resources["OPS/text/chapter1.xhtml"] = Epub2ChapterOne;
+        _resources["OPS/text/chapter2.xhtml"] = Epub2ChapterTwo;
+        return this;
+    }
+
+    public SyntheticEpubBuilder WithPackage(string package)
+    {
+        _package = package;
+        return this;
+    }
+
+    public SyntheticEpubBuilder WithResource(string path, string content)
+    {
+        _resources[path] = content;
         return this;
     }
 
@@ -62,9 +88,11 @@ internal sealed class SyntheticEpubBuilder
             Add(archive, "META-INF/encryption.xml", "<encryption xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\" />");
         }
 
-        Add(archive, "OPS/package.opf", Package);
-        Add(archive, "OPS/nav/toc.xhtml", _navigation);
-        Add(archive, "OPS/text/book.xhtml", _content);
+        Add(archive, "OPS/package.opf", _package);
+        foreach (var (resourcePath, content) in _resources)
+        {
+            Add(archive, resourcePath, content);
+        }
     }
 
     private static void Add(
@@ -86,7 +114,7 @@ internal sealed class SyntheticEpubBuilder
         </container>
         """;
 
-    private const string Package = """
+    internal const string DefaultPackage = """
         <?xml version="1.0" encoding="utf-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
           <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -100,6 +128,57 @@ internal sealed class SyntheticEpubBuilder
           </manifest>
           <spine><itemref idref="book" /></spine>
         </package>
+        """;
+
+    internal const string Epub2Package = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
+          <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <dc:identifier id="id">synthetic-epub2-book</dc:identifier>
+            <dc:title>NCX Sample Book</dc:title>
+            <dc:language>en</dc:language>
+          </metadata>
+          <manifest>
+            <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml" />
+            <item id="chapter1" href="text/chapter1.xhtml" media-type="application/xhtml+xml" />
+            <item id="chapter2" href="text/chapter2.xhtml" media-type="application/xhtml+xml" />
+          </manifest>
+          <spine toc="ncx"><itemref idref="chapter1" /><itemref idref="chapter2" /></spine>
+        </package>
+        """;
+
+    internal const string DefaultNcx = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+          <navMap>
+            <navPoint id="preface" playOrder="1">
+              <navLabel><text>Preface</text></navLabel><content src="text/not-in-manifest.xhtml" />
+            </navPoint>
+            <navPoint id="chapter1" playOrder="2">
+              <navLabel><text>Chapter 1</text></navLabel><content src="text/chapter1.xhtml" />
+            </navPoint>
+            <navPoint id="chapter2" playOrder="3">
+              <navLabel><text>Chapter 2</text></navLabel><content src="text/chapter2.xhtml" />
+            </navPoint>
+          </navMap>
+        </ncx>
+        """;
+
+    internal const string Epub2ChapterOne = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <head><title>Chapter 1</title></head>
+          <body><h2>1</h2><p>First NCX chapter paragraph.</p><p>More chapter one.</p></body>
+        </html>
+        """;
+
+    internal const string Epub2ChapterTwo = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <head><title>Chapter 2</title></head>
+          <body><h2>2</h2><p>Only chapter two NCX prose.</p></body>
+        </html>
         """;
 
     internal const string DefaultNavigation = """

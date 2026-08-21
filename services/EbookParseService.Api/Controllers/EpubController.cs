@@ -8,6 +8,7 @@ namespace EbookParseService.Api.Controllers;
 [Route("api/epubs")]
 public sealed class EpubController(
     IEpubChapterParser parser,
+    ITtsTextNormalizer ttsTextNormalizer,
     IChapterOutputWriter writer,
     ILogger<EpubController> logger) : ControllerBase
 {
@@ -27,7 +28,25 @@ public sealed class EpubController(
     {
         try
         {
+            TtsTextOptions? ttsOptions = null;
+            if (request.Tts)
+            {
+                if (!TtsTextOptions.IsSupported(request.TtsLanguage))
+                {
+                    throw new EpubParseException(
+                        EpubParseErrorKind.InvalidRequest,
+                        "TTS=true requires TTS_LANG=en or TTS_LANG=pt.");
+                }
+
+                ttsOptions = new TtsTextOptions(request.TtsLanguage!);
+            }
+
             var book = await parser.ParseAsync(request.FileName, cancellationToken);
+            if (ttsOptions is not null)
+            {
+                book = ttsTextNormalizer.Normalize(book, ttsOptions);
+            }
+
             return Ok(await writer.PublishAsync(book, cancellationToken));
         }
         catch (EpubParseException exception)

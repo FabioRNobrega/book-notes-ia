@@ -16,6 +16,7 @@ builder.Services.AddOptions<EpubParserOptions>()
         && options.MaxXmlCharacters > 0, "All parser limits must be positive.")
     .ValidateOnStart();
 builder.Services.AddSingleton<IEpubChapterParser, EpubChapterParser>();
+builder.Services.AddSingleton<ITtsTextNormalizer, TtsTextNormalizer>();
 builder.Services.AddSingleton<IChapterOutputWriter, ChapterOutputWriter>();
 
 var app = builder.Build();

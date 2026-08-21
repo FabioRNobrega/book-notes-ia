@@ -54,6 +54,200 @@ public sealed class EpubChapterParserTests
         Assert.Equal("Semantic chapter prose.", Assert.Single(result.Chapters[0].Paragraphs));
     }
 
+    [Fact]
+    public async Task ParseAsync_UsesEpub2NcxWholeDocumentTargets()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        new SyntheticEpubBuilder().AsEpub2Ncx().Build(System.IO.Path.Combine(input, "ncx.epub"));
+
+        var result = await CreateParser(input).ParseAsync("ncx.epub");
+
+        Assert.Equal("NCX Sample Book", result.Title);
+        Assert.Equal("en", result.Language);
+        Assert.Equal([1, 2], result.Chapters.Select(chapter => chapter.Number));
+        Assert.Equal(
+            ["First NCX chapter paragraph.", "More chapter one."],
+            result.Chapters[0].Paragraphs);
+        Assert.Equal("Only chapter two NCX prose.", Assert.Single(result.Chapters[1].Paragraphs));
+        Assert.DoesNotContain(
+            result.Chapters.SelectMany(chapter => chapter.Paragraphs),
+            paragraph => paragraph.Contains("Preface", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ParseAsync_UsesEpub2NcxFragmentTarget()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx.Replace(
+            "src=\"text/chapter1.xhtml\"",
+            "src=\"text/chapter1.xhtml#one\"",
+            StringComparison.Ordinal);
+        var chapter = """
+            <html xmlns="http://www.w3.org/1999/xhtml">
+              <body><section id="one"><h2>1</h2><p>Fragment NCX prose.</p></section></body>
+            </html>
+            """;
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/chapter1.xhtml", chapter)
+            .Build(System.IO.Path.Combine(input, "fragment.epub"));
+
+        var result = await CreateParser(input).ParseAsync("fragment.epub");
+
+        Assert.Equal("Fragment NCX prose.", Assert.Single(result.Chapters[0].Paragraphs));
+    }
+
+    [Fact]
+    public async Task ParseAsync_NormalizesXhtmlNbspWithoutResolvingExternalDtd()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var chapter = SyntheticEpubBuilder.Epub2ChapterOne.Replace(
+            "First NCX",
+            "First&nbsp;NCX",
+            StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithResource("OPS/text/chapter1.xhtml", chapter)
+            .Build(System.IO.Path.Combine(input, "nbsp.epub"));
+
+        var result = await CreateParser(input).ParseAsync("nbsp.epub");
+
+        Assert.Contains("First NCX chapter paragraph.", result.Chapters[0].Paragraphs);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub2PackageWithoutSpineNcxReference()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var package = SyntheticEpubBuilder.Epub2Package.Replace(" toc=\"ncx\"", string.Empty, StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithPackage(package)
+            .Build(System.IO.Path.Combine(input, "missing-ncx.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("missing-ncx.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub2NcxWithoutNavMap()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        const string ncx = "<ncx xmlns=\"http://www.daisy.org/z3986/2005/ncx/\" version=\"2005-1\" />";
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithResource("OPS/toc.ncx", ncx)
+            .Build(System.IO.Path.Combine(input, "no-nav-map.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("no-nav-map.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub2NcxChapterWithMismatchedHeading()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var chapter = SyntheticEpubBuilder.Epub2ChapterOne.Replace("<h2>1</h2>", "<h2>9</h2>", StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithResource("OPS/text/chapter1.xhtml", chapter)
+            .Build(System.IO.Path.Combine(input, "mismatch.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("mismatch.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub2NcxUndeclaredChapterTarget()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx.Replace(
+            "src=\"text/chapter1.xhtml\"",
+            "src=\"text/missing.xhtml\"",
+            StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithResource("OPS/toc.ncx", ncx)
+            .Build(System.IO.Path.Combine(input, "undeclared.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("undeclared.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsDuplicateEpub2NcxChapterTarget()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx
+            .Replace("<text>Chapter 2</text>", "<text>Chapter 1</text>", StringComparison.Ordinal)
+            .Replace("src=\"text/chapter2.xhtml\"", "src=\"text/chapter1.xhtml\"", StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx().WithResource("OPS/toc.ncx", ncx)
+            .Build(System.IO.Path.Combine(input, "duplicate-target.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("duplicate-target.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+        Assert.Contains("duplicate chapter target", exception.PublicMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ParseAsync_InfersLanguageForNumericEpub2NcxChapters()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        BuildNumericNcxWithoutPackageLanguage(input, "numeric.epub", "pt-br", "pt-br");
+
+        var result = await CreateParser(input).ParseAsync("numeric.epub");
+
+        Assert.Equal("pt-br", result.Language);
+        Assert.Equal([1, 2], result.Chapters.Select(chapter => chapter.Number));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("pt-br", null)]
+    [InlineData("pt-br", "en")]
+    public async Task ParseAsync_RejectsIncompleteOrInconsistentInferredNcxLanguage(
+        string? chapterOneLanguage,
+        string? chapterTwoLanguage)
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        BuildNumericNcxWithoutPackageLanguage(
+            input,
+            "invalid-language.epub",
+            chapterOneLanguage,
+            chapterTwoLanguage);
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("invalid-language.epub"));
+
+        Assert.Equal(EpubParseErrorKind.InvalidEpub, exception.Kind);
+        Assert.Contains("language", exception.PublicMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub3WithoutPackageLanguage()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var package = RemovePackageLanguage(SyntheticEpubBuilder.DefaultPackage);
+        new SyntheticEpubBuilder().WithPackage(package).Build(System.IO.Path.Combine(input, "epub3-no-language.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("epub3-no-language.epub"));
+
+        Assert.Equal(EpubParseErrorKind.InvalidEpub, exception.Kind);
+        Assert.Contains("language", exception.PublicMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("../fixture.epub")]
     [InlineData("nested/fixture.epub")]
@@ -154,4 +348,36 @@ public sealed class EpubChapterParserTests
             InputDirectory = input,
             OutputDirectory = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(input)!, "output")
         }));
+
+    private static void BuildNumericNcxWithoutPackageLanguage(
+        string input,
+        string fileName,
+        string? chapterOneLanguage,
+        string? chapterTwoLanguage)
+    {
+        var package = RemovePackageLanguage(SyntheticEpubBuilder.Epub2Package);
+        var ncx = SyntheticEpubBuilder.DefaultNcx
+            .Replace("<text>Chapter 1</text>", "<text>1</text>", StringComparison.Ordinal)
+            .Replace("<text>Chapter 2</text>", "<text>2</text>", StringComparison.Ordinal);
+        var chapterOne = AddHeadingLanguage(SyntheticEpubBuilder.Epub2ChapterOne, "1", chapterOneLanguage);
+        var chapterTwo = AddHeadingLanguage(SyntheticEpubBuilder.Epub2ChapterTwo, "2", chapterTwoLanguage);
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithPackage(package)
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/chapter1.xhtml", chapterOne)
+            .WithResource("OPS/text/chapter2.xhtml", chapterTwo)
+            .Build(System.IO.Path.Combine(input, fileName));
+    }
+
+    private static string RemovePackageLanguage(string package) =>
+        package.Replace("<dc:language>en-US</dc:language>", string.Empty, StringComparison.Ordinal)
+            .Replace("<dc:language>en</dc:language>", string.Empty, StringComparison.Ordinal);
+
+    private static string AddHeadingLanguage(string chapter, string number, string? language) =>
+        language is null
+            ? chapter
+            : chapter.Replace(
+                $"<h2>{number}</h2>",
+                $"<h2 xml:lang=\"{language}\">{number}</h2>",
+                StringComparison.Ordinal);
 }

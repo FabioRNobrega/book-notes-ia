@@ -28,8 +28,10 @@ EBOOK_PARSER_COMPOSE_FILES := -f docker-compose.ebook-parser.yml
 EBOOK_PARSER_COMPOSE_PROJECT ?= book-notes-ia-ebook-parser
 EBOOK_PARSER_PORT ?= 5082
 BOOK ?=
+TTS ?= false
+TTS_LANG ?=
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down ebook-parse ebook-parser-test ebook-parser-logs ebook-parser-down
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down repair-ebook ebook-parse ebook-parser-test ebook-parser-logs ebook-parser-down
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -132,16 +134,28 @@ chatterbox-test:
 chatterbox-down:
 	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) down --remove-orphans
 
-# Parse one private EPUB from services/EbookParseService.Api/data/input.
-# BOOK is intentionally restricted to a plain local filename.
-ebook-parse:
-	@if [ -z "$(BOOK)" ]; then echo "Usage: make ebook-parse BOOK=book.epub"; exit 1; fi
+# Repair one private EPUB's ZIP media-type marker without changing the source.
+# The repaired publication is written beside it as <name>-fixed.epub.
+repair-ebook:
+	@if [ -z "$(BOOK)" ]; then echo "Usage: make repair-ebook BOOK=book.epub"; exit 1; fi
 	@case "$(BOOK)" in *[!A-Za-z0-9._\ -]*|.*) echo "BOOK must be a safe base filename"; exit 1 ;; esac
 	@case "$(BOOK)" in *.epub|*.EPUB) ;; *) echo "BOOK must end in .epub"; exit 1 ;; esac
 	@test -f "services/EbookParseService.Api/data/input/$(BOOK)" || (echo "Missing services/EbookParseService.Api/data/input/$(BOOK)" && exit 1)
+	$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) build ebook-parser
+	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) run --rm --no-deps --entrypoint /app/repair-ebook.sh ebook-parser "$(BOOK)"
+
+# Parse one private EPUB from services/EbookParseService.Api/data/input.
+# BOOK is intentionally restricted to a plain local filename.
+ebook-parse:
+	@if [ -z "$(BOOK)" ]; then echo "Usage: make ebook-parse BOOK=book.epub [TTS=true TTS_LANG=en|pt]"; exit 1; fi
+	@case "$(BOOK)" in *[!A-Za-z0-9._\ -]*|.*) echo "BOOK must be a safe base filename"; exit 1 ;; esac
+	@case "$(BOOK)" in *.epub|*.EPUB) ;; *) echo "BOOK must end in .epub"; exit 1 ;; esac
+	@case "$(TTS)" in ""|false|true) ;; *) echo "TTS must be true or false"; exit 1 ;; esac
+	@if [ "$(TTS)" = "true" ]; then case "$(TTS_LANG)" in en|pt) ;; *) echo "TTS=true requires TTS_LANG=en or TTS_LANG=pt"; exit 1 ;; esac; fi
+	@test -f "services/EbookParseService.Api/data/input/$(BOOK)" || (echo "Missing services/EbookParseService.Api/data/input/$(BOOK)" && exit 1)
 	$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) up -d --build ebook-parser
 	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) exec -T ebook-parser sh -c 'until curl --fail --silent http://localhost:5082/health >/dev/null; do sleep 1; done'
-	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) exec -T ebook-parser curl --fail-with-body --silent --show-error -H "Content-Type: application/json" -d '{"fileName":"$(BOOK)"}' http://localhost:5082/api/epubs/parse
+	@$(COMPOSE) -p $(EBOOK_PARSER_COMPOSE_PROJECT) $(EBOOK_PARSER_COMPOSE_FILES) exec -T ebook-parser curl --fail-with-body --silent --show-error -H "Content-Type: application/json" -d '{"fileName":"$(BOOK)","tts":$(if $(filter true,$(TTS)),true,false),"ttsLanguage":$(if $(filter true,$(TTS)),"$(TTS_LANG)",null)}' http://localhost:5082/api/epubs/parse
 	@echo
 
 ebook-parser-test:

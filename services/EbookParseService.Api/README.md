@@ -1,6 +1,6 @@
 # EPUB Chapter Text Parser POC
 
-This isolated .NET 10 API converts a local EPUB 3 publication into one UTF-8 text file per explicitly identified chapter. It does not call WebApp, a database, Supertonic, or Chatterbox.
+This isolated .NET 10 API converts a supported local EPUB 2 or EPUB 3 publication into one UTF-8 text file per explicitly identified chapter. It does not call WebApp, a database, Supertonic, or Chatterbox.
 
 ## Run the POC
 
@@ -10,6 +10,26 @@ Place a legally obtained book in the private input folder, then run:
 cp /your/local/path/book.epub services/EbookParseService.Api/data/input/book.epub
 make ebook-parse BOOK=book.epub
 ```
+
+To publish only text normalized for the Chatterbox POC, opt in with an explicit supported language:
+
+```bash
+make ebook-parse BOOK=book.epub TTS=true TTS_LANG=pt
+make ebook-parse BOOK=book.epub TTS=true TTS_LANG=en
+```
+
+`TTS_LANG` is mandatory when `TTS=true` and accepts only the exact Chatterbox identifiers `en` and `pt`. It intentionally does not fall back to EPUB language metadata. TTS mode removes standalone `***` scene-marker symbols while retaining the paragraph boundary, normalizes repeated periods and horizontal whitespace, and applies Portuguese dialogue-dash punctuation rules for `pt`. English dialogue dashes are preserved. Generated headings use `Chapter N.` for `en` and `Capítulo N.` for `pt`; decimal chapter numbers are retained.
+
+TTS mode publishes only the normalized files to the same output directory, atomically replacing any previous chapter set. It does not create a raw copy or a `tts/` subdirectory. This step prepares plain text only; it does not call Chatterbox, choose a voice, split synthesis chunks, or generate audio.
+
+If the parser reports a nonconforming EPUB media-type marker because the marker is missing or reordered, run:
+
+```bash
+make repair-ebook BOOK=book.epub
+make ebook-parse BOOK=book-fixed.epub
+```
+
+The repair command runs in a one-off isolated container, leaves the source untouched, and refuses to overwrite an existing `book-fixed.epub`. It corrects only the EPUB ZIP marker and entry ordering. It does not convert EPUB 2 `toc.ncx` navigation, add EPUB 3 chapter semantics, remove DRM, or repair publication content.
 
 The command builds and starts only `docker-compose.ebook-parser.yml`, waits for `GET /health`, and sends the base filename to `POST /api/epubs/parse`. Generated files appear under:
 
@@ -21,18 +41,22 @@ Run the focused synthetic test suite with `make ebook-parser-test`, inspect serv
 
 ## Supported chapter discovery
 
-The parser reads the EPUB media-type marker, `META-INF/container.xml`, the declared package document, manifest, spine, and the EPUB 3 navigation document. Chapter order and boundaries come from table-of-contents fragment links. This supports several chapter targets inside one XHTML file.
+The parser reads the EPUB media-type marker, `META-INF/container.xml`, the declared package document, manifest, and spine. It prefers an EPUB 3 navigation document; when none exists, it supports the EPUB 2 NCX document referenced by the spine's `toc` attribute.
+
+EPUB 3 chapter order and boundaries come from table-of-contents fragment links. This supports several chapter targets inside one XHTML file.
 
 A target is a chapter only if either:
 
 - its structural section/article has `epub:type="chapter"`; or
 - its TOC label is an Arabic number and its target section/heading contains the same number.
 
-Part headings, title pages, coda entries, filenames, resource size, and generic heading words are not used as guesses. An EPUB with no supported explicit structure fails without publishing output. EPUB 2 NCX-only books, fixed-layout publications, malformed HTML recovery, PDFs, MOBI/AZW, OCR, and translation are outside this POC.
+For EPUB 2 NCX, an entry is a chapter only when its label is `Chapter N` or plain `N`, its target is a manifest-declared XHTML document, and that document or fragment contains the matching numeric heading. Whole-document, fragment, and nested NCX targets are supported. Non-chapter NCX entries are ignored. If the package omits `dc:language`, every accepted chapter must have the same explicit in-scope `xml:lang`; language is never guessed from filenames or prose. XHTML `&nbsp;` is normalized locally without resolving an external DTD.
+
+Part headings, title pages, coda entries, filenames, resource size, spine membership alone, and generic heading words are not used as guesses. An EPUB with no supported explicit structure or no reliable language fails without publishing output. EPUB 2 books with arbitrary named chapter labels, fixed-layout publications, malformed HTML recovery, PDFs, MOBI/AZW, OCR, and translation are outside this POC.
 
 ## Output and replacement
 
-Each file starts with `Chapter N.`, a blank line, and normalized narrative paragraphs. Markup, duplicate numeric headings, scripts, styles, navigation controls, media-only content, and footnote controls are excluded. A complete result is written to a sibling staging directory and then replaces `data/output/<book-slug>/` as a unit. If parsing or staging fails, the last successful output remains available.
+Each file starts with `Chapter N.`, a blank line, and normalized narrative paragraphs. Markup, duplicate numeric headings, scripts, styles, navigation controls, media-only content, and footnote controls are excluded. A complete result is written to a sibling staging directory and then replaces `data/output/<book-slug>/` as a unit. If parsing, optional TTS normalization, or staging fails, the last successful output remains available.
 
 ## Privacy, copyright, and security
 

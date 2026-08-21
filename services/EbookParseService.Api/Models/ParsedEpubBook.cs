@@ -4,4 +4,5 @@ public sealed record ParsedEpubBook(
     string SourceFileName,
     string Title,
     string Language,
-    IReadOnlyList<ParsedChapter> Chapters);
+    IReadOnlyList<ParsedChapter> Chapters,
+    string ChapterLabel = "Chapter");

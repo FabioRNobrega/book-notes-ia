@@ -60,6 +60,38 @@ public sealed class ChapterOutputWriterTests
         Assert.Equal(before, await File.ReadAllBytesAsync(System.IO.Path.Combine(first.OutputDirectory, "chapter-001.txt")));
     }
 
+    [Fact]
+    public async Task PublishAsync_ReportsFinalPublishedCharacterCount()
+    {
+        using var temp = new TemporaryDirectory();
+        var writer = CreateWriter(temp.Path);
+
+        var response = await writer.PublishAsync(Book(new ParsedChapter(1, ["TTS-ready prose."])));
+        var content = await File.ReadAllTextAsync(
+            System.IO.Path.Combine(response.OutputDirectory, response.Chapters[0].FileName));
+
+        Assert.Equal(content.Length, response.Chapters[0].CharacterCount);
+        Assert.Equal(["chapter-001.txt"], Directory.GetFiles(response.OutputDirectory).Select(System.IO.Path.GetFileName));
+        Assert.Empty(Directory.GetDirectories(response.OutputDirectory));
+    }
+
+    [Fact]
+    public async Task PublishAsync_RendersLocalizedChapterLabelWithDecimalNumber()
+    {
+        using var temp = new TemporaryDirectory();
+        var writer = CreateWriter(temp.Path);
+        var book = Book(new ParsedChapter(1, ["Texto pronto para narração."])) with
+        {
+            ChapterLabel = "Capítulo"
+        };
+
+        var response = await writer.PublishAsync(book);
+        var content = await File.ReadAllTextAsync(
+            System.IO.Path.Combine(response.OutputDirectory, "chapter-001.txt"));
+
+        Assert.StartsWith("Capítulo 1.\n\n", content, StringComparison.Ordinal);
+    }
+
     private static ChapterOutputWriter CreateWriter(string output) =>
         new(Options.Create(new EpubParserOptions
         {

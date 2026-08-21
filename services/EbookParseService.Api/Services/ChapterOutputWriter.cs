@@ -35,7 +35,7 @@ public sealed class ChapterOutputWriter(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fileName = $"chapter-{chapter.Number:000}.txt";
-                var content = Render(chapter);
+                var content = Render(chapter, book.ChapterLabel);
                 await File.WriteAllTextAsync(Path.Combine(staging, fileName), content, Utf8WithoutBom, cancellationToken);
                 summaries.Add(new ParsedChapterSummary(chapter.Number, fileName, content.Length));
             }
@@ -101,6 +101,7 @@ public sealed class ChapterOutputWriter(
     private static void ValidateBook(ParsedEpubBook book)
     {
         if (string.IsNullOrWhiteSpace(book.Title)
+            || string.IsNullOrWhiteSpace(book.ChapterLabel)
             || book.Chapters.Count == 0
             || book.Chapters.Any(chapter => chapter.Number < 1 || chapter.Paragraphs.Count == 0)
             || book.Chapters.Select(chapter => chapter.Number).Distinct().Count() != book.Chapters.Count)
@@ -111,7 +112,7 @@ public sealed class ChapterOutputWriter(
         }
     }
 
-    private static string Render(ParsedChapter chapter)
+    private static string Render(ParsedChapter chapter, string chapterLabel)
     {
         var paragraphs = chapter.Paragraphs
             .Select(paragraph => paragraph.Trim())
@@ -124,7 +125,7 @@ public sealed class ChapterOutputWriter(
                 "The parsed chapter set contains an empty chapter.");
         }
 
-        return $"Chapter {chapter.Number}.\n\n{string.Join("\n\n", paragraphs)}\n";
+        return $"{chapterLabel} {chapter.Number}.\n\n{string.Join("\n\n", paragraphs)}\n";
     }
 
     private static string CreateSlug(string title)
