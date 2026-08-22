@@ -24,6 +24,21 @@ export CHATTERBOX_MODEL
 CHATTERBOX_PREVIEW_TIMEOUT_SECONDS ?= 604800
 export CHATTERBOX_PREVIEW_TIMEOUT_SECONDS
 VOICE_ID ?=
+SEED ?= 1234
+export CHATTERBOX_SEED := $(SEED)
+AUDIOBOOK_ROOT ?= /home/deck/Music
+BOOK_NAME ?=
+BOOK_INTRO ?=
+BOOK_OUTRO ?=
+FORCE ?= false
+export AUDIOBOOK_ROOT
+export AUDIOBOOK_BOOK = $(BOOK)
+export AUDIOBOOK_BOOK_NAME = $(BOOK_NAME)
+export AUDIOBOOK_LANGUAGE = $(TTS_LANG)
+export AUDIOBOOK_VOICE_ID = $(VOICE_ID)
+export AUDIOBOOK_INTRO = $(BOOK_INTRO)
+export AUDIOBOOK_OUTRO = $(BOOK_OUTRO)
+export AUDIOBOOK_FORCE = $(FORCE)
 EBOOK_PARSER_COMPOSE_FILES := -f docker-compose.ebook-parser.yml
 EBOOK_PARSER_COMPOSE_PROJECT ?= book-notes-ia-ebook-parser
 EBOOK_PARSER_PORT ?= 5082
@@ -31,7 +46,7 @@ BOOK ?=
 TTS ?= false
 TTS_LANG ?=
 
-.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down repair-ebook ebook-parse ebook-parser-test ebook-parser-logs ebook-parser-down
+.PHONY: docker-build docker-build-mac docker-build-windows docker-run docker-run-mac docker-run-windows docker-down docker-down-mac docker-down-windows docker-test docker-test-build docker-test-shell test ollama-logs ollama-logs-mac ollama-logs-windows ollama-chat release docker-env debug-tts presentation-bundle chatterbox-preview chatterbox-voices chatterbox-logs chatterbox-test chatterbox-down create-audio-book repair-ebook ebook-parse ebook-parser-test ebook-parser-logs ebook-parser-down
 
 docker-env:
 	@echo "export DOCKER_HOST=$(DOCKER_HOST)"
@@ -133,6 +148,24 @@ chatterbox-test:
 
 chatterbox-down:
 	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) down --remove-orphans
+
+# Generate one English Multilingual V3 WAV per intro/chapter/outro text file.
+# The one-off process persists a checksum manifest and resumes verified tracks.
+create-audio-book:
+	@test -n "$$AUDIOBOOK_BOOK" || (echo 'Usage: make create-audio-book BOOK=folder BOOK_NAME="Book Name" TTS_LANG=en VOICE_ID=uuid BOOK_INTRO=intro.txt BOOK_OUTRO=outro.txt [SEED=1234 AUDIOBOOK_ROOT=/home/deck/Music FORCE=true|false]' && exit 1)
+	@test -n "$$AUDIOBOOK_BOOK_NAME" || (echo "BOOK_NAME is required" && exit 1)
+	@test -n "$$AUDIOBOOK_VOICE_ID" || (echo "VOICE_ID is required" && exit 1)
+	@test -n "$$AUDIOBOOK_INTRO" || (echo "BOOK_INTRO is required" && exit 1)
+	@test -n "$$AUDIOBOOK_OUTRO" || (echo "BOOK_OUTRO is required" && exit 1)
+	@case "$$AUDIOBOOK_LANGUAGE" in en) ;; *) echo "TTS_LANG must be en"; exit 1 ;; esac
+	@case "$$AUDIOBOOK_FORCE" in true|false) ;; *) echo "FORCE must be true or false"; exit 1 ;; esac
+	@mkdir -p "$$AUDIOBOOK_ROOT"
+	$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) build chatterbox-tts
+	@$(COMPOSE) -p $(CHATTERBOX_COMPOSE_PROJECT) $(CHATTERBOX_COMPOSE_FILES) run --rm --no-deps \
+		-e CHATTERBOX_MODEL=v3 \
+		-e AUDIOBOOK_BOOK -e AUDIOBOOK_BOOK_NAME -e AUDIOBOOK_LANGUAGE \
+		-e AUDIOBOOK_VOICE_ID -e AUDIOBOOK_INTRO -e AUDIOBOOK_OUTRO \
+		-e AUDIOBOOK_FORCE chatterbox-tts python -m app.audiobook_client
 
 # Repair one private EPUB's ZIP media-type marker without changing the source.
 # The repaired publication is written beside it as <name>-fixed.epub.

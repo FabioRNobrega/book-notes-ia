@@ -10,6 +10,8 @@ PINNED_NANO_MODEL_REVISION = "71ccd1d0081b430592cea481f4307e764e07bc64"
 PINNED_CHATTERBOX_SOURCE_REVISION = "5de7a54aa4e5e2baadb0182dde554908b48b85c2"
 CONDITIONING_FORMAT_VERSION = 2
 SUPPORTED_LANGUAGES = ("en", "pt")
+AUDIOBOOK_LANGUAGE_ID = "en"
+AUDIOBOOK_MODEL_NAME = "multilingual-v3"
 
 
 class UnsupportedLanguageError(ValueError):
@@ -43,6 +45,7 @@ class Settings:
     paragraph_silence_ms: int = 420
     minimum_reference_seconds: float = 3.0
     minimum_pcm_peak: int = 32
+    synthesis_seed: int = 1234
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -64,6 +67,7 @@ class Settings:
             source_revision=os.getenv(
                 "CHATTERBOX_SOURCE_REVISION", PINNED_CHATTERBOX_SOURCE_REVISION
             ),
+            synthesis_seed=_environment_integer("CHATTERBOX_SEED", 1234),
         ).validated()
 
     @property
@@ -140,6 +144,8 @@ class Settings:
             raise ValueError("Minimum reference duration must be positive")
         if not 0 < self.minimum_pcm_peak <= 32767:
             raise ValueError("Minimum PCM peak must be between 1 and 32767")
+        if not 0 < self.synthesis_seed <= 2_147_483_647:
+            raise ValueError("Chatterbox synthesis seed must be between 1 and 2147483647")
 
         for language_id in self.supported_languages:
             profile = self.profile(language_id)
@@ -152,3 +158,11 @@ class Settings:
             if not profile.preview_text():
                 raise ValueError("Preview text cannot be empty")
         return self
+
+
+def _environment_integer(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default))
+    try:
+        return int(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be an integer") from error

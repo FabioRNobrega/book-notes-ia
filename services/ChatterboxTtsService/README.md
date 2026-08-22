@@ -11,13 +11,14 @@
 - [Storage](#storage)
 - [HTTP Routes](#http-routes)
 - [Make Commands](#make-commands)
+- [Audiobook Batch POC](#audiobook-batch-poc)
 - [Reliability and Security](#reliability-and-security)
 - [Testing](#testing)
 - [Limitations and Future Integration](#limitations-and-future-integration)
 
 ## Purpose
 
-`ChatterboxTtsService` is an isolated Docker proof of concept for creating multiple preserved local voices through fixed English and Portuguese reference slots and generating fixed previews. It is not connected to the ASP.NET Core WebApp, user profiles, premium authorization, chat routing, PostgreSQL, or the existing Supertonic service.
+`ChatterboxTtsService` is an isolated Docker proof of concept for creating multiple preserved local voices through fixed English and Portuguese reference slots, generating fixed previews, and producing a resumable local English audiobook batch with Multilingual V3. It is not connected to the ASP.NET Core WebApp, user profiles, premium authorization, chat routing, PostgreSQL, or the existing Supertonic service.
 
 The POC proves that Chatterbox voice conditioning can be prepared once, saved locally, loaded after a container restart, and reused when the preview text changes.
 
@@ -34,6 +35,7 @@ All reference recordings, `.pt` files, metadata, generated audio, and model file
 | `ChatterboxEngine` | Provider service | Loads Chatterbox and prepares, saves, loads, and uses conditioning. |
 | `LocalVoiceStore` | Filesystem repository | Owns UUIDs, metadata, checksums, safe paths, and atomic persistence. |
 | `PreviewService` | Application service | Coordinates profile selection, conditioning, chunking, and output. |
+| `AudiobookService` | Application service | Coordinates ordered local text tracks, resume manifests, and atomic WAV publication. |
 | Pytest | xUnit | Runs unit and HTTP tests in Docker. |
 
 Python type annotations improve clarity and tooling, but they are evaluated differently from C# compile-time types. Runtime validation is still required for paths, metadata, language IDs, and files.
@@ -59,6 +61,10 @@ flowchart LR
     Portuguese[pt-reference.wav + pt-preview.txt] --> Preview
     Store --> Voices[data/voices]
     Preview --> Outputs[data/outputs]
+    Books[parser output: intro + chapters + outro] --> Batch[AudiobookService]
+    Batch --> Store
+    Batch --> Engine
+    Batch --> Music[Music/book name/NNN.wav]
     Cache[models cache] --> Model
 ```
 
@@ -172,6 +178,8 @@ Compose bind-mounts these ignored host directories:
 ```text
 services/ChatterboxTtsService/data/   -> /data
 services/ChatterboxTtsService/models/ -> /models
+services/EbookParseService.Api/data/output/ -> /books (read-only)
+${AUDIOBOOK_ROOT:-/home/deck/Music} -> /audiobooks
 ```
 
 After both profiles have been used, the data layout resembles:
@@ -252,6 +260,7 @@ No request body, arbitrary text, reference path, voice path, or `.pt` upload is 
   "device": "cpu",
   "model": "multilingual-v3",
   "model_revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
+  "synthesis_seed": 1234,
   "language_id": "en",
   "elapsed_seconds": 420.1,
   "output_duration_seconds": 47.5,
@@ -278,6 +287,7 @@ make chatterbox-voices
 make chatterbox-voices LANGUAGE=pt
 make chatterbox-preview LANGUAGE=pt VOICE_ID=<voice-id>
 make chatterbox-preview LANGUAGE=en VOICE_ID=<voice-id> CHATTERBOX_MODEL=nano
+make chatterbox-preview LANGUAGE=en VOICE_ID=<voice-id> SEED=1234
 ```
 
 The preview target validates the selected reference when creating/resolving by checksum, builds/starts the isolated service, prints periodic model-readiness messages, and prints changed stage/chunk percentages during generation. It finally prints the voice ID and output path. An explicit `VOICE_ID` uses that voice's archived reference and does not depend on the mutable root reference slot.
@@ -308,6 +318,118 @@ make chatterbox-test
 make chatterbox-down
 ```
 
+Multilingual generation samples at a nonzero temperature, so unseeded runs can
+sound different even when text, voice, model, and settings are identical. Preview
+and audiobook synthesis therefore share `SEED`, which defaults to the positive
+deterministic value `1234`. The engine resets Torch, NumPy, and Python random state
+for every chunk and passes the V3 quality defaults explicitly: exaggeration `0.5`,
+CFG weight `0.5`, temperature `0.8`, repetition penalty `1.2`, minimum probability
+`0.05`, and top probability `1.0`.
+
+Before starting a full book, audition its intro by placing the exact intro text in
+`config/preview.txt` and trying a seed:
+
+```bash
+make chatterbox-preview \
+  LANGUAGE=en \
+  VOICE_ID=21ecfcec-33c1-40db-8bc8-25d078ce2fa9 \
+  SEED=1234
+```
+
+If that rendition is not acceptable, try another positive integer such as `42`
+or `2026`. Once a preview is acceptable, pass exactly the same seed to
+`create-audio-book`. Byte-identical text with the same chunking, voice,
+conditioning, model revision, and seed follows the same deterministic inference
+path. A seed change is audiobook-manifest incompatibility and therefore requires
+`FORCE=true` when an older output already exists.
+
+## Audiobook Batch POC
+
+The one-off audiobook runner converts one prepared English text folder into one
+Multilingual V3 WAV per part. It is a local CLI inside the Chatterbox container;
+it does not add an arbitrary-text HTTP route or involve the WebApp.
+
+Prepare this layout beneath the EPUB parser's ignored output directory:
+
+```text
+services/EbookParseService.Api/data/output/the-room/
+├── TheRoomIntro.txt
+├── chapter-001.txt
+├── chapter-002.txt
+├── ...
+└── TheRoomOutro.txt
+```
+
+The intro and outro are always required. Chapters must use contiguous
+`chapter-NNN.txt` names starting at `chapter-001.txt`. Every input must be a
+non-empty UTF-8 text file directly inside the selected book folder. Parser output
+created with `TTS=true TTS_LANG=en` is recommended because it has already been
+normalized for narration.
+
+Run the batch only when you are ready for a long CPU synthesis job:
+
+```bash
+make create-audio-book \
+  BOOK=the-room \
+  BOOK_NAME="The Room" \
+  TTS_LANG=en \
+  VOICE_ID=21ecfcec-33c1-40db-8bc8-25d078ce2fa9 \
+  BOOK_INTRO=TheRoomIntro.txt \
+  BOOK_OUTRO=TheRoomOutro.txt \
+  SEED=1234
+```
+
+The variables are:
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `BOOK` | Yes | Direct child folder under the parser output root. |
+| `BOOK_NAME` | Yes | Destination folder and WAV filename prefix. |
+| `TTS_LANG` | Yes | Must be `en` for this POC. |
+| `VOICE_ID` | Yes | Existing preserved English voice UUID. |
+| `BOOK_INTRO` | Yes | Intro `.txt` basename inside `BOOK`. |
+| `BOOK_OUTRO` | Yes | Outro `.txt` basename inside `BOOK`. |
+| `SEED` | No | Positive deterministic sampling seed; defaults to `1234`. |
+| `AUDIOBOOK_ROOT` | No | Host output root; defaults to `/home/deck/Music`. |
+| `FORCE` | No | Exact `true` or `false`; defaults to `false`. |
+
+For 65 chapters, the output is:
+
+```text
+/home/deck/Music/The Room/
+├── audiobook-manifest.json
+├── The Room 001.wav  # intro
+├── The Room 002.wav  # chapter-001.txt
+├── ...
+└── The Room 067.wav  # outro
+```
+
+The input mount is read-only. The process loads the pinned Multilingual V3 model
+once, loads the selected voice conditioning once, and synthesizes tracks
+sequentially. Each WAV is created under a temporary name, checked as audible
+16-bit PCM, and atomically published. Progress prints track and chunk numbers but
+never source prose.
+
+`audiobook-manifest.json` records source/output checksums, ordering, voice/model
+compatibility, duration, and per-track completion. An identical rerun verifies and
+skips completed tracks. A changed source regenerates only its mapped track. An
+incompatible manifest or unmanifested WAV files require an explicit forced run:
+
+```bash
+make create-audio-book \
+  BOOK=the-room BOOK_NAME="The Room" TTS_LANG=en \
+  VOICE_ID=21ecfcec-33c1-40db-8bc8-25d078ce2fa9 \
+  BOOK_INTRO=TheRoomIntro.txt BOOK_OUTRO=TheRoomOutro.txt \
+  SEED=1234 \
+  FORCE=true
+```
+
+`Ctrl+C` stops the one-off process. The active temporary WAV is removed, already
+published tracks and manifest progress remain, and the same non-forced command
+resumes them. Do not run two audiobook jobs against the same destination at once.
+To write elsewhere, set an absolute host path such as
+`AUDIOBOOK_ROOT=/tmp/audiobooks`.
+
 ## Reliability and Security
 
 - Reference files must be readable 16-bit PCM mono or stereo WAV files, at least three seconds long, and not silent/near-silent.
@@ -320,6 +442,16 @@ make chatterbox-down
 - Conditioning and metadata are written to temporary files and published as a recoverable pair; failed replacement restores the previous valid pair.
 - Preview WAVs are checked for real PCM samples and audible peak level before atomic replacement, so an empty/near-silent result preserves the last valid output.
 - Reference, conditioning, or tensor contents are never logged.
+- Audiobook text is mounted read-only, is never sent through the HTTP API, and is
+  never logged; only source basenames and progress are printed.
+- Audiobook output paths are resolved beneath the mounted root, and only obsolete
+  WAV paths owned by a prior valid manifest can be removed after a successful
+  forced run.
+- Only the two known upstream `LoRACompatibleLinear` and
+  `torch.backends.cuda.sdp_kernel()` deprecation messages are suppressed. They do
+  not affect synthesis quality; unrelated warnings remain visible. Updating
+  Diffusers/PEFT, Torch, or the pinned Chatterbox revision is a separate
+  compatibility decision.
 - The POC is unauthenticated and must not be exposed to the public internet.
 
 Conditioning is sensitive biometric-derived voice data even though it is not playable audio. Deleting a local voice means deleting its reference recording, `data/voices/<voice-id>/`, and `data/outputs/<voice-id>/`. The POC intentionally has no deletion command, so deletion must be a deliberate local filesystem operation with an appropriate backup decision.
@@ -344,13 +476,19 @@ The Docker test suite replaces the heavyweight engine with `FakeEngine` and uses
 - Conditioning pair and preview atomic rollback.
 - Serialized inference and concise HTTP failures.
 - Exact English and Portuguese preview text chunking.
+- Audiobook discovery/order, path containment, three-digit naming, manifest
+  compatibility, resume, force regeneration, atomic publication, and failure
+  recovery with fake inference.
 
 Real model runs remain manual because CPU synthesis on the tested Legion Go takes several minutes and uses several gigabytes of memory.
 
 ## Limitations and Future Integration
 
 - Only two mutable local reference slots are supported, but each can create multiple preserved voices.
-- Only tracked preview text files can be synthesized; arbitrary request text is out of scope.
+- HTTP synthesis accepts only tracked preview text files; arbitrary request text remains out of scope for the API.
+- Audiobook batch synthesis is English-only, Multilingual V3-only, local, and
+  sequential. It requires a prepared intro/chapter/outro folder and does not
+  parse EPUBs, produce MP3/M4B, embed covers or tags, or expose an HTTP endpoint.
 - The general multilingual `pt` model is used rather than a dedicated Brazilian Portuguese checkpoint.
 - CPU inference is intentionally used; AMD Vulkan/ROCm acceleration is not assumed.
 - There is no authentication, database ownership, upload, UI, premium gating, backup, or deletion API.

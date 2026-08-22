@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from app.main import OutputWriteError, PreviewService, _validate_output
+from app.audio_validation import OutputWriteError, validate_output
+from app.main import PreviewService
 from app.settings import Settings
 from conftest import write_wav
 from test_api import FakeEngine
@@ -22,7 +23,7 @@ def test_success_writes_per_voice_output_and_preserves_reference(
     response = PreviewService(settings, FakeEngine()).generate(language_id)
     output_path = Path(response["output_path"])
 
-    assert _validate_output(output_path) > 0
+    assert validate_output(output_path) > 0
     assert output_path == (
         settings.outputs_dir / response["voice_id"] / f"preview-{language_id}.wav"
     )
@@ -82,3 +83,11 @@ def test_settings_reject_unsupported_runtime_options(
             model_revision=settings.model_revision,
             source_revision=settings.source_revision,
         ).validated()
+
+
+@pytest.mark.parametrize("seed", [0, -1, 2_147_483_648])
+def test_settings_reject_invalid_synthesis_seed(settings, seed: int) -> None:
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="synthesis seed"):
+        replace(settings, synthesis_seed=seed).validated()

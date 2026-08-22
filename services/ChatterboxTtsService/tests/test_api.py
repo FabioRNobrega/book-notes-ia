@@ -40,6 +40,7 @@ class FakeEngine:
         self.save_calls: list[Path] = []
         self.load_calls: list[Path] = []
         self.synthesis_calls: list[dict] = []
+        self.model_load_count = 0
         self.conditioning: bytes | None = None
         self.fail_next_load = False
         self.active = 0
@@ -55,6 +56,7 @@ class FakeEngine:
         return "download failed" if not self._ready else None
 
     def load(self) -> None:
+        self.model_load_count += 1
         self._ready = True
 
     def prepare_conditioning(self, reference_path: Path) -> None:
@@ -117,6 +119,7 @@ def test_health_reports_both_supported_languages(settings) -> None:
         "device": "cpu",
         "model": "multilingual-v3",
         "model_revision": FakeEngine.model_revision,
+        "synthesis_seed": 1234,
         "supported_languages": ["en", "pt"],
         "load_error": None,
     }
@@ -164,6 +167,7 @@ def test_restart_reuses_same_voice_without_preparing_reference(settings) -> None
 
     assert loaded["voice_id"] == created["voice_id"]
     assert loaded["conditioning_status"] == "loaded"
+    assert loaded["synthesis_seed"] == settings.synthesis_seed
     assert second_engine.prepare_calls == []
     assert len(second_engine.load_calls) == 1
 

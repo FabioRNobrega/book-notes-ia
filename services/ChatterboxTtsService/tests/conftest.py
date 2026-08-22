@@ -57,3 +57,28 @@ def settings(tmp_path: Path) -> Settings:
         model_revision=PINNED_MODEL_REVISION,
         source_revision=PINNED_CHATTERBOX_SOURCE_REVISION,
     ).validated()
+
+
+@pytest.fixture
+def audiobook_roots(tmp_path: Path) -> tuple[Path, Path]:
+    input_root = tmp_path / "books"
+    output_root = tmp_path / "audiobooks"
+    input_root.mkdir()
+    output_root.mkdir()
+    return input_root, output_root
+
+
+def write_audiobook_book(
+    input_root: Path,
+    book_id: str = "sample-book",
+    chapter_count: int = 2,
+) -> Path:
+    book_dir = input_root / book_id
+    book_dir.mkdir(parents=True, exist_ok=True)
+    (book_dir / "intro.txt").write_text("This is the introduction.", encoding="utf-8")
+    for number in range(1, chapter_count + 1):
+        (book_dir / f"chapter-{number:03d}.txt").write_text(
+            f"Chapter {number}.\n\nThis is chapter {number}.", encoding="utf-8"
+        )
+    (book_dir / "outro.txt").write_text("This is the outro.", encoding="utf-8")
+    return book_dir
