@@ -257,6 +257,10 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
             .Where(item => string.Equals(item.MediaType, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase))
             .Select(item => item.Path)
             .ToHashSet(StringComparer.Ordinal);
+        var spineXhtmlPaths = spine
+            .Where(id => string.Equals(manifest[id].MediaType, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase))
+            .Select(id => manifest[id].Path)
+            .ToList();
 
         if (navigationItems.Count == 1)
         {
@@ -265,7 +269,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
                 throw UnsupportedStructure("The EPUB 3 navigation item must be an XHTML document.");
             }
 
-            return new PackageMetadata(title, language, navigationItems[0].Path, NavigationKind.Epub3, xhtmlPaths);
+            return new PackageMetadata(title, language, navigationItems[0].Path, NavigationKind.Epub3, xhtmlPaths, spineXhtmlPaths);
         }
 
         var ncxId = NormalizeWhitespace((string?)spineElement.Attribute("toc"));
@@ -277,7 +281,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
                 "The EPUB must declare an EPUB 3 navigation document or a spine-referenced EPUB 2 NCX document.");
         }
 
-        return new PackageMetadata(title, language, ncxItem.Path, NavigationKind.Ncx, xhtmlPaths);
+        return new PackageMetadata(title, language, ncxItem.Path, NavigationKind.Ncx, xhtmlPaths, spineXhtmlPaths);
     }
 
     private IReadOnlyList<ParsedChapter> DiscoverEpub3Chapters(
@@ -346,7 +350,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
                 throw UnsupportedStructure("The EPUB table of contents contains a duplicate chapter number.");
             }
 
-            candidates.Add(new ChapterCandidate(resourcePath, target, semanticBoundary ?? numericBoundary!, numeric));
+            candidates.Add(new ChapterCandidate(resourcePath, target, semanticBoundary ?? numericBoundary!, numeric, IsWholeDocumentTarget: false));
         }
 
         if (candidates.Count == 0)
@@ -397,21 +401,9 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
             var navLabel = navPoint.Elements().FirstOrDefault(element => element.Name.LocalName == "navLabel");
             var label = NormalizeWhitespace(navLabel?.Descendants()
                 .FirstOrDefault(element => element.Name.LocalName == "text")?.Value);
-            var numericMatch = NcxChapterLabel().Match(label);
-            if (!numericMatch.Success)
-            {
-                numericMatch = NumericLabel().Match(label);
-            }
-
-            if (!numericMatch.Success)
+            if (!TryParseNcxChapterNumber(label, out var numeric))
             {
                 continue;
-            }
-
-            if (!int.TryParse(numericMatch.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var numeric)
-                || numeric < 1)
-            {
-                throw UnsupportedStructure("An EPUB 2 NCX chapter number is invalid.");
             }
 
             var content = navPoint.Elements().FirstOrDefault(element => element.Name.LocalName == "content");
@@ -441,8 +433,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
             else
             {
                 var matchingHeadings = document.Descendants()
-                    .Where(element => IsHeading(element)
-                        && NormalizeWhitespace(element.Value) == numeric.ToString(CultureInfo.InvariantCulture))
+                    .Where(element => IsHeading(element) && HasMatchingNumericHeading(element, numeric))
                     .ToList();
                 if (matchingHeadings.Count != 1)
                 {
@@ -485,7 +476,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
                 }
             }
 
-            candidates.Add(new ChapterCandidate(resourcePath, target, boundary, numeric));
+            candidates.Add(new ChapterCandidate(resourcePath, target, boundary, numeric, fragment is null));
         }
 
         if (candidates.Count == 0)
@@ -496,7 +487,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
         var chapters = new List<ParsedChapter>(candidates.Count);
         foreach (var candidate in candidates)
         {
-            var paragraphs = ExtractParagraphs(candidate, candidates);
+            var paragraphs = ExtractNcxParagraphs(candidate, candidates, metadata.SpineXhtmlPaths, entries, documentCache);
             if (paragraphs.Count == 0)
             {
                 throw UnsupportedStructure("A discovered chapter contains no narration-ready text.");
@@ -548,7 +539,7 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
 
     private static XElement? FindNumericBoundary(XElement target, int number)
     {
-        if (IsHeading(target) && NormalizeWhitespace(target.Value) == number.ToString(CultureInfo.InvariantCulture))
+        if (IsHeading(target) && HasMatchingNumericHeading(target, number))
         {
             return target;
         }
@@ -560,9 +551,82 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
 
         var heading = target.Elements().FirstOrDefault(IsHeading);
         return heading is not null
-            && NormalizeWhitespace(heading.Value) == number.ToString(CultureInfo.InvariantCulture)
+            && HasMatchingNumericHeading(heading, number)
                 ? target
                 : null;
+    }
+
+    private IReadOnlyList<string> ExtractNcxParagraphs(
+        ChapterCandidate candidate,
+        IReadOnlyList<ChapterCandidate> candidates,
+        IReadOnlyList<string> spineXhtmlPaths,
+        IReadOnlyDictionary<string, ZipArchiveEntry> entries,
+        IDictionary<string, XDocument> documentCache)
+    {
+        var paragraphs = ExtractParagraphs(candidate, candidates).ToList();
+        if (!candidate.IsWholeDocumentTarget)
+        {
+            return paragraphs;
+        }
+
+        var start = FindSpinePathIndex(spineXhtmlPaths, candidate.ResourcePath);
+        if (start < 0)
+        {
+            throw UnsupportedStructure("An EPUB 2 NCX chapter target is outside the reading spine.");
+        }
+
+        var nextTargetIndexes = candidates
+            .Where(other => other.IsWholeDocumentTarget && !ReferenceEquals(other, candidate))
+            .Select(other => FindSpinePathIndex(spineXhtmlPaths, other.ResourcePath))
+            .Where(index => index > start);
+        var end = nextTargetIndexes.DefaultIfEmpty(spineXhtmlPaths.Count).Min();
+        for (var index = start + 1; index < end; index++)
+        {
+            var document = GetContentDocument(spineXhtmlPaths[index], entries, documentCache);
+            paragraphs.AddRange(ExtractDocumentParagraphs(document));
+        }
+
+        return paragraphs;
+    }
+
+    private static int FindSpinePathIndex(IReadOnlyList<string> spineXhtmlPaths, string path)
+    {
+        for (var index = 0; index < spineXhtmlPaths.Count; index++)
+        {
+            if (string.Equals(spineXhtmlPaths[index], path, StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static bool TryParseNcxChapterNumber(string label, out int number)
+    {
+        number = 0;
+        var match = NcxChapterLabel().Match(label);
+        if (!match.Success)
+        {
+            match = NumericLabel().Match(label);
+        }
+
+        if (!match.Success)
+        {
+            match = NumberedNcxChapterTitle().Match(label);
+        }
+
+        return match.Success
+            && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out number)
+            && number >= 1;
+    }
+
+    private static bool HasMatchingNumericHeading(XElement heading, int number)
+    {
+        var match = LeadingNumericHeading().Match(NormalizeWhitespace(heading.Value));
+        return match.Success
+            && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var headingNumber)
+            && headingNumber == number;
     }
 
     private static IReadOnlyList<string> ExtractParagraphs(
@@ -587,6 +651,14 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
             throw UnsupportedStructure("A chapter target does not have an unambiguous structural boundary.");
         }
 
+        return ExtractNarrativeBlocks(scope);
+    }
+
+    private static IReadOnlyList<string> ExtractDocumentParagraphs(XDocument document) =>
+        ExtractNarrativeBlocks(document.Descendants());
+
+    private static IReadOnlyList<string> ExtractNarrativeBlocks(IEnumerable<XElement> scope)
+    {
         var blocks = scope
             .SelectMany(element => NarrativeBlocks.Contains(element.Name.LocalName)
                 ? [element]
@@ -853,8 +925,14 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
         string Language,
         string NavigationPath,
         NavigationKind NavigationKind,
-        HashSet<string> XhtmlPaths);
-    private sealed record ChapterCandidate(string ResourcePath, XElement Target, XElement Boundary, int? DeclaredNumber);
+        HashSet<string> XhtmlPaths,
+        IReadOnlyList<string> SpineXhtmlPaths);
+    private sealed record ChapterCandidate(
+        string ResourcePath,
+        XElement Target,
+        XElement Boundary,
+        int? DeclaredNumber,
+        bool IsWholeDocumentTarget);
     private sealed record NcxDiscovery(IReadOnlyList<ParsedChapter> Chapters, string? InferredLanguage);
 
     private enum NavigationKind
@@ -871,6 +949,12 @@ public sealed partial class EpubChapterParser(IOptions<EpubParserOptions> option
 
     [GeneratedRegex(@"^Chapter\s+0*([1-9][0-9]*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex NcxChapterLabel();
+
+    [GeneratedRegex(@"^0*([1-9][0-9]*)(?:\s*[.\-–—:]\s*|\s+)\S.*$", RegexOptions.CultureInvariant)]
+    private static partial Regex NumberedNcxChapterTitle();
+
+    [GeneratedRegex(@"^0*([1-9][0-9]*)(?:$|[^0-9])", RegexOptions.CultureInvariant)]
+    private static partial Regex LeadingNumericHeading();
 
     [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
     private static partial Regex Whitespace();

@@ -100,6 +100,114 @@ public sealed class EpubChapterParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_UsesEpub2NcxNumberedTitleLabelsAndHeadings()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx
+            .Replace("<text>Chapter 1</text>", "<text>1. Start</text>", StringComparison.Ordinal)
+            .Replace("<text>Chapter 2</text>", "<text>2. Define</text>", StringComparison.Ordinal);
+        var chapterOne = SyntheticEpubBuilder.Epub2ChapterOne.Replace("<h2>1</h2>", "<h2>1START</h2>", StringComparison.Ordinal);
+        var chapterTwo = SyntheticEpubBuilder.Epub2ChapterTwo.Replace("<h2>2</h2>", "<h2>2 DEFINE</h2>", StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/chapter1.xhtml", chapterOne)
+            .WithResource("OPS/text/chapter2.xhtml", chapterTwo)
+            .Build(System.IO.Path.Combine(input, "numbered-titles.epub"));
+
+        var result = await CreateParser(input).ParseAsync("numbered-titles.epub");
+
+        Assert.Equal([1, 2], result.Chapters.Select(chapter => chapter.Number));
+        Assert.Equal("First NCX chapter paragraph.", result.Chapters[0].Paragraphs[0]);
+        Assert.Equal("Only chapter two NCX prose.", Assert.Single(result.Chapters[1].Paragraphs));
+    }
+
+    [Fact]
+    public async Task ParseAsync_UsesEpub2NcxNumberedTitleFragmentTarget()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx.Replace(
+            "<text>Chapter 1</text>",
+            "<text>1. Start</text>",
+            StringComparison.Ordinal).Replace(
+            "src=\"text/chapter1.xhtml\"",
+            "src=\"text/chapter1.xhtml#one\"",
+            StringComparison.Ordinal);
+        var chapter = """
+            <html xmlns="http://www.w3.org/1999/xhtml">
+              <body><section id="one"><h2>1 START</h2><p>Fragment NCX prose.</p></section></body>
+            </html>
+            """;
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/chapter1.xhtml", chapter)
+            .Build(System.IO.Path.Combine(input, "numbered-title-fragment.epub"));
+
+        var result = await CreateParser(input).ParseAsync("numbered-title-fragment.epub");
+
+        Assert.Equal("Fragment NCX prose.", Assert.Single(result.Chapters[0].Paragraphs));
+    }
+
+    [Fact]
+    public async Task ParseAsync_UsesSpineResourcesFollowingWholeDocumentNcxTitleTarget()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        const string package = """
+            <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">test</dc:identifier><dc:title>Spine test</dc:title><dc:language>en</dc:language></metadata>
+              <manifest>
+                <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml" />
+                <item id="title" href="text/title.xhtml" media-type="application/xhtml+xml" />
+                <item id="body" href="text/body.xhtml" media-type="application/xhtml+xml" />
+                <item id="next" href="text/next.xhtml" media-type="application/xhtml+xml" />
+              </manifest>
+              <spine toc="ncx"><itemref idref="title" /><itemref idref="body" /><itemref idref="next" /></spine>
+            </package>
+            """;
+        const string ncx = """
+            <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap>
+              <navPoint id="one"><navLabel><text>1. Start</text></navLabel><content src="text/title.xhtml" /></navPoint>
+              <navPoint id="two"><navLabel><text>2. Next</text></navLabel><content src="text/next.xhtml" /></navPoint>
+            </navMap></ncx>
+            """;
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithPackage(package)
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/title.xhtml", "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>1START</h1></body></html>")
+            .WithResource("OPS/text/body.xhtml", "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>Spine continuation prose.</p></body></html>")
+            .WithResource("OPS/text/next.xhtml", "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>2NEXT</h1><p>Second chapter prose.</p></body></html>")
+            .Build(System.IO.Path.Combine(input, "spine-continuation.epub"));
+
+        var result = await CreateParser(input).ParseAsync("spine-continuation.epub");
+
+        Assert.Equal("Spine continuation prose.", Assert.Single(result.Chapters[0].Paragraphs));
+        Assert.Equal("Second chapter prose.", Assert.Single(result.Chapters[1].Paragraphs));
+    }
+
+    [Fact]
+    public async Task ParseAsync_RejectsEpub2NcxNumberedTitleWithMismatchedHeading()
+    {
+        using var temp = new TemporaryDirectory();
+        var input = Directory.CreateDirectory(System.IO.Path.Combine(temp.Path, "input")).FullName;
+        var ncx = SyntheticEpubBuilder.DefaultNcx.Replace(
+            "<text>Chapter 1</text>",
+            "<text>1. Start</text>",
+            StringComparison.Ordinal);
+        var chapter = SyntheticEpubBuilder.Epub2ChapterOne.Replace("<h2>1</h2>", "<h2>9 START</h2>", StringComparison.Ordinal);
+        new SyntheticEpubBuilder().AsEpub2Ncx()
+            .WithResource("OPS/toc.ncx", ncx)
+            .WithResource("OPS/text/chapter1.xhtml", chapter)
+            .Build(System.IO.Path.Combine(input, "numbered-title-mismatch.epub"));
+
+        var exception = await Assert.ThrowsAsync<EpubParseException>(
+            () => CreateParser(input).ParseAsync("numbered-title-mismatch.epub"));
+
+        Assert.Equal(EpubParseErrorKind.UnsupportedStructure, exception.Kind);
+    }
+
+    [Fact]
     public async Task ParseAsync_NormalizesXhtmlNbspWithoutResolvingExternalDtd()
     {
         using var temp = new TemporaryDirectory();
